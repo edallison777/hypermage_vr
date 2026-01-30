@@ -1,0 +1,126 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://hypermage.vr/schemas/CostModel.schema.json",
+    "title": "Cost Model",
+    "description": "Cost calculation model for AWS services",
+    "type": "object",
+    "required": [
+        "id",
+        "region",
+        "currency",
+        "services"
+    ],
+    "properties": {
+        "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this cost model"
+        },
+        "region": {
+            "type": "string",
+            "default": "eu-west-1",
+            "description": "AWS region for pricing"
+        },
+        "currency": {
+            "type": "string",
+            "default": "GBP",
+            "description": "Currency code (ISO 4217)"
+        },
+        "services": {
+            "type": "object",
+            "description": "Per-service cost models",
+            "properties": {
+                "gamelift": {
+                    "type": "object",
+                    "properties": {
+                        "instanceHourlyCost": {
+                            "type": "object",
+                            "description": "Hourly cost per instance type",
+                            "additionalProperties": {
+                                "type": "number",
+                                "minimum": 0
+                            }
+                        },
+                        "dataTransferPerGB": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Cost per GB of data transfer"
+                        }
+                    }
+                },
+                "cognito": {
+                    "type": "object",
+                    "properties": {
+                        "monthlyActiveUsers": {
+                            "type": "object",
+                            "properties": {
+                                "first50k": {
+                                    "type": "number",
+                                    "minimum": 0
+                                },
+                                "next50k": {
+                                    "type": "number",
+                                    "minimum": 0
+                                },
+                                "over100k": {
+                                    "type": "number",
+                                    "minimum": 0
+                                }
+                            }
+                        }
+                    }
+                },
+                "dynamodb": {
+                    "type": "object",
+                    "properties": {
+                        "writeRequestUnit": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Cost per million write request units"
+                        },
+                        "readRequestUnit": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Cost per million read request units"
+                        },
+                        "storagePerGB": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Cost per GB-month of storage"
+                        }
+                    }
+                },
+                "lambda": {
+                    "type": "object",
+                    "properties": {
+                        "requestCost": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Cost per million requests"
+                        },
+                        "computeCostPerGBSecond": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Cost per GB-second of compute"
+                        }
+                    }
+                },
+                "apiGateway": {
+                    "type": "object",
+                    "properties": {
+                        "requestCost": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Cost per million requests"
+                        }
+                    }
+                }
+            }
+        },
+        "lastUpdated": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp of last pricing update"
+        }
+    }
+}

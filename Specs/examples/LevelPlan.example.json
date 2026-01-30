@@ -1,0 +1,238 @@
+{
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "name": "Crystal Caverns Arena",
+    "description": "A multi-level VR arena set in glowing crystal caverns with vertical gameplay and capture points",
+    "zones": [
+        {
+            "id": "spawn_zone_alpha",
+            "name": "Alpha Spawn",
+            "bounds": {
+                "center": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 200
+                },
+                "extents": {
+                    "x": 500,
+                    "y": 500,
+                    "z": 300
+                }
+            },
+            "type": "spawn",
+            "assets": [
+                "blockout_platform_01",
+                "spawn_marker_alpha"
+            ]
+        },
+        {
+            "id": "spawn_zone_beta",
+            "name": "Beta Spawn",
+            "bounds": {
+                "center": {
+                    "x": 5000,
+                    "y": 0,
+                    "z": 200
+                },
+                "extents": {
+                    "x": 500,
+                    "y": 500,
+                    "z": 300
+                }
+            },
+            "type": "spawn",
+            "assets": [
+                "blockout_platform_01",
+                "spawn_marker_beta"
+            ]
+        },
+        {
+            "id": "central_arena",
+            "name": "Central Arena",
+            "bounds": {
+                "center": {
+                    "x": 2500,
+                    "y": 0,
+                    "z": 0
+                },
+                "extents": {
+                    "x": 2000,
+                    "y": 2000,
+                    "z": 500
+                }
+            },
+            "type": "combat",
+            "assets": [
+                "blockout_floor_01",
+                "blockout_pillar_01",
+                "crystal_cluster_placeholder"
+            ]
+        },
+        {
+            "id": "objective_point_a",
+            "name": "Capture Point A",
+            "bounds": {
+                "center": {
+                    "x": 1500,
+                    "y": -1000,
+                    "z": 0
+                },
+                "extents": {
+                    "x": 400,
+                    "y": 400,
+                    "z": 200
+                }
+            },
+            "type": "objective",
+            "assets": [
+                "capture_point_marker",
+                "blockout_platform_02"
+            ]
+        },
+        {
+            "id": "objective_point_b",
+            "name": "Capture Point B",
+            "bounds": {
+                "center": {
+                    "x": 3500,
+                    "y": 1000,
+                    "z": 0
+                },
+                "extents": {
+                    "x": 400,
+                    "y": 400,
+                    "z": 200
+                }
+            },
+            "type": "objective",
+            "assets": [
+                "capture_point_marker",
+                "blockout_platform_02"
+            ]
+        },
+        {
+            "id": "safe_zone_center",
+            "name": "Neutral Safe Zone",
+            "bounds": {
+                "center": {
+                    "x": 2500,
+                    "y": 0,
+                    "z": 800
+                },
+                "extents": {
+                    "x": 300,
+                    "y": 300,
+                    "z": 200
+                }
+            },
+            "type": "safe",
+            "assets": [
+                "blockout_platform_03",
+                "safe_zone_indicator"
+            ]
+        }
+    ],
+    "playerSpawns": [
+        {
+            "position": {
+                "x": 0,
+                "y": 0,
+                "z": 250
+            },
+            "rotation": {
+                "pitch": 0,
+                "yaw": 90,
+                "roll": 0
+            }
+        },
+        {
+            "position": {
+                "x": 0,
+                "y": 400,
+                "z": 250
+            },
+            "rotation": {
+                "pitch": 0,
+                "yaw": 90,
+                "roll": 0
+            }
+        },
+        {
+            "position": {
+                "x": 0,
+                "y": -400,
+                "z": 250
+            },
+            "rotation": {
+                "pitch": 0,
+                "yaw": 90,
+                "roll": 0
+            }
+        },
+        {
+            "position": {
+                "x": 5000,
+                "y": 0,
+                "z": 250
+            },
+            "rotation": {
+                "pitch": 0,
+                "yaw": -90,
+                "roll": 0
+            }
+        },
+        {
+            "position": {
+                "x": 5000,
+                "y": 400,
+                "z": 250
+            },
+            "rotation": {
+                "pitch": 0,
+                "yaw": -90,
+                "roll": 0
+            }
+        },
+        {
+            "position": {
+                "x": 5000,
+                "y": -400,
+                "z": 250
+            },
+            "rotation": {
+                "pitch": 0,
+                "yaw": -90,
+                "roll": 0
+            }
+        }
+    ],
+    "objectives": [
+        {
+            "id": "capture_point_a",
+            "type": "capture_point",
+            "description": "Capture and hold Point A for 30 seconds",
+            "rewardId": "first_objective_complete",
+            "position": {
+                "x": 1500,
+                "y": -1000,
+                "z": 50
+            }
+        },
+        {
+            "id": "capture_point_b",
+            "type": "capture_point",
+            "description": "Capture and hold Point B for 30 seconds",
+            "rewardId": "all_objectives_complete",
+            "position": {
+                "x": 3500,
+                "y": 1000,
+                "z": 50
+            }
+        },
+        {
+            "id": "win_match",
+            "type": "team_victory",
+            "description": "Win the match by capturing both points",
+            "rewardId": "team_victory"
+        }
+    ]
+}

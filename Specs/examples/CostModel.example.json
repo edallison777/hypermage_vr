@@ -1,0 +1,35 @@
+{
+    "id": "cc0e8400-e29b-41d4-a716-446655440007",
+    "region": "eu-west-1",
+    "currency": "GBP",
+    "services": {
+        "gamelift": {
+            "instanceHourlyCost": {
+                "c5.large": 0.085,
+                "c5.xlarge": 0.17,
+                "c5.2xlarge": 0.34
+            },
+            "dataTransferPerGB": 0.09
+        },
+        "cognito": {
+            "monthlyActiveUsers": {
+                "first50k": 0.0,
+                "next50k": 0.0055,
+                "over100k": 0.0046
+            }
+        },
+        "dynamodb": {
+            "writeRequestUnit": 1.25,
+            "readRequestUnit": 0.25,
+            "storagePerGB": 0.25
+        },
+        "lambda": {
+            "requestCost": 0.20,
+            "computeCostPerGBSecond": 0.0000166667
+        },
+        "apiGateway": {
+            "requestCost": 3.50
+        }
+    },
+    "lastUpdated": "2026-01-30T20:00:00Z"
+}

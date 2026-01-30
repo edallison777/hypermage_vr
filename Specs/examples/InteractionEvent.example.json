@@ -1,0 +1,13 @@
+{
+    "eventId": "aa0e8400-e29b-41d4-a716-446655440005",
+    "timestamp": "2026-02-01T14:23:45Z",
+    "playerId": "player_12345",
+    "sessionId": "bb0e8400-e29b-41d4-a716-446655440006",
+    "eventType": "objective_complete",
+    "data": {
+        "objectiveId": "capture_point_a",
+        "captureTime": 32.5,
+        "teamId": "alpha"
+    },
+    "ttl": 1738598400
+}

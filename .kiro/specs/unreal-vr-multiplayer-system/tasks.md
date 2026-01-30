@@ -13,7 +13,7 @@ This implementation plan breaks down the Unreal VR Multiplayer System into discr
 
 ## Tasks
 
-- [ ] 1. Repository structure and foundational schemas
+- [-] 1. Repository structure and foundational schemas
   - Create monorepo directory structure (/Specs, /Orchestrator, /Agents, /MCP, /UnrealProject, /Infra, /CI)
   - Create all JSON schema files in /Specs/schemas/
   - Create example JSON files in /Specs/examples/

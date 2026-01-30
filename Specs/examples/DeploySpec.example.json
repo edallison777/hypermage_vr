@@ -1,0 +1,28 @@
+{
+    "id": "990e8400-e29b-41d4-a716-446655440004",
+    "environment": "dev",
+    "region": "eu-west-1",
+    "services": {
+        "gamelift": {
+            "fleetType": "ON_DEMAND",
+            "instanceType": "c5.large",
+            "maxConcurrentShards": 3,
+            "playersPerShard": {
+                "min": 10,
+                "max": 15
+            }
+        },
+        "cognito": {
+            "userPoolName": "hypermage-vr-dev",
+            "tokenExpiration": {
+                "accessToken": 3600,
+                "refreshToken": 604800
+            }
+        },
+        "dynamodb": {
+            "billingMode": "PAY_PER_REQUEST",
+            "ttlEnabled": true
+        }
+    },
+    "budgetPolicyId": "880e8400-e29b-41d4-a716-446655440003"
+}

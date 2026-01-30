@@ -1,0 +1,13 @@
+{
+    "sessionId": "bb0e8400-e29b-41d4-a716-446655440006",
+    "playerId": "player_12345",
+    "shardId": "shard_001",
+    "startTime": "2026-02-01T14:00:00Z",
+    "endTime": "2026-02-01T14:35:00Z",
+    "rewards": {
+        "first_objective_complete": true,
+        "all_objectives_complete": true,
+        "team_victory": true,
+        "zone_explorer": true
+    }
+}

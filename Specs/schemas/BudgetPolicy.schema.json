@@ -1,0 +1,124 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://hypermage.vr/schemas/BudgetPolicy.schema.json",
+    "title": "Budget Policy",
+    "description": "Cost governance policy with enforcement rules",
+    "type": "object",
+    "required": [
+        "id",
+        "environment",
+        "limits",
+        "enforcement"
+    ],
+    "properties": {
+        "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this budget policy"
+        },
+        "environment": {
+            "type": "string",
+            "enum": [
+                "dev",
+                "prod"
+            ],
+            "description": "Target environment for this policy"
+        },
+        "limits": {
+            "type": "object",
+            "required": [
+                "total",
+                "duration"
+            ],
+            "description": "Cost limits for the policy period",
+            "properties": {
+                "total": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Total budget limit"
+                },
+                "currency": {
+                    "type": "string",
+                    "default": "GBP",
+                    "description": "Currency code (ISO 4217)"
+                },
+                "duration": {
+                    "type": "string",
+                    "pattern": "^\\d+h$",
+                    "description": "Duration in hours (e.g., 72h for 72-hour event)"
+                },
+                "perService": {
+                    "type": "object",
+                    "description": "Optional per-service budget limits",
+                    "properties": {
+                        "gamelift": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Budget limit for GameLift"
+                        },
+                        "cognito": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Budget limit for Cognito"
+                        },
+                        "dynamodb": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Budget limit for DynamoDB"
+                        },
+                        "lambda": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Budget limit for Lambda"
+                        },
+                        "other": {
+                            "type": "number",
+                            "minimum": 0,
+                            "description": "Budget limit for other services"
+                        }
+                    }
+                }
+            }
+        },
+        "enforcement": {
+            "type": "object",
+            "required": [
+                "mode"
+            ],
+            "description": "Enforcement behavior for budget limits",
+            "properties": {
+                "mode": {
+                    "type": "string",
+                    "enum": [
+                        "report",
+                        "warn",
+                        "block"
+                    ],
+                    "description": "Enforcement mode: report=log only, warn=log+notify, block=prevent operation"
+                },
+                "warningThreshold": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "default": 0.8,
+                    "description": "Percentage of budget at which to issue warnings (0.0-1.0)"
+                },
+                "approvalRequired": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Whether manual approval is required for operations exceeding budget"
+                }
+            }
+        },
+        "eventStart": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp of event start (for TTL calculation)"
+        },
+        "eventEnd": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp of event end (for TTL calculation)"
+        }
+    }
+}

@@ -1,0 +1,138 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://hypermage.vr/schemas/AssetSpec.schema.json",
+    "title": "Asset Specification",
+    "description": "Asset specification with provenance tracking",
+    "type": "object",
+    "required": [
+        "id",
+        "name",
+        "tier",
+        "provenance"
+    ],
+    "properties": {
+        "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the asset"
+        },
+        "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Human-readable name for the asset"
+        },
+        "tier": {
+            "type": "integer",
+            "enum": [
+                0,
+                1,
+                2
+            ],
+            "description": "Asset quality tier: 0=blockout primitives, 1=placeholder/generated, 2=final/licensed"
+        },
+        "type": {
+            "type": "string",
+            "enum": [
+                "mesh",
+                "texture",
+                "material",
+                "sound",
+                "animation",
+                "blueprint",
+                "particle"
+            ],
+            "description": "Type of asset"
+        },
+        "provenance": {
+            "type": "object",
+            "required": [
+                "origin",
+                "license",
+                "createdAt",
+                "createdBy"
+            ],
+            "description": "Complete provenance record for legal compliance",
+            "properties": {
+                "origin": {
+                    "type": "string",
+                    "enum": [
+                        "generated",
+                        "hand-crafted",
+                        "licensed",
+                        "marketplace"
+                    ],
+                    "description": "Source of the asset"
+                },
+                "license": {
+                    "type": "string",
+                    "description": "License type (e.g., MIT, CC-BY-4.0, Commercial, Proprietary)"
+                },
+                "licenseUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "URL to the full license text"
+                },
+                "createdAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "ISO 8601 timestamp of asset creation"
+                },
+                "createdBy": {
+                    "type": "string",
+                    "description": "Agent or user who created/imported the asset"
+                },
+                "sourceUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "URL to the original source (marketplace, repository, etc.)"
+                },
+                "cost": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Cost in GBP if purchased"
+                },
+                "approvedBy": {
+                    "type": "string",
+                    "description": "User who approved the asset for use"
+                },
+                "approvedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "ISO 8601 timestamp of approval"
+                },
+                "usageRights": {
+                    "type": "object",
+                    "required": [
+                        "commercial",
+                        "modification",
+                        "redistribution"
+                    ],
+                    "description": "Usage rights for the asset",
+                    "properties": {
+                        "commercial": {
+                            "type": "boolean",
+                            "description": "Can be used commercially"
+                        },
+                        "modification": {
+                            "type": "boolean",
+                            "description": "Can be modified"
+                        },
+                        "redistribution": {
+                            "type": "boolean",
+                            "description": "Can be redistributed"
+                        }
+                    }
+                }
+            }
+        },
+        "unrealPath": {
+            "type": "string",
+            "description": "Path within Unreal Engine project (e.g., /Game/Assets/Props/Crate_01)"
+        },
+        "metadata": {
+            "type": "object",
+            "description": "Additional metadata specific to asset type",
+            "additionalProperties": true
+        }
+    }
+}

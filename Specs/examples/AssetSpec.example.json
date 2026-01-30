@@ -1,0 +1,24 @@
+{
+    "id": "770e8400-e29b-41d4-a716-446655440002",
+    "name": "Crystal Cluster Placeholder",
+    "tier": 1,
+    "type": "mesh",
+    "provenance": {
+        "origin": "generated",
+        "license": "Proprietary",
+        "createdAt": "2026-01-30T20:00:00Z",
+        "createdBy": "TechArtVFXAudioAgent",
+        "usageRights": {
+            "commercial": true,
+            "modification": true,
+            "redistribution": false
+        }
+    },
+    "unrealPath": "/Game/Assets/Props/CrystalCluster_Placeholder",
+    "metadata": {
+        "polyCount": 1200,
+        "textureResolution": "1024x1024",
+        "generatedFrom": "concept_art_crystal_01.png",
+        "performanceTarget": "Quest3_60fps"
+    }
+}

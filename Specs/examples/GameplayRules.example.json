@@ -1,0 +1,99 @@
+{
+    "id": "660e8400-e29b-41d4-a716-446655440001",
+    "levelId": "550e8400-e29b-41d4-a716-446655440000",
+    "rules": [
+        {
+            "id": "grant_first_objective_reward",
+            "trigger": {
+                "type": "objective_complete",
+                "conditions": {
+                    "objectiveId": "capture_point_a",
+                    "isFirstObjective": true
+                }
+            },
+            "action": {
+                "type": "grant_reward",
+                "parameters": {
+                    "rewardId": "first_objective_complete"
+                }
+            },
+            "enabled": true,
+            "priority": 10
+        },
+        {
+            "id": "grant_all_objectives_reward",
+            "trigger": {
+                "type": "objective_complete",
+                "conditions": {
+                    "objectiveId": "capture_point_b",
+                    "allObjectivesComplete": true
+                }
+            },
+            "action": {
+                "type": "grant_reward",
+                "parameters": {
+                    "rewardId": "all_objectives_complete"
+                }
+            },
+            "enabled": true,
+            "priority": 10
+        },
+        {
+            "id": "grant_team_victory_reward",
+            "trigger": {
+                "type": "match_end",
+                "conditions": {
+                    "winCondition": "team_victory"
+                }
+            },
+            "action": {
+                "type": "grant_reward",
+                "parameters": {
+                    "rewardId": "team_victory"
+                }
+            },
+            "enabled": true,
+            "priority": 5
+        },
+        {
+            "id": "grant_zone_explorer_reward",
+            "trigger": {
+                "type": "player_visited_all_zones",
+                "conditions": {
+                    "zoneTypes": [
+                        "spawn",
+                        "combat",
+                        "objective",
+                        "safe"
+                    ]
+                }
+            },
+            "action": {
+                "type": "grant_reward",
+                "parameters": {
+                    "rewardId": "zone_explorer"
+                }
+            },
+            "enabled": true,
+            "priority": 3
+        },
+        {
+            "id": "display_capture_message",
+            "trigger": {
+                "type": "player_enters_zone",
+                "conditions": {
+                    "zoneType": "objective"
+                }
+            },
+            "action": {
+                "type": "display_message",
+                "parameters": {
+                    "message": "Capture this point!",
+                    "duration": 3.0
+                }
+            },
+            "enabled": true,
+            "priority": 1
+        }
+    ]
+}

@@ -1,0 +1,23 @@
+{
+    "id": "880e8400-e29b-41d4-a716-446655440003",
+    "environment": "dev",
+    "limits": {
+        "total": 1000,
+        "currency": "GBP",
+        "duration": "72h",
+        "perService": {
+            "gamelift": 600,
+            "cognito": 50,
+            "dynamodb": 150,
+            "lambda": 100,
+            "other": 100
+        }
+    },
+    "enforcement": {
+        "mode": "warn",
+        "warningThreshold": 0.8,
+        "approvalRequired": false
+    },
+    "eventStart": "2026-02-01T00:00:00Z",
+    "eventEnd": "2026-02-04T00:00:00Z"
+}

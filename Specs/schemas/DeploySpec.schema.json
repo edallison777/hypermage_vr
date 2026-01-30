@@ -1,0 +1,126 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://hypermage.vr/schemas/DeploySpec.schema.json",
+    "title": "Deployment Specification",
+    "description": "Deployment configuration for AWS infrastructure",
+    "type": "object",
+    "required": [
+        "id",
+        "environment",
+        "region",
+        "services"
+    ],
+    "properties": {
+        "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this deployment spec"
+        },
+        "environment": {
+            "type": "string",
+            "enum": [
+                "dev",
+                "staging",
+                "prod"
+            ],
+            "description": "Target deployment environment"
+        },
+        "region": {
+            "type": "string",
+            "default": "eu-west-1",
+            "description": "AWS region for deployment"
+        },
+        "services": {
+            "type": "object",
+            "description": "Service-specific deployment configurations",
+            "properties": {
+                "gamelift": {
+                    "type": "object",
+                    "properties": {
+                        "fleetType": {
+                            "type": "string",
+                            "enum": [
+                                "ON_DEMAND",
+                                "SPOT"
+                            ],
+                            "default": "ON_DEMAND"
+                        },
+                        "instanceType": {
+                            "type": "string",
+                            "default": "c5.large",
+                            "description": "EC2 instance type for GameLift fleet"
+                        },
+                        "maxConcurrentShards": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "default": 3,
+                            "description": "Maximum number of concurrent game shards"
+                        },
+                        "playersPerShard": {
+                            "type": "object",
+                            "properties": {
+                                "min": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "default": 10
+                                },
+                                "max": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "default": 15
+                                }
+                            }
+                        }
+                    }
+                },
+                "cognito": {
+                    "type": "object",
+                    "properties": {
+                        "userPoolName": {
+                            "type": "string",
+                            "description": "Name for the Cognito User Pool"
+                        },
+                        "tokenExpiration": {
+                            "type": "object",
+                            "properties": {
+                                "accessToken": {
+                                    "type": "integer",
+                                    "default": 3600,
+                                    "description": "Access token expiration in seconds"
+                                },
+                                "refreshToken": {
+                                    "type": "integer",
+                                    "default": 604800,
+                                    "description": "Refresh token expiration in seconds"
+                                }
+                            }
+                        }
+                    }
+                },
+                "dynamodb": {
+                    "type": "object",
+                    "properties": {
+                        "billingMode": {
+                            "type": "string",
+                            "enum": [
+                                "PROVISIONED",
+                                "PAY_PER_REQUEST"
+                            ],
+                            "default": "PAY_PER_REQUEST"
+                        },
+                        "ttlEnabled": {
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Enable TTL for ephemeral data"
+                        }
+                    }
+                }
+            }
+        },
+        "budgetPolicyId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Reference to the BudgetPolicy for this deployment"
+        }
+    }
+}
