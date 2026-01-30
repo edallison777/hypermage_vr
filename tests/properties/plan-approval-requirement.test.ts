@@ -200,19 +200,20 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
         it('should track plan creation timestamp', async () => {
             fc.assert(
                 fc.asyncProperty(fc.string({ minLength: 10, maxLength: 200 }), async (specification) => {
-                    const beforeCreation = new Date().toISOString();
+                    const beforeCreation = Date.now();
                     await new Promise((resolve) => setTimeout(resolve, 10));
 
                     const context: PlanContext = { targetEnvironment: 'dev' };
                     const plan = await planGenerator.generatePlan(specification, context);
 
                     await new Promise((resolve) => setTimeout(resolve, 10));
-                    const afterCreation = new Date().toISOString();
+                    const afterCreation = Date.now();
 
                     // Plan should have creation timestamp
                     expect(plan.createdAt).toBeDefined();
-                    expect(plan.createdAt).toBeGreaterThanOrEqual(beforeCreation);
-                    expect(plan.createdAt).toBeLessThanOrEqual(afterCreation);
+                    const planTime = new Date(plan.createdAt).getTime();
+                    expect(planTime).toBeGreaterThanOrEqual(beforeCreation);
+                    expect(planTime).toBeLessThanOrEqual(afterCreation);
                 }),
                 { numRuns: 30 }
             );

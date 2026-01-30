@@ -159,17 +159,17 @@ export class AWSMCPAdapter extends BaseMCPAdapter {
     protected async executeCapability<T>(request: MCPRequest): Promise<T> {
         switch (request.capability) {
             case 'deploy_gamelift':
-                return (await this.deployGameLift(request.parameters as DeployGameLiftParams)) as T;
+                return (await this.deployGameLift(request.parameters as unknown as DeployGameLiftParams)) as T;
             case 'create_cognito_pool':
                 return (await this.createCognitoPool(
-                    request.parameters as CreateCognitoPoolParams
+                    request.parameters as unknown as CreateCognitoPoolParams
                 )) as T;
             case 'create_dynamodb_table':
                 return (await this.createDynamoDBTable(
-                    request.parameters as CreateDynamoDBTableParams
+                    request.parameters as unknown as CreateDynamoDBTableParams
                 )) as T;
             case 'get_cost_estimate':
-                return (await this.getCostEstimate(request.parameters as GetCostEstimateParams)) as T;
+                return (await this.getCostEstimate(request.parameters as unknown as GetCostEstimateParams)) as T;
             default:
                 throw new Error(`Unknown capability: ${request.capability}`);
         }
@@ -181,39 +181,39 @@ export class AWSMCPAdapter extends BaseMCPAdapter {
 
         switch (request.capability) {
             case 'deploy_gamelift':
-                return this.mockDeployGameLift(request.parameters as DeployGameLiftParams) as T;
+                return this.mockDeployGameLift(request.parameters as unknown as DeployGameLiftParams) as T;
             case 'create_cognito_pool':
-                return this.mockCreateCognitoPool(request.parameters as CreateCognitoPoolParams) as T;
+                return this.mockCreateCognitoPool(request.parameters as unknown as CreateCognitoPoolParams) as T;
             case 'create_dynamodb_table':
-                return this.mockCreateDynamoDBTable(request.parameters as CreateDynamoDBTableParams) as T;
+                return this.mockCreateDynamoDBTable(request.parameters as unknown as CreateDynamoDBTableParams) as T;
             case 'get_cost_estimate':
-                return this.mockGetCostEstimate(request.parameters as GetCostEstimateParams) as T;
+                return this.mockGetCostEstimate(request.parameters as unknown as GetCostEstimateParams) as T;
             default:
                 throw new Error(`Unknown capability: ${request.capability}`);
         }
     }
 
     // Real implementations (would call AWS SDK)
-    private async deployGameLift(params: DeployGameLiftParams): Promise<DeployGameLiftResult> {
+    private async deployGameLift(_params: DeployGameLiftParams): Promise<DeployGameLiftResult> {
         // TODO: Implement actual AWS GameLift deployment
         throw new Error('Real AWS integration not yet implemented');
     }
 
     private async createCognitoPool(
-        params: CreateCognitoPoolParams
+        _params: CreateCognitoPoolParams
     ): Promise<CreateCognitoPoolResult> {
         // TODO: Implement actual AWS Cognito User Pool creation
         throw new Error('Real AWS integration not yet implemented');
     }
 
     private async createDynamoDBTable(
-        params: CreateDynamoDBTableParams
+        _params: CreateDynamoDBTableParams
     ): Promise<CreateDynamoDBTableResult> {
         // TODO: Implement actual AWS DynamoDB table creation
         throw new Error('Real AWS integration not yet implemented');
     }
 
-    private async getCostEstimate(params: GetCostEstimateParams): Promise<GetCostEstimateResult> {
+    private async getCostEstimate(_params: GetCostEstimateParams): Promise<GetCostEstimateResult> {
         // TODO: Implement actual AWS Cost Explorer API call
         throw new Error('Real AWS integration not yet implemented');
     }
@@ -273,9 +273,7 @@ export class AWSMCPAdapter extends BaseMCPAdapter {
         return hourlyRate * params.maxConcurrentShards * hours;
     }
 
-    private estimateServiceCost(service: string, duration: string): number {
-        const hours = parseInt(duration.replace('h', ''));
-
+    private estimateServiceCost(service: string, _duration: string): number {
         const estimates: Record<string, number> = {
             gamelift: 18.36, // 3 shards * £0.085/hour * 72 hours
             cognito: 5.0, // Estimated for 1000 MAU

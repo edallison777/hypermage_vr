@@ -91,7 +91,7 @@ export class PlanGenerator {
 
     private generateLevelCreationSteps(
         specification: string,
-        context: PlanContext
+        _context: PlanContext
     ): PlanStep[] {
         return [
             {
@@ -133,7 +133,7 @@ export class PlanGenerator {
         ];
     }
 
-    private generateDeploymentSteps(context: PlanContext): PlanStep[] {
+    private generateDeploymentSteps(_context: PlanContext): PlanStep[] {
         return [
             {
                 id: uuidv4(),
@@ -203,7 +203,7 @@ export class PlanGenerator {
         ];
     }
 
-    private generateGenericPlan(specification: string, context: PlanContext): PlanStep[] {
+    private generateGenericPlan(specification: string, _context: PlanContext): PlanStep[] {
         return [
             {
                 id: uuidv4(),

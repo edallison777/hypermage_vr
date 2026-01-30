@@ -118,7 +118,7 @@ This implementation plan breaks down the Unreal VR Multiplayer System into discr
     - **Property 15: Spec Update with Change Notes**
     - **Validates: Requirements 17.1, 17.2**
 
-- [ ] 5. Checkpoint - Orchestrator and schemas validated
+- [x] 5. Checkpoint - Orchestrator and schemas validated
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 6. Agent framework using Strands SDK

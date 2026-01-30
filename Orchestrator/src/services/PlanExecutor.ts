@@ -8,10 +8,7 @@ import { v4 as uuidv4 } from 'uuid';
 import {
     ExecutionPlan,
     PlanExecution,
-    StepExecution,
     PlanStep,
-    Artifact,
-    CostSummary,
     ChangeNote,
 } from '../types';
 import { logger } from '../utils/logger';
@@ -106,7 +103,7 @@ export class PlanExecutor {
         plan: ExecutionPlan,
         execution: PlanExecution
     ): Promise<void> {
-        const stepMap = new Map(plan.steps.map((step) => [step.id, step]));
+        // const stepMap = new Map(plan.steps.map((step) => [step.id, step]));
         const executedSteps = new Set<string>();
 
         for (const step of plan.steps) {
@@ -204,7 +201,7 @@ export class PlanExecutor {
     /**
      * Simulate step execution (placeholder)
      */
-    private async simulateStepExecution(step: PlanStep): Promise<void> {
+    private async simulateStepExecution(_step: PlanStep): Promise<void> {
         // Simulate work with a delay
         await this.delay(Math.random() * 2000 + 1000);
     }

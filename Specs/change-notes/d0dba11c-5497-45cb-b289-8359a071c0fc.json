@@ -1,0 +1,23 @@
+[
+  {
+    "timestamp": "2026-01-30T22:17:16.638Z",
+    "actor": "ConversationLevelDesignerAgent",
+    "action": "parse_specification",
+    "description": "Convert natural language to LevelPlan.json",
+    "specPath": "executions/d0dba11c-5497-45cb-b289-8359a071c0fc/steps/dced9320-c09c-4e5e-a761-babc3522739f.json"
+  },
+  {
+    "timestamp": "2026-01-30T22:17:18.553Z",
+    "actor": "UnrealLevelBuilderAgent",
+    "action": "generate_level",
+    "description": "Create blockout geometry in Unreal Engine",
+    "specPath": "executions/d0dba11c-5497-45cb-b289-8359a071c0fc/steps/34799e5e-9252-4c7f-b7bb-f9c663321e72.json"
+  },
+  {
+    "timestamp": "2026-01-30T22:17:21.364Z",
+    "actor": "GameplaySystemsAgent",
+    "action": "implement_gameplay",
+    "description": "Add objectives, spawn points, and game rules",
+    "specPath": "executions/d0dba11c-5497-45cb-b289-8359a071c0fc/steps/73109d34-59bc-458a-a616-7a8efb58593d.json"
+  }
+]

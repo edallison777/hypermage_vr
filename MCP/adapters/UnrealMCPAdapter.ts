@@ -145,13 +145,13 @@ export class UnrealMCPAdapter extends BaseMCPAdapter {
     protected async executeCapability<T>(request: MCPRequest): Promise<T> {
         switch (request.capability) {
             case 'build_project':
-                return (await this.buildProject(request.parameters as BuildProjectParams)) as T;
+                return (await this.buildProject(request.parameters as unknown as BuildProjectParams)) as T;
             case 'package_server':
-                return (await this.packageServer(request.parameters as PackageServerParams)) as T;
+                return (await this.packageServer(request.parameters as unknown as PackageServerParams)) as T;
             case 'generate_level':
-                return (await this.generateLevel(request.parameters as GenerateLevelParams)) as T;
+                return (await this.generateLevel(request.parameters as unknown as GenerateLevelParams)) as T;
             case 'import_asset':
-                return (await this.importAsset(request.parameters as ImportAssetParams)) as T;
+                return (await this.importAsset(request.parameters as unknown as ImportAssetParams)) as T;
             default:
                 throw new Error(`Unknown capability: ${request.capability}`);
         }
@@ -163,35 +163,35 @@ export class UnrealMCPAdapter extends BaseMCPAdapter {
 
         switch (request.capability) {
             case 'build_project':
-                return this.mockBuildProject(request.parameters as BuildProjectParams) as T;
+                return this.mockBuildProject(request.parameters as unknown as BuildProjectParams) as T;
             case 'package_server':
-                return this.mockPackageServer(request.parameters as PackageServerParams) as T;
+                return this.mockPackageServer(request.parameters as unknown as PackageServerParams) as T;
             case 'generate_level':
-                return this.mockGenerateLevel(request.parameters as GenerateLevelParams) as T;
+                return this.mockGenerateLevel(request.parameters as unknown as GenerateLevelParams) as T;
             case 'import_asset':
-                return this.mockImportAsset(request.parameters as ImportAssetParams) as T;
+                return this.mockImportAsset(request.parameters as unknown as ImportAssetParams) as T;
             default:
                 throw new Error(`Unknown capability: ${request.capability}`);
         }
     }
 
     // Real implementations (would call Unreal Engine APIs/CLI)
-    private async buildProject(params: BuildProjectParams): Promise<BuildProjectResult> {
+    private async buildProject(_params: BuildProjectParams): Promise<BuildProjectResult> {
         // TODO: Implement actual Unreal Engine build via UnrealBuildTool
         throw new Error('Real Unreal Engine integration not yet implemented');
     }
 
-    private async packageServer(params: PackageServerParams): Promise<PackageServerResult> {
+    private async packageServer(_params: PackageServerParams): Promise<PackageServerResult> {
         // TODO: Implement actual Unreal Engine packaging
         throw new Error('Real Unreal Engine integration not yet implemented');
     }
 
-    private async generateLevel(params: GenerateLevelParams): Promise<GenerateLevelResult> {
+    private async generateLevel(_params: GenerateLevelParams): Promise<GenerateLevelResult> {
         // TODO: Implement actual level generation via Unreal Engine Python API
         throw new Error('Real Unreal Engine integration not yet implemented');
     }
 
-    private async importAsset(params: ImportAssetParams): Promise<ImportAssetResult> {
+    private async importAsset(_params: ImportAssetParams): Promise<ImportAssetResult> {
         // TODO: Implement actual asset import via Unreal Engine Python API
         throw new Error('Real Unreal Engine integration not yet implemented');
     }

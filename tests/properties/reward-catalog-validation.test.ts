@@ -42,7 +42,7 @@ function loadRewardsCatalog(): RewardsCatalog {
 }
 
 // Simulate reward granting (this will be replaced with actual implementation)
-function grantReward(playerId: string, rewardId: string): GrantRewardResult {
+function grantReward(_playerId: string, rewardId: string): GrantRewardResult {
     const catalog = loadRewardsCatalog();
     const rewardExists = catalog.rewards.some((r) => r.id === rewardId);
 
