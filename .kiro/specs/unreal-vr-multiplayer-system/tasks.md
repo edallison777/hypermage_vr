@@ -82,7 +82,7 @@ This implementation plan breaks down the Unreal VR Multiplayer System into discr
     - **Property 13: MCP Adapter Mock Mode**
     - **Validates: Requirements 8.5, 12.7**
 
-- [-] 4. Orchestrator core service implementation
+- [x] 4. Orchestrator core service implementation
   - [x] 4.1 Create Orchestrator HTTP API with Express.js
     - Implement POST /api/v1/plans endpoint
     - Implement POST /api/v1/plans/:planId/execute endpoint
@@ -110,11 +110,11 @@ This implementation plan breaks down the Unreal VR Multiplayer System into discr
     - Store cost records and summaries
     - _Requirements: 19.1_
   
-  - [ ] 4.5 Write property test for plan approval requirement
+  - [x] 4.5 Write property test for plan approval requirement
     - **Property 18: Plan Approval Requirement**
     - **Validates: Requirements 19.4**
   
-  - [ ] 4.6 Write property test for spec updates
+  - [x] 4.6 Write property test for spec updates
     - **Property 15: Spec Update with Change Notes**
     - **Validates: Requirements 17.1, 17.2**
 
