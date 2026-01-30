@@ -20,6 +20,12 @@ module.exports = {
         },
     },
     moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
+    moduleNameMapper: {
+        '^(\\.{1,2}/.*)\\.js$': '$1',
+    },
+    transformIgnorePatterns: [
+        'node_modules/(?!(@strands-agents|@aws-sdk)/)',
+    ],
     transform: {
         '^.+\\.tsx?$': ['ts-jest', {
             tsconfig: 'tsconfig.json',

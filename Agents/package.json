@@ -1,0 +1,26 @@
+{
+    "name": "@hypermage-vr/agents",
+    "version": "0.1.0",
+    "description": "Specialized AI agents built with Strands SDK for Unreal VR Multiplayer System",
+    "type": "module",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsc --watch",
+        "clean": "rm -rf dist",
+        "test": "jest"
+    },
+    "dependencies": {
+        "@strands-agents/sdk": "latest",
+        "@aws-sdk/client-bedrock-agentcore": "latest",
+        "zod": "^4.1.12"
+    },
+    "devDependencies": {
+        "@types/node": "^20.10.0",
+        "typescript": "^5.3.0"
+    },
+    "engines": {
+        "node": ">=20.0.0"
+    }
+}
