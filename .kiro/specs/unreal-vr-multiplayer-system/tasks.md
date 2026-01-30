@@ -13,7 +13,7 @@ This implementation plan breaks down the Unreal VR Multiplayer System into discr
 
 ## Tasks
 
-- [-] 1. Repository structure and foundational schemas
+- [x] 1. Repository structure and foundational schemas
   - Create monorepo directory structure (/Specs, /Orchestrator, /Agents, /MCP, /UnrealProject, /Infra, /CI)
   - Create all JSON schema files in /Specs/schemas/
   - Create example JSON files in /Specs/examples/
@@ -21,38 +21,38 @@ This implementation plan breaks down the Unreal VR Multiplayer System into discr
   - Set up package.json with workspace configuration
   - _Requirements: 8.1, 8.2, 9.1, 11.1-11.9_
 
-- [ ] 2. Core schema definitions and validation
-  - [ ] 2.1 Implement LevelPlan.schema.json with zones, spawns, and objectives
+- [-] 2. Core schema definitions and validation
+  - [x] 2.1 Implement LevelPlan.schema.json with zones, spawns, and objectives
     - Define zone types (combat, safe, objective, spawn)
     - Define spatial bounds structure (center, extents)
     - Define player spawn points with position and rotation
     - Define objectives with reward ID references
     - _Requirements: 11.1_
   
-  - [ ] 2.2 Implement GameplayRules.schema.json with trigger-action patterns
+  - [x] 2.2 Implement GameplayRules.schema.json with trigger-action patterns
     - Define trigger types and condition structures
     - Define action types and parameter structures
     - Link rules to level IDs
     - _Requirements: 11.2_
   
-  - [ ] 2.3 Implement AssetSpec.schema.json with provenance tracking
+  - [x] 2.3 Implement AssetSpec.schema.json with provenance tracking
     - Define asset tiers (0: blockout, 1: placeholder, 2: final)
     - Define provenance fields (origin, license, createdBy, cost)
     - Define usage rights structure
     - _Requirements: 11.3, 6.5, 6.6_
   
-  - [ ] 2.4 Implement BudgetPolicy.schema.json with enforcement rules
+  - [x] 2.4 Implement BudgetPolicy.schema.json with enforcement rules
     - Define environment types (dev, prod)
     - Define cost limits structure (total, per-service)
     - Define enforcement modes (report, warn, block)
     - _Requirements: 11.7, 7.5, 7.6_
   
-  - [ ] 2.5 Implement rewards_catalog.json structure
+  - [x] 2.5 Implement rewards_catalog.json structure
     - Define reward ID format and validation rules
     - Create example rewards (first_objective_complete, session_complete, team_victory)
     - _Requirements: 11.9, 15.1_
   
-  - [ ] 2.6 Write property test for schema validation
+  - [-] 2.6 Write property test for schema validation
     - **Property 6: Reward Catalog Validation**
     - **Validates: Requirements 5.3, 15.2, 15.3**
 
