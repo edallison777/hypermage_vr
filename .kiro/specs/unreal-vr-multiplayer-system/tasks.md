@@ -21,7 +21,7 @@ This implementation plan breaks down the Unreal VR Multiplayer System into discr
   - Set up package.json with workspace configuration
   - _Requirements: 8.1, 8.2, 9.1, 11.1-11.9_
 
-- [-] 2. Core schema definitions and validation
+- [x] 2. Core schema definitions and validation
   - [x] 2.1 Implement LevelPlan.schema.json with zones, spawns, and objectives
     - Define zone types (combat, safe, objective, spawn)
     - Define spatial bounds structure (center, extents)
@@ -52,33 +52,33 @@ This implementation plan breaks down the Unreal VR Multiplayer System into discr
     - Create example rewards (first_objective_complete, session_complete, team_victory)
     - _Requirements: 11.9, 15.1_
   
-  - [-] 2.6 Write property test for schema validation
+  - [x] 2.6 Write property test for schema validation
     - **Property 6: Reward Catalog Validation**
     - **Validates: Requirements 5.3, 15.2, 15.3**
 
-- [ ] 3. MCP adapter interfaces and mock implementations
-  - [ ] 3.1 Create MCP adapter base interface
+- [-] 3. MCP adapter interfaces and mock implementations
+  - [x] 3.1 Create MCP adapter base interface
     - Define capability-based request/response protocol
     - Implement mock mode flag and behavior switching
     - Add provenance logging for all operations
     - _Requirements: 12.7_
   
-  - [ ] 3.2 Implement UnrealMCP adapter with mock
+  - [x] 3.2 Implement UnrealMCP adapter with mock
     - Define capabilities: build_project, package_server, generate_level, import_asset
     - Implement mock responses with realistic delays
     - _Requirements: 12.1_
   
-  - [ ] 3.3 Implement AWSMCP adapter with mock
+  - [x] 3.3 Implement AWSMCP adapter with mock
     - Define capabilities: deploy_gamelift, create_cognito_pool, create_dynamodb_table
     - Implement mock responses simulating AWS operations
     - _Requirements: 12.2_
   
-  - [ ] 3.4 Implement GitHubMCP adapter with mock
+  - [x] 3.4 Implement GitHubMCP adapter with mock
     - Define capabilities: create_pr, commit_changes, create_tag
     - Implement mock responses for version control operations
     - _Requirements: 12.3_
   
-  - [ ] 3.5 Write property test for MCP mock mode
+  - [-] 3.5 Write property test for MCP mock mode
     - **Property 13: MCP Adapter Mock Mode**
     - **Validates: Requirements 8.5, 12.7**
 
