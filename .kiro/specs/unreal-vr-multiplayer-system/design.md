@@ -100,6 +100,37 @@ All external system interactions go through MCP adapters, which provide:
 4. **Error handling**: Consistent error reporting across all external systems
 5. **Rate limiting**: Prevents excessive API calls and cost overruns
 
+### Cloud-Based Unreal Build Architecture
+
+The UnrealMCP adapter supports both local and cloud-based builds:
+
+**Cloud Build Mode (Default):**
+1. UnrealMCP receives build request from agent
+2. Launches AWS EC2 g4dn.xlarge instance with pre-configured UE5.3 AMI
+3. Clones project repository to EC2 instance
+4. Executes build commands (compile, cook, package)
+5. Uploads artifacts to S3 bucket
+6. Terminates EC2 instance
+7. Returns S3 artifact URLs to agent
+
+**Local Build Mode (Optional):**
+1. Detects local UE5.3 installation
+2. Executes build commands locally
+3. Uploads artifacts to S3 or local storage
+4. Returns artifact paths to agent
+
+**Mock Build Mode (Testing):**
+1. Simulates build process with realistic delays
+2. Generates mock artifact metadata
+3. No actual compilation or EC2 usage
+4. Returns mock artifact URLs
+
+**Cost Optimization:**
+- EC2 instances are spot instances when possible
+- Instances terminate immediately after build completion
+- Build artifacts cached in S3 with lifecycle policies (30-day expiration)
+- Parallel builds limited to prevent cost overruns
+
 ## Components and Interfaces
 
 ### Core Schemas
@@ -397,15 +428,23 @@ interface ExecutionStatus {
 Sessions are ephemeral with TTL-based expiration:
 
 ```typescript
+enum SessionState {
+  CREATED = 'CREATED',
+  ACTIVE = 'ACTIVE',
+  ENDED = 'ENDED',
+  EXPIRED = 'EXPIRED'
+}
+
 interface PlayerSession {
   sessionId: string;
   playerId: string;
   shardId: string;
+  state: SessionState;
   startTime: string;
   endTime?: string;
   events: InteractionEvent[];
   rewards: string[]; // Reward IDs from catalog
-  ttl: number; // Unix timestamp for DynamoDB TTL
+  ttl: number; // Unix timestamp for DynamoDB TTL (72 hours after session end)
 }
 
 interface InteractionEvent {
@@ -414,14 +453,26 @@ interface InteractionEvent {
   playerId: string;
   eventType: string;
   data: Record<string, any>;
-  ttl: number; // Unix timestamp for DynamoDB TTL
+  ttl: number; // Unix timestamp for DynamoDB TTL (72 hours after session end)
+}
+
+interface RewardGrantError {
+  code: 'INVALID_REWARD_ID' | 'REWARD_CATALOG_NOT_FOUND' | 'REWARD_ALREADY_GRANTED';
+  message: string;
+  rewardId?: string;
 }
 ```
 
+**Session Lifecycle:**
+1. **CREATED**: Session created when player joins matchmaking
+2. **ACTIVE**: Session becomes active when match starts
+3. **ENDED**: Session ends on match completion, timeout, or all players disconnect
+4. **EXPIRED**: Session data expires 72 hours after ENDED state (via DynamoDB TTL)
+
 DynamoDB table structure:
 
-- **PlayerSessions** table: Partition key = `playerId`, Sort key = `sessionId`, TTL attribute = `ttl`
-- **InteractionEvents** table: Partition key = `sessionId`, Sort key = `timestamp`, TTL attribute = `ttl`
+- **PlayerSessions** table: Partition key = `playerId`, Sort key = `sessionId`, TTL attribute = `ttl` (72h after end)
+- **InteractionEvents** table: Partition key = `sessionId`, Sort key = `timestamp`, TTL attribute = `ttl` (72h after session end)
 - **PlayerRewards** table: Partition key = `playerId`, Sort key = `rewardId` (no TTL - persistent)
 
 ### Provenance Data Model
@@ -879,6 +930,8 @@ While not part of the initial vertical slice, performance testing should include
 - VR Plugin: OpenXR plugin for Quest 3
 - Networking: Unreal's built-in replication with GameLift integration
 - Language: C++ for core systems, Blueprints for gameplay prototyping
+- Build System: Cloud-based builds on AWS EC2 g4dn instances (local builds optional)
+- Build Artifacts: Stored in S3 with 30-day lifecycle policy
 
 **Infrastructure:**
 - IaC: Terraform 1.5+
@@ -892,9 +945,27 @@ While not part of the initial vertical slice, performance testing should include
 2. **Planning Phase**: Orchestrator generates execution plan with agent assignments
 3. **Review Phase**: User reviews plan, cost estimates, and timeline
 4. **Execution Phase**: Orchestrator coordinates agents to implement plan
-5. **Validation Phase**: QA agent runs tests and validates implementation
-6. **Deployment Phase**: DevOps agent deploys to target environment
-7. **Monitoring Phase**: CostMonitor tracks costs and generates reports
+5. **Build Phase**: UnrealMCP adapter triggers cloud build on EC2 (or uses local UE5.3 if available)
+6. **Validation Phase**: QA agent runs tests and validates implementation
+7. **Deployment Phase**: DevOps agent deploys to target environment
+8. **Monitoring Phase**: CostMonitor tracks costs and generates reports
+
+### Cloud Build Workflow
+
+**For Unreal Engine Builds:**
+1. Agent requests build via UnrealMCP adapter
+2. UnrealMCP checks for local UE5.3 installation
+   - If found: Execute build locally (faster, no EC2 cost)
+   - If not found: Proceed with cloud build
+3. Cloud build process:
+   - Launch EC2 g4dn.xlarge spot instance with UE5.3 AMI
+   - Clone project repository to instance
+   - Execute build commands (compile C++, cook content, package for Quest 3/Server)
+   - Upload artifacts to S3 bucket
+   - Terminate EC2 instance
+   - Return S3 URLs to agent
+4. Cost tracking: Record EC2 instance time and S3 storage costs
+5. Estimated cost per build: ~$0.50-$2.00 depending on project size
 
 ### Deployment Environments
 

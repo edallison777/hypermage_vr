@@ -17,7 +17,7 @@ The Unreal VR Multiplayer System is a spec-driven, multi-agent system that desig
 - **Budget_Policy**: A configuration document defining cost limits and enforcement rules
 - **Comfort_Setting**: VR configuration options designed to reduce motion sickness
 - **Mock_Mode**: A testing mode where external system calls are simulated locally
-- **TTL**: Time-to-live expiration for ephemeral data records
+- **TTL**: Time-To-Live - An expiration timestamp for ephemeral data records. After the TTL expires, DynamoDB automatically deletes the record. For this system, session data has a 72-hour TTL after session end, giving you 72 hours to query or process session information before it's automatically deleted.
 - **Vertical_Slice**: A complete end-to-end feature implementation demonstrating all system layers
 
 ## Requirements
@@ -81,8 +81,10 @@ The Unreal VR Multiplayer System is a spec-driven, multi-agent system that desig
 1. THE System SHALL create ephemeral sessions that do not persist gameplay state
 2. THE System SHALL persist only reward data as boolean flags
 3. THE System SHALL store reward flags using string identifiers from the rewards catalog
-4. THE System SHALL store event data with automatic TTL expiration
+4. THE System SHALL store event data with automatic TTL expiration set to 72 hours after session end
 5. WHEN a session ends, THE System SHALL discard all non-reward gameplay state
+6. THE System SHALL define session states: CREATED, ACTIVE, ENDED, EXPIRED
+7. THE System SHALL transition sessions through states: CREATED → ACTIVE (on match start) → ENDED (on match completion/timeout/disconnect) → EXPIRED (after TTL)
 
 ### Requirement 6: Asset Management
 
@@ -122,6 +124,26 @@ The Unreal VR Multiplayer System is a spec-driven, multi-agent system that desig
 3. THE System SHALL use GitHub Actions for CI/CD pipelines
 4. THE System SHALL use Terraform for infrastructure as code
 5. THE System SHALL support full mock mode for all external systems
+6. THE System SHALL use cloud-based EC2 instances for Unreal Engine builds
+7. THE System SHALL NOT require local Unreal Engine installation for orchestrator or agent operation
+
+### Requirement 8a: Cloud-Based Unreal Build System
+
+**User Story:** As a developer, I want Unreal Engine builds to happen in the cloud, so that I don't need to install UE5.3 locally and can work from any machine.
+
+**IMPORTANT:** This requirement ensures the project can be completed WITHOUT local UE5.3 installation. All Unreal Engine compilation happens on AWS EC2 instances, making the system accessible from any development machine.
+
+#### Acceptance Criteria
+
+1. THE System SHALL use AWS EC2 g4dn instances for Unreal Engine compilation and packaging
+2. THE UnrealMCP adapter SHALL orchestrate remote builds via EC2 API
+3. THE System SHALL provide pre-configured AMIs with UE5.3, Android SDK, and GameLift SDK
+4. THE System SHALL support mock mode for UnrealMCP that simulates builds without EC2
+5. THE System SHALL upload build artifacts to S3 for distribution
+6. THE System SHALL support local UE5.3 installation as an optional optimization for developers who have it
+7. THE System SHALL terminate EC2 instances after build completion to minimize costs
+
+**Note:** Local UE5.3 installation is OPTIONAL for performance optimization only. The system is fully functional using cloud builds alone.
 
 ### Requirement 9: System Architecture
 
@@ -217,8 +239,9 @@ The Unreal VR Multiplayer System is a spec-driven, multi-agent system that desig
 
 1. THE System SHALL maintain a rewards_catalog.json file containing all valid reward identifiers
 2. WHEN a reward is granted, THE System SHALL validate the reward ID against the rewards catalog
-3. WHEN a reward ID is not in the catalog, THE System SHALL reject the reward grant operation
+3. WHEN a reward ID is not in the catalog, THE System SHALL reject the reward grant operation with error code INVALID_REWARD_ID
 4. THE System SHALL store granted rewards as boolean flags with string identifiers
+5. WHEN the rewards catalog cannot be loaded, THE System SHALL reject reward operations with error code REWARD_CATALOG_NOT_FOUND
 
 ### Requirement 16: Licensed Asset Handling
 

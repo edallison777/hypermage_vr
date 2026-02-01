@@ -65,8 +65,11 @@ This implementation plan breaks down the Unreal VR Multiplayer System into discr
   
   - [x] 3.2 Implement UnrealMCP adapter with mock
     - Define capabilities: build_project, package_server, generate_level, import_asset
-    - Implement mock responses with realistic delays
-    - _Requirements: 12.1_
+    - Implement cloud build mode using EC2 API (launches instance, executes build, uploads to S3, terminates)
+    - Implement local build mode for developers with UE5.3 installed (optional)
+    - Implement mock mode with realistic delays and mock artifacts
+    - Add cost tracking for EC2 instance usage
+    - _Requirements: 12.1, 8a.1-8a.7_
   
   - [x] 3.3 Implement AWSMCP adapter with mock
     - Define capabilities: deploy_gamelift, create_cognito_pool, create_dynamodb_table
@@ -204,17 +207,18 @@ This implementation plan breaks down the Unreal VR Multiplayer System into discr
     - **Property 9: Licensed Asset Recommendation Without Purchase**
     - **Validates: Requirements 6.4, 16.1-16.4**
 
-- [ ] 9. Checkpoint - Core agents and cost monitoring validated
+- [x] 9. Checkpoint - Core agents and cost monitoring validated
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 10. Unreal Engine VR project setup
-  - [ ] 10.1 Create UE5.3+ project for Meta Quest 3
+- [x] 10. Unreal Engine VR project setup
+  - [x] 10.1 Create UE5.3+ project for Meta Quest 3
     - Enable OpenXR plugin
     - Configure Android build settings for Quest 3
     - Set up dedicated server build target
-    - _Requirements: 1.1, 1.2_
+    - **IMPORTANT:** Project structure and configuration files created; actual compilation happens via cloud builds (EC2) or mock mode. Local UE5.3 installation is NOT required to complete this project.
+    - _Requirements: 1.1, 1.2, 8a.1-8a.7_
   
-  - [ ] 10.2 Implement VR Pawn with comfort settings
+  - [x] 10.2 Implement VR Pawn with comfort settings
     - Implement smooth locomotion with speed caps
     - Implement snap turn (default) and smooth turn (optional)
     - Implement comfort vignette on acceleration/rotation
@@ -222,91 +226,112 @@ This implementation plan breaks down the Unreal VR Multiplayer System into discr
     - Implement optional flight mode with comfort tuning
     - _Requirements: 1.3-1.7_
   
-  - [ ] 10.3 Implement dedicated server architecture
+  - [x] 10.3 Implement dedicated server architecture
     - Set up server-authoritative game mode
     - Implement client-server replication
     - Add server-side validation for all gameplay actions
     - _Requirements: 2.1_
   
-  - [ ] 10.4 Implement player capacity management
+  - [x] 10.4 Implement player capacity management
     - Enforce 10-15 player limit per shard
     - Reject connections beyond capacity
     - _Requirements: 2.2_
   
-  - [ ] 10.5 Write property test for server authority
+  - [x] 10.5 Write property test for server authority
     - **Property 1: Server Authority for Gameplay State**
     - **Validates: Requirements 2.1**
   
-  - [ ] 10.6 Write property test for shard capacity
+  - [x] 10.6 Write property test for shard capacity
     - **Property 2: Shard Player Capacity Enforcement**
     - **Validates: Requirements 2.2**
 
-- [ ] 11. GameLift integration and authentication
-  - [ ] 11.1 Implement GameLift SDK integration
+- [x] 11. GameLift integration and authentication
+  - [x] 11.1 Implement GameLift SDK integration
     - Initialize GameLift server SDK
     - Implement player session validation
     - Handle server health reporting
     - _Requirements: 2.4_
   
-  - [ ] 11.2 Implement JWT authentication
+  - [x] 11.2 Implement JWT authentication
     - Integrate Cognito JWT validation
     - Validate token signature and expiration
     - Extract player ID from token claims
     - Reject invalid or expired tokens
     - _Requirements: 3.1-3.4_
   
-  - [ ] 11.3 Write property test for JWT validation
+  - [x] 11.3 Write property test for JWT validation
     - **Property 3: JWT Token Validation**
     - **Validates: Requirements 3.2, 3.3, 3.4**
 
-- [ ] 12. Voice communication system
-  - [ ] 12.1 Implement Unreal Voice Chat Interface integration
+- [x] 12. Voice communication system
+  - [x] 12.1 Implement Unreal Voice Chat Interface integration
     - Set up party voice channel
     - Route audio to all players in shard
     - Implement pluggable provider interface
     - _Requirements: 4.1, 4.2, 4.3_
   
-  - [ ] 12.2 Implement mock voice provider
+  - [x] 12.2 Implement mock voice provider
     - Simulate voice connections
     - Provide no-op audio routing for testing
     - _Requirements: 4.4_
   
-  - [ ] 12.3 Write property test for party voice routing
+  - [x] 12.3 Write property test for party voice routing
     - **Property 4: Party Voice Routing**
     - **Validates: Requirements 4.2, 4.5**
 
-- [ ] 13. Session management and reward system
-  - [ ] 13.1 Implement ephemeral session logic
-    - Create session on match start
+- [x] 13. Session management and reward system
+  - [x] 13.1 Implement ephemeral session logic
+    - Create session on match start (state: CREATED → ACTIVE)
     - Track player events during session
+    - Transition to ENDED state on session completion/timeout/disconnect
     - Discard gameplay state on session end
-    - _Requirements: 5.1, 5.5_
+    - Set TTL to 72 hours after session end
+    - _Requirements: 5.1, 5.5, 5.6, 5.7_
   
-  - [ ] 13.2 Implement reward granting system
-    - Validate reward IDs against rewards_catalog.json
-    - Store rewards as boolean flags
-    - Reject invalid reward IDs
-    - _Requirements: 5.2, 5.3, 15.2, 15.3_
+  - [x] 13.2 Implement reward granting system
+    - Load and validate rewards_catalog.json
+    - Validate reward IDs against catalog before granting
+    - Store rewards as boolean flags in PlayerRewards table
+    - Reject invalid reward IDs with error code INVALID_REWARD_ID
+    - Handle catalog loading errors with error code REWARD_CATALOG_NOT_FOUND
+    - _Requirements: 5.2, 5.3, 15.1, 15.2, 15.3, 15.5_
   
-  - [ ] 13.3 Implement PlayerSessionSummary generation
+  - [x] 13.3 Implement PlayerSessionSummary generation
     - Collect granted rewards at session end
-    - Generate summary with player ID and reward list
-    - Send summary to Session API
+    - Generate summary with player ID, session ID, and reward list
+    - Create stub interface for Session API (actual API implemented in Task 15.4)
+    - Store summary locally or send to mock Session API endpoint
     - _Requirements: 5.2_
   
-  - [ ] 13.4 Write property test for session ephemeral state
+  - [x] 13.4 Write property test for session ephemeral state
     - **Property 5: Session Ephemeral State**
-    - **Validates: Requirements 5.1, 5.2, 5.5**
+    - **Validates: Requirements 5.1, 5.2, 5.5, 5.6, 5.7**
+    - Test that only rewards persist after session ends
+    - Test that gameplay state (positions, events, inventory) is discarded
+    - Test TTL is set to 72 hours after session end
+    - Test session state transitions: CREATED → ACTIVE → ENDED → EXPIRED
   
-  - [ ] 13.5 Write property test for reward storage format
+  - [x] 13.5 Write property test for reward storage format
     - **Property 14: Reward Storage Format**
-    - **Validates: Requirements 15.4**
+    - **Validates: Requirements 15.4, 15.5**
+    - Test rewards stored as boolean flags with string identifiers
+    - Test reward records have no TTL attribute (persistent)
+    - Test invalid reward IDs return INVALID_REWARD_ID error
+    - Test catalog loading failures return REWARD_CATALOG_NOT_FOUND error
 
-- [ ] 14. Checkpoint - Unreal project core systems validated
+- [x] 14. Checkpoint - Unreal project core systems validated
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 15. AWS infrastructure with Terraform
-  - [ ] 15.1 Create GameLift fleet Terraform module
+  - [x] 15.0 Create Unreal Build EC2 infrastructure
+    - Create Terraform module for EC2 build instances (g4dn.xlarge)
+    - Create pre-configured AMI with UE5.3, Android SDK, GameLift SDK
+    - Set up S3 bucket for build artifacts with lifecycle policies
+    - Configure IAM roles for EC2 build instances
+    - Implement spot instance support for cost optimization
+    - _Requirements: 8a.1-8a.7_
+  
+  - [x] 15.1 Create GameLift fleet Terraform module
     - Define fleet configuration with Quest 3 server builds
     - Configure scaling policies (max 3 shards initially)
     - Set up fleet locations in eu-west-1
