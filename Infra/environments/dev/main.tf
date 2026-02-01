@@ -95,6 +95,107 @@ module "gamelift_fleet" {
   }
 }
 
+# FlexMatch Matchmaking Module
+module "flexmatch" {
+  source = "../../modules/flexmatch"
+
+  project_name = var.project_name
+  environment  = "dev"
+  aws_region   = var.aws_region
+
+  # Fleet configuration
+  fleet_arns = [module.gamelift_fleet.fleet_arn]
+
+  # Match size (10-15 players per shard)
+  min_players_per_match = 10
+  max_players_per_match = 15
+
+  # Matchmaking timeouts
+  matchmaking_timeout_seconds = 120
+  acceptance_timeout_seconds  = 30
+  acceptance_required         = true
+
+  # Skill matching
+  skill_distance_threshold = 5
+  max_latency_ms          = 100
+
+  # Backfill
+  backfill_mode = "AUTOMATIC"
+
+  tags = {
+    CostCenter = "Development"
+    Owner      = "DevOps Team"
+  }
+}
+
+# Cognito User Pools Module
+module "cognito" {
+  source = "../../modules/cognito"
+
+  project_name = var.project_name
+  environment  = "dev"
+  aws_region   = var.aws_region
+
+  # Token validity (1h access, 7d refresh)
+  access_token_validity_hours = 1
+  id_token_validity_hours     = 1
+  refresh_token_validity_days = 7
+
+  # MFA configuration (optional for dev)
+  mfa_configuration = "OPTIONAL"
+
+  # Security (audit mode for dev)
+  advanced_security_mode = "AUDIT"
+  deletion_protection    = "INACTIVE"
+
+  # OAuth callbacks (update with actual URLs)
+  callback_urls = [
+    "http://localhost:3000/callback",
+    "hypermage://callback"
+  ]
+  logout_urls = [
+    "http://localhost:3000/logout",
+    "hypermage://logout"
+  ]
+
+  tags = {
+    CostCenter = "Development"
+    Owner      = "DevOps Team"
+  }
+}
+
+# Session API Module
+module "session_api" {
+  source = "../../modules/session-api"
+
+  project_name = var.project_name
+  environment  = "dev"
+  aws_region   = var.aws_region
+
+  # Cognito integration
+  cognito_user_pool_arn = module.cognito.user_pool_arn
+
+  # FlexMatch integration
+  matchmaking_configuration_name = module.flexmatch.matchmaking_configuration_name
+
+  # DynamoDB integration (tables will be created in task 15.5)
+  # dynamodb_table_arns = [
+  #   aws_dynamodb_table.player_sessions.arn,
+  #   aws_dynamodb_table.player_rewards.arn
+  # ]
+  # player_sessions_table_name = aws_dynamodb_table.player_sessions.name
+  # player_rewards_table_name  = aws_dynamodb_table.player_rewards.name
+
+  # Logging
+  log_retention_days = 30
+  lambda_log_level   = "INFO"
+
+  tags = {
+    CostCenter = "Development"
+    Owner      = "DevOps Team"
+  }
+}
+
 # Outputs
 output "build_s3_bucket" {
   description = "S3 bucket for build artifacts"
@@ -124,4 +225,49 @@ output "gamelift_alias_id" {
 output "gamelift_fleet_arn" {
   description = "GameLift fleet ARN"
   value       = module.gamelift_fleet.fleet_arn
+}
+
+output "matchmaking_configuration_name" {
+  description = "FlexMatch configuration name for client integration"
+  value       = module.flexmatch.matchmaking_configuration_name
+}
+
+output "matchmaking_deployment_instructions" {
+  description = "Instructions for deploying FlexMatch resources"
+  value       = module.flexmatch.deployment_instructions
+}
+
+output "game_session_queue_arn" {
+  description = "Game session queue ARN"
+  value       = module.flexmatch.game_session_queue_arn
+}
+
+output "cognito_user_pool_id" {
+  description = "Cognito User Pool ID for authentication"
+  value       = module.cognito.user_pool_id
+}
+
+output "cognito_game_client_id" {
+  description = "Cognito game client ID for client integration"
+  value       = module.cognito.game_client_id
+}
+
+output "cognito_jwks_uri" {
+  description = "JWKS URI for JWT token validation"
+  value       = module.cognito.jwks_uri
+}
+
+output "cognito_issuer" {
+  description = "JWT token issuer"
+  value       = module.cognito.issuer
+}
+
+output "session_api_endpoint" {
+  description = "Session API endpoint URL"
+  value       = module.session_api.api_endpoint
+}
+
+output "session_api_id" {
+  description = "Session API Gateway ID"
+  value       = module.session_api.api_id
 }

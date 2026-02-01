@@ -337,19 +337,19 @@ This implementation plan breaks down the Unreal VR Multiplayer System into discr
     - Set up fleet locations in eu-west-1
     - _Requirements: 2.4, 2.5, 2.6_
   
-  - [ ] 15.2 Create FlexMatch Terraform module
+  - [x] 15.2 Create FlexMatch Terraform module
     - Define matchmaking configuration
     - Set up rule sets for 10-15 player matches
     - Configure matchmaking queues
     - _Requirements: 2.5, 2.6_
   
-  - [ ] 15.3 Create Cognito User Pools Terraform module
+  - [x] 15.3 Create Cognito User Pools Terraform module
     - Define user pool with JWT configuration
     - Set up app clients for game authentication
     - Configure token expiration (1h access, 7d refresh)
     - _Requirements: 3.1, 3.2_
   
-  - [ ] 15.4 Create Session API Terraform module
+  - [x] 15.4 Create Session API Terraform module
     - Define API Gateway with Cognito authorizer
     - Create Lambda functions for endpoints
     - Implement POST /matchmaking/start
@@ -357,14 +357,14 @@ This implementation plan breaks down the Unreal VR Multiplayer System into discr
     - Implement POST /session-summary
     - _Requirements: 13.4_
   
-  - [ ] 15.5 Create DynamoDB tables Terraform module
+  - [x] 15.5 Create DynamoDB tables Terraform module
     - Create PlayerSessions table with TTL
     - Create InteractionEvents table with TTL
     - Create PlayerRewards table (no TTL)
     - Configure TTL attribute on expires_at_epoch field
     - _Requirements: 13.5_
   
-  - [ ] 15.6 Write property test for event TTL assignment
+  - [x] 15.6 Write property test for event TTL assignment
     - **Property 7: Event TTL Assignment**
     - **Validates: Requirements 5.4**
 
