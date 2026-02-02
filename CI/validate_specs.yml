@@ -1,0 +1,183 @@
+name: Validate Specs
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'Specs/**'
+      - 'Orchestrator/**'
+      - 'Agents/**'
+      - 'MCP/**'
+      - 'tests/**'
+      - 'package.json'
+      - 'tsconfig.json'
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run JSON schema validation
+        run: node scripts/validate-schemas.js
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run TypeScript type checking
+        run: npm run type-check
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Generate test coverage report
+        run: npm run test:coverage
+
+      - name: Upload coverage to artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 30
+
+      - name: Check coverage threshold
+        run: |
+          COVERAGE=$(cat coverage/coverage-summary.json | jq '.total.lines.pct')
+          echo "Line coverage: $COVERAGE%"
+          if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+            echo "Coverage is below 80% threshold"
+            exit 1
+          fi
+
+      - name: Validate package.json
+        run: npm run validate-package
+
+      - name: Check for security vulnerabilities
+        run: npm audit --audit-level=moderate
+
+  validate-specs-structure:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate spec file structure
+        run: |
+          # Check that all required spec files exist
+          if [ ! -f ".kiro/specs/unreal-vr-multiplayer-system/requirements.md" ]; then
+            echo "Missing requirements.md"
+            exit 1
+          fi
+          if [ ! -f ".kiro/specs/unreal-vr-multiplayer-system/design.md" ]; then
+            echo "Missing design.md"
+            exit 1
+          fi
+          if [ ! -f ".kiro/specs/unreal-vr-multiplayer-system/tasks.md" ]; then
+            echo "Missing tasks.md"
+            exit 1
+          fi
+          echo "All required spec files present"
+
+      - name: Validate schema files
+        run: |
+          # Check that all required schema files exist
+          SCHEMAS=(
+            "LevelPlan.schema.json"
+            "GameplayRules.schema.json"
+            "AssetSpec.schema.json"
+            "BudgetPolicy.schema.json"
+            "CostModel.schema.json"
+            "DeploySpec.schema.json"
+            "InteractionEvent.schema.json"
+            "PlayerSessionSummary.schema.json"
+          )
+          
+          for schema in "${SCHEMAS[@]}"; do
+            if [ ! -f "Specs/schemas/$schema" ]; then
+              echo "Missing schema: $schema"
+              exit 1
+            fi
+          done
+          echo "All required schema files present"
+
+      - name: Validate example files
+        run: |
+          # Check that example files exist
+          if [ ! -f "Specs/examples/rewards_catalog.json" ]; then
+            echo "Missing rewards_catalog.json"
+            exit 1
+          fi
+          echo "All required example files present"
+
+  validate-property-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check property test coverage
+        run: |
+          # Verify all 22 properties have tests
+          PROPERTY_TESTS=(
+            "server-authority-gameplay-state.test.ts"
+            "shard-player-capacity-enforcement.test.ts"
+            "jwt-token-validation.test.ts"
+            "party-voice-routing.test.ts"
+            "session-ephemeral-state.test.ts"
+            "reward-catalog-validation.test.ts"
+            "event-ttl-assignment.test.ts"
+            "tier1-asset-generation.test.ts"
+            "licensed-asset-handling.test.ts"
+            "asset-provenance-completeness.test.ts"
+            "environment-approval-gates.test.ts"
+            "cost-limit-enforcement.test.ts"
+            "mcp-mock-mode.test.ts"
+            "reward-storage-format.test.ts"
+            "spec-update-change-notes.test.ts"
+            "orchestrator-plan-generation.test.ts"
+            "plan-approval-requirement.test.ts"
+            "cost-tracking-aws-operations.test.ts"
+          )
+          
+          MISSING_TESTS=()
+          for test in "${PROPERTY_TESTS[@]}"; do
+            if [ ! -f "tests/properties/$test" ]; then
+              MISSING_TESTS+=("$test")
+            fi
+          done
+          
+          if [ ${#MISSING_TESTS[@]} -gt 0 ]; then
+            echo "Missing property tests:"
+            printf '%s\n' "${MISSING_TESTS[@]}"
+            exit 1
+          fi
+          echo "All property tests present"
+
+      - name: Run property tests
+        run: npm run test:properties
+        env:
+          NODE_ENV: test

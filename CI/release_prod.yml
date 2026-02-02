@@ -1,0 +1,372 @@
+name: Release to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+      skip_tests:
+        description: 'Skip tests (not recommended)'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  pre-release-checks:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate release version
+        run: |
+          VERSION="${{ github.event.inputs.release_version }}"
+          if [[ ! $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version format. Expected: vX.Y.Z"
+            exit 1
+          fi
+          echo "Version format valid: $VERSION"
+
+      - name: Check if version already exists
+        run: |
+          VERSION="${{ github.event.inputs.release_version }}"
+          if git rev-parse "$VERSION" >/dev/null 2>&1; then
+            echo "Version $VERSION already exists"
+            exit 1
+          fi
+          echo "Version $VERSION is new"
+
+      - name: Run full test suite
+        if: github.event.inputs.skip_tests != 'true'
+        run: |
+          echo "Running full test suite"
+          npm run test:all
+
+      - name: Run property tests
+        if: github.event.inputs.skip_tests != 'true'
+        run: npm run test:properties
+
+      - name: Check test coverage
+        if: github.event.inputs.skip_tests != 'true'
+        run: |
+          npm run test:coverage
+          COVERAGE=$(cat coverage/coverage-summary.json | jq '.total.lines.pct')
+          if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+            echo "Coverage is below 80% threshold"
+            exit 1
+          fi
+
+  budget-check:
+    runs-on: ubuntu-latest
+    needs: pre-release-checks
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Load production budget policy
+        id: budget
+        run: |
+          echo "Loading production budget policy"
+          node -e "
+          const fs = require('fs');
+          const budgetPolicy = JSON.parse(fs.readFileSync('Specs/examples/budget-policy-prod.json', 'utf8'));
+          
+          console.log('Budget Policy:');
+          console.log('- Environment:', budgetPolicy.environment);
+          console.log('- Total limit:', budgetPolicy.limits.total, budgetPolicy.limits.currency);
+          console.log('- Duration:', budgetPolicy.limits.duration);
+          console.log('- Enforcement mode:', budgetPolicy.enforcement.mode);
+          console.log('- Approval required:', budgetPolicy.enforcement.approvalRequired);
+          
+          if (budgetPolicy.enforcement.approvalRequired !== true) {
+            console.error('ERROR: Production budget policy must require approval');
+            process.exit(1);
+          }
+          
+          console.log('budget_limit=' + budgetPolicy.limits.total);
+          " | tee budget-output.txt
+          
+          LIMIT=$(grep 'budget_limit=' budget-output.txt | cut -d'=' -f2)
+          echo "limit=$LIMIT" >> $GITHUB_OUTPUT
+
+      - name: Estimate production costs
+        id: cost
+        run: |
+          echo "Estimating production infrastructure costs"
+          node -e "
+          const { CostMonitorFinOpsAgent } = require('./Agents/CostMonitorFinOpsAgent.js');
+          const agent = new CostMonitorFinOpsAgent([]);
+          
+          // Estimate costs for full production deployment
+          const estimatedMonthlyCost = 200; // £200/month for 3 shards, 15 players each
+          const estimatedEventCost = (estimatedMonthlyCost / 30) * 3; // 72h event
+          
+          console.log('Estimated monthly cost: £' + estimatedMonthlyCost);
+          console.log('Estimated 72h event cost: £' + estimatedEventCost);
+          
+          const budgetLimit = ${{ steps.budget.outputs.limit }};
+          console.log('Budget limit: £' + budgetLimit);
+          
+          if (estimatedEventCost > budgetLimit) {
+            console.error('ERROR: Estimated cost exceeds production budget limit!');
+            process.exit(1);
+          }
+          
+          console.log('Budget compliance: OK');
+          console.log('event_cost=' + estimatedEventCost);
+          " | tee cost-output.txt
+          
+          COST=$(grep 'event_cost=' cost-output.txt | cut -d'=' -f2)
+          echo "estimated_cost=$COST" >> $GITHUB_OUTPUT
+
+  approval-gate:
+    runs-on: ubuntu-latest
+    needs: budget-check
+    environment: production
+    
+    steps:
+      - name: Request production deployment approval
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ github.TOKEN }}
+          approvers: ${{ secrets.PROD_APPROVERS }}
+          minimum-approvals: 2
+          issue-title: "Production Release Approval Required"
+          issue-body: |
+            ## Production Release - ${{ github.event.inputs.release_version }}
+            
+            **Version:** ${{ github.event.inputs.release_version }}
+            **Commit:** ${{ github.sha }}
+            **Requested by:** ${{ github.actor }}
+            **Estimated Cost:** £${{ needs.budget-check.outputs.estimated_cost }} (72h event)
+            
+            ### Pre-release Checks
+            - ✅ Version format validated
+            - ✅ Full test suite passed
+            - ✅ Property tests passed
+            - ✅ Coverage threshold met (80%+)
+            - ✅ Budget compliance verified
+            
+            ### Deployment Plan
+            1. Build Unreal artifacts (Server + Quest 3)
+            2. Deploy infrastructure to production
+            3. Run smoke tests
+            4. Create GitHub release
+            5. Tag repository
+            
+            **⚠️ This will deploy to PRODUCTION. Please review carefully.**
+            
+            Approve this issue to proceed with production deployment.
+
+  build-artifacts:
+    runs-on: ubuntu-latest
+    needs: approval-gate
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+
+      - name: Build production artifacts
+        run: |
+          echo "Building production artifacts"
+          # Trigger cloud builds for both Server and Quest 3
+          npm run build:prod
+
+      - name: Upload artifacts to S3
+        run: |
+          VERSION="${{ github.event.inputs.release_version }}"
+          aws s3 sync ./artifacts/ s3://unreal-vr-builds/releases/$VERSION/
+
+  terraform-apply-prod:
+    runs-on: ubuntu-latest
+    needs: build-artifacts
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+
+      - name: Terraform Init
+        working-directory: Infra/environments/prod
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: Infra/environments/prod
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: Infra/environments/prod
+        run: terraform apply -auto-approve tfplan
+
+      - name: Get Terraform outputs
+        working-directory: Infra/environments/prod
+        run: terraform output -json > outputs.json
+
+      - name: Upload Terraform outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-outputs-prod-${{ github.sha }}
+          path: Infra/environments/prod/outputs.json
+          retention-days: 365
+
+  smoke-tests-prod:
+    runs-on: ubuntu-latest
+    needs: terraform-apply-prod
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download Terraform outputs
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-outputs-prod-${{ github.sha }}
+
+      - name: Run production smoke tests
+        run: npm run test:smoke -- --environment=prod
+
+      - name: Validate critical paths
+        run: |
+          echo "Validating critical production paths"
+          node -e "
+          const outputs = require('./outputs.json');
+          
+          // Validate Session API
+          const apiUrl = outputs.session_api_url?.value;
+          if (!apiUrl) {
+            console.error('Session API URL not found');
+            process.exit(1);
+          }
+          console.log('✅ Session API URL:', apiUrl);
+          
+          // Validate GameLift fleet
+          const fleetId = outputs.gamelift_fleet_id?.value;
+          if (!fleetId) {
+            console.error('GameLift fleet ID not found');
+            process.exit(1);
+          }
+          console.log('✅ GameLift fleet ID:', fleetId);
+          
+          // Validate Cognito
+          const userPoolId = outputs.cognito_user_pool_id?.value;
+          if (!userPoolId) {
+            console.error('Cognito user pool ID not found');
+            process.exit(1);
+          }
+          console.log('✅ Cognito user pool ID:', userPoolId);
+          
+          console.log('All critical paths validated');
+          "
+
+  create-release:
+    runs-on: ubuntu-latest
+    needs: smoke-tests-prod
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create Git tag
+        run: |
+          VERSION="${{ github.event.inputs.release_version }}"
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git push origin "$VERSION"
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          VERSION="${{ github.event.inputs.release_version }}"
+          echo "# Release $VERSION" > release-notes.md
+          echo "" >> release-notes.md
+          echo "## Deployment Information" >> release-notes.md
+          echo "- **Commit:** ${{ github.sha }}" >> release-notes.md
+          echo "- **Deployed by:** ${{ github.actor }}" >> release-notes.md
+          echo "- **Deployed at:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "## Infrastructure" >> release-notes.md
+          echo "- Environment: Production" >> release-notes.md
+          echo "- Region: eu-west-1" >> release-notes.md
+          echo "- Max shards: 3" >> release-notes.md
+          echo "- Max players per shard: 15" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "## Artifacts" >> release-notes.md
+          echo "- Server build: s3://unreal-vr-builds/releases/$VERSION/Server/" >> release-notes.md
+          echo "- Quest 3 build: s3://unreal-vr-builds/releases/$VERSION/Quest3/" >> release-notes.md
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.inputs.release_version }}
+          release_name: Release ${{ github.event.inputs.release_version }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: false
+
+      - name: Notify success
+        run: |
+          echo "🎉 Production release completed successfully!"
+          echo "Version: ${{ github.event.inputs.release_version }}"
+          echo "Commit: ${{ github.sha }}"

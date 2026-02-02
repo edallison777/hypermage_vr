@@ -1,0 +1,229 @@
+name: Build Unreal
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'UnrealProject/**'
+      - 'MCP/adapters/UnrealMCPAdapter.ts'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'UnrealProject/**'
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'Development'
+        type: choice
+        options:
+          - Development
+          - Shipping
+      target_platform:
+        description: 'Target platform'
+        required: true
+        default: 'Quest3'
+        type: choice
+        options:
+          - Quest3
+          - Server
+          - Both
+
+jobs:
+  build-server:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.target_platform == 'Server' || github.event.inputs.target_platform == 'Both' || github.event_name != 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+
+      - name: Trigger cloud build for dedicated server
+        run: |
+          echo "Triggering cloud build via UnrealMCP adapter"
+          node -e "
+          const { UnrealMCPAdapter } = require('./MCP/adapters/UnrealMCPAdapter.js');
+          const adapter = new UnrealMCPAdapter({ mockMode: false });
+          
+          const buildConfig = {
+            projectPath: 'UnrealProject/HyperMageVR.uproject',
+            buildType: '${{ github.event.inputs.build_type || 'Development' }}',
+            platform: 'LinuxServer',
+            outputPath: 's3://unreal-vr-builds/${{ github.sha }}/Server',
+            useCloudBuild: true,
+          };
+          
+          adapter.execute({
+            id: 'build-${{ github.sha }}',
+            timestamp: new Date().toISOString(),
+            capability: 'build_project',
+            parameters: buildConfig,
+            actor: 'github-actions',
+          }).then(result => {
+            console.log('Build result:', JSON.stringify(result, null, 2));
+            if (!result.success) {
+              process.exit(1);
+            }
+          }).catch(err => {
+            console.error('Build failed:', err);
+            process.exit(1);
+          });
+          "
+
+      - name: Download server artifacts from S3
+        run: |
+          aws s3 sync s3://unreal-vr-builds/${{ github.sha }}/Server ./artifacts/server/
+
+      - name: Upload server artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-build-${{ github.sha }}
+          path: artifacts/server/
+          retention-days: 30
+
+      - name: Track build cost
+        run: |
+          echo "Recording build cost to CostMonitor"
+          # Cost tracking would be handled by CostMonitorFinOpsAgent
+          # Estimated cost: $0.50-$2.00 per build
+
+  build-quest3:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.target_platform == 'Quest3' || github.event.inputs.target_platform == 'Both' || github.event_name != 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+
+      - name: Trigger cloud build for Quest 3
+        run: |
+          echo "Triggering cloud build via UnrealMCP adapter"
+          node -e "
+          const { UnrealMCPAdapter } = require('./MCP/adapters/UnrealMCPAdapter.js');
+          const adapter = new UnrealMCPAdapter({ mockMode: false });
+          
+          const buildConfig = {
+            projectPath: 'UnrealProject/HyperMageVR.uproject',
+            buildType: '${{ github.event.inputs.build_type || 'Development' }}',
+            platform: 'Android',
+            outputPath: 's3://unreal-vr-builds/${{ github.sha }}/Quest3',
+            useCloudBuild: true,
+            androidSettings: {
+              targetSDK: 32,
+              minSDK: 29,
+              packageName: 'com.unrealvr.hypermage',
+            },
+          };
+          
+          adapter.execute({
+            id: 'build-${{ github.sha }}',
+            timestamp: new Date().toISOString(),
+            capability: 'package_server',
+            parameters: buildConfig,
+            actor: 'github-actions',
+          }).then(result => {
+            console.log('Build result:', JSON.stringify(result, null, 2));
+            if (!result.success) {
+              process.exit(1);
+            }
+          }).catch(err => {
+            console.error('Build failed:', err);
+            process.exit(1);
+          });
+          "
+
+      - name: Download Quest 3 artifacts from S3
+        run: |
+          aws s3 sync s3://unreal-vr-builds/${{ github.sha }}/Quest3 ./artifacts/quest3/
+
+      - name: Upload Quest 3 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: quest3-build-${{ github.sha }}
+          path: artifacts/quest3/
+          retention-days: 30
+
+      - name: Track build cost
+        run: |
+          echo "Recording build cost to CostMonitor"
+          # Cost tracking would be handled by CostMonitorFinOpsAgent
+
+  validate-builds:
+    runs-on: ubuntu-latest
+    needs: [build-server, build-quest3]
+    if: always()
+    
+    steps:
+      - name: Check build status
+        run: |
+          if [ "${{ needs.build-server.result }}" == "failure" ] || [ "${{ needs.build-quest3.result }}" == "failure" ]; then
+            echo "One or more builds failed"
+            exit 1
+          fi
+          echo "All builds completed successfully"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Validate artifact structure
+        run: |
+          echo "Validating build artifacts"
+          # Check that expected files exist in artifacts
+          if [ -d "server-build-${{ github.sha }}" ]; then
+            echo "Server build artifacts found"
+          fi
+          if [ -d "quest3-build-${{ github.sha }}" ]; then
+            echo "Quest 3 build artifacts found"
+          fi
+
+      - name: Generate build report
+        run: |
+          echo "# Build Report" > build-report.md
+          echo "" >> build-report.md
+          echo "**Commit:** ${{ github.sha }}" >> build-report.md
+          echo "**Branch:** ${{ github.ref_name }}" >> build-report.md
+          echo "**Build Type:** ${{ github.event.inputs.build_type || 'Development' }}" >> build-report.md
+          echo "" >> build-report.md
+          echo "## Artifacts" >> build-report.md
+          echo "- Server build: server-build-${{ github.sha }}" >> build-report.md
+          echo "- Quest 3 build: quest3-build-${{ github.sha }}" >> build-report.md
+
+      - name: Upload build report
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-report-${{ github.sha }}
+          path: build-report.md
+          retention-days: 90

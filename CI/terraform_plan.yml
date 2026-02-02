@@ -1,0 +1,247 @@
+name: Terraform Plan
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'Infra/**'
+      - 'Agents/DevOpsAWSAgent.ts'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+jobs:
+  terraform-plan:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [dev, staging, prod]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+
+      - name: Terraform Init
+        working-directory: Infra/environments/${{ matrix.environment }}
+        run: terraform init
+
+      - name: Terraform Validate
+        working-directory: Infra/environments/${{ matrix.environment }}
+        run: terraform validate
+
+      - name: Terraform Format Check
+        working-directory: Infra/environments/${{ matrix.environment }}
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: Infra/environments/${{ matrix.environment }}
+        run: |
+          terraform plan -out=tfplan -no-color | tee plan-output.txt
+          echo "plan_output<<EOF" >> $GITHUB_OUTPUT
+          cat plan-output.txt >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Save plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-${{ matrix.environment }}-${{ github.sha }}
+          path: Infra/environments/${{ matrix.environment }}/tfplan
+          retention-days: 30
+
+      - name: Estimate costs with CostMonitor
+        run: |
+          echo "Estimating infrastructure costs"
+          node -e "
+          const { CostMonitorFinOpsAgent } = require('./Agents/CostMonitorFinOpsAgent.js');
+          const agent = new CostMonitorFinOpsAgent([]);
+          
+          // Parse Terraform plan and estimate costs
+          const planOutput = \`${{ steps.plan.outputs.plan_output }}\`;
+          
+          // Extract resource changes
+          const addMatch = planOutput.match(/Plan: (\d+) to add/);
+          const changeMatch = planOutput.match(/(\d+) to change/);
+          const destroyMatch = planOutput.match(/(\d+) to destroy/);
+          
+          const resourcesToAdd = addMatch ? parseInt(addMatch[1]) : 0;
+          const resourcesToChange = changeMatch ? parseInt(changeMatch[1]) : 0;
+          const resourcesToDestroy = destroyMatch ? parseInt(destroyMatch[1]) : 0;
+          
+          console.log('Resource changes:');
+          console.log('- To add:', resourcesToAdd);
+          console.log('- To change:', resourcesToChange);
+          console.log('- To destroy:', resourcesToDestroy);
+          
+          // Estimate costs (simplified)
+          const estimatedMonthlyCost = resourcesToAdd * 50; // £50 per resource estimate
+          console.log('Estimated monthly cost: £' + estimatedMonthlyCost);
+          
+          // Write to file for PR comment
+          const fs = require('fs');
+          fs.writeFileSync('cost-estimate-${{ matrix.environment }}.txt', 
+            'Environment: ${{ matrix.environment }}\n' +
+            'Estimated monthly cost: £' + estimatedMonthlyCost + '\n' +
+            'Resources to add: ' + resourcesToAdd + '\n' +
+            'Resources to change: ' + resourcesToChange + '\n' +
+            'Resources to destroy: ' + resourcesToDestroy
+          );
+          "
+
+      - name: Upload cost estimate
+        uses: actions/upload-artifact@v4
+        with:
+          name: cost-estimate-${{ matrix.environment }}-${{ github.sha }}
+          path: cost-estimate-${{ matrix.environment }}.txt
+          retention-days: 30
+
+      - name: Comment PR with plan
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const planOutput = `${{ steps.plan.outputs.plan_output }}`;
+            const costEstimate = fs.readFileSync('cost-estimate-${{ matrix.environment }}.txt', 'utf8');
+            
+            const comment = `## Terraform Plan - ${{ matrix.environment }}
+            
+            <details>
+            <summary>Show Plan</summary>
+            
+            \`\`\`terraform
+            ${planOutput.substring(0, 60000)} // Truncate if too long
+            \`\`\`
+            
+            </details>
+            
+            ### Cost Estimate
+            
+            \`\`\`
+            ${costEstimate}
+            \`\`\`
+            
+            **Note:** This is an automated estimate. Actual costs may vary.
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Check budget compliance
+        run: |
+          echo "Checking budget compliance for ${{ matrix.environment }}"
+          node -e "
+          const fs = require('fs');
+          const costEstimate = fs.readFileSync('cost-estimate-${{ matrix.environment }}.txt', 'utf8');
+          const costMatch = costEstimate.match(/Estimated monthly cost: £(\d+)/);
+          const estimatedCost = costMatch ? parseInt(costMatch[1]) : 0;
+          
+          // Load budget policy
+          const budgetLimits = {
+            dev: 100,
+            staging: 500,
+            prod: 1000
+          };
+          
+          const limit = budgetLimits['${{ matrix.environment }}'];
+          console.log('Estimated cost: £' + estimatedCost);
+          console.log('Budget limit: £' + limit);
+          
+          if (estimatedCost > limit) {
+            console.error('ERROR: Estimated cost exceeds budget limit!');
+            process.exit(1);
+          }
+          
+          console.log('Budget compliance: OK');
+          "
+
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run tfsec security scan
+        uses: aquasecurity/tfsec-action@v1.0.0
+        with:
+          working_directory: Infra/
+          soft_fail: false
+
+      - name: Run Checkov security scan
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: Infra/
+          framework: terraform
+          soft_fail: false
+
+  summary:
+    runs-on: ubuntu-latest
+    needs: [terraform-plan, security-scan]
+    if: always()
+    
+    steps:
+      - name: Download all cost estimates
+        uses: actions/download-artifact@v4
+        with:
+          pattern: cost-estimate-*
+
+      - name: Generate summary report
+        run: |
+          echo "# Terraform Plan Summary" > summary.md
+          echo "" >> summary.md
+          echo "**PR:** #${{ github.event.pull_request.number }}" >> summary.md
+          echo "**Commit:** ${{ github.sha }}" >> summary.md
+          echo "" >> summary.md
+          echo "## Cost Estimates by Environment" >> summary.md
+          echo "" >> summary.md
+          
+          for env in dev staging prod; do
+            if [ -f "cost-estimate-${env}-${{ github.sha }}/cost-estimate-${env}.txt" ]; then
+              echo "### ${env}" >> summary.md
+              cat "cost-estimate-${env}-${{ github.sha }}/cost-estimate-${env}.txt" >> summary.md
+              echo "" >> summary.md
+            fi
+          done
+          
+          cat summary.md
+
+      - name: Upload summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-summary-${{ github.sha }}
+          path: summary.md
+          retention-days: 90
