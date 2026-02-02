@@ -15,6 +15,7 @@ import { BaseAgent } from './BaseAgent.js';
 import type { AgentConfig, AgentContext, AgentResult } from './types.js';
 import type { IMCPAdapter } from '../MCP/types.js';
 import * as fs from 'fs/promises';
+import { getEnvironmentManager, type Environment } from '../Orchestrator/src/services/EnvironmentManager.js';
 
 /**
  * Cost record for tracking AWS operations
@@ -68,6 +69,7 @@ export interface BudgetPolicy {
 export class CostMonitorFinOpsAgent extends BaseAgent {
     private costRecords: Map<string, CostRecord[]>;
     private budgetPolicies: Map<string, BudgetPolicy>;
+    private environmentManager = getEnvironmentManager();
 
     constructor(mcpAdapters: IMCPAdapter[] = []) {
         const config: AgentConfig = {
@@ -429,6 +431,14 @@ Be strict, accurate, and proactive in cost governance.`;
                 throw new Error('Invalid budget policy structure');
             }
 
+            // Validate policy matches current environment
+            const currentEnv = this.environmentManager.getEnvironment();
+            if (policy.environment !== currentEnv) {
+                console.warn(
+                    `Budget policy environment (${policy.environment}) does not match current environment (${currentEnv})`
+                );
+            }
+
             // Store policy
             this.budgetPolicies.set(policy.id, policy);
 
@@ -436,6 +446,20 @@ Be strict, accurate, and proactive in cost governance.`;
         } catch (error) {
             throw new Error(`Failed to load budget policy: ${error}`);
         }
+    }
+
+    /**
+     * Get current environment
+     */
+    getCurrentEnvironment(): Environment {
+        return this.environmentManager.getEnvironment();
+    }
+
+    /**
+     * Detect and set environment
+     */
+    async detectEnvironment(): Promise<Environment> {
+        return await this.environmentManager.detectEnvironment();
     }
 
     /**
