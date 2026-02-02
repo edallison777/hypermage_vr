@@ -1,133 +1,198 @@
 {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "name": "Crystal Caverns Arena",
-    "description": "A multi-level VR arena set in glowing crystal caverns with vertical gameplay and capture points",
+    "$schema": "../schemas/LevelPlan.schema.json",
+    "id": "crystal-cavern-001",
+    "name": "Crystal Cavern",
+    "description": "A VR multiplayer arena set in a mystical crystal cavern. Features a central combat zone surrounded by safe zones and two capture point objectives. Designed for 10-15 players with balanced spawn distribution.",
     "zones": [
         {
-            "id": "spawn_zone_alpha",
-            "name": "Alpha Spawn",
+            "id": "combat-central",
+            "name": "Central Combat Zone",
             "bounds": {
                 "center": {
                     "x": 0,
                     "y": 0,
-                    "z": 200
-                },
-                "extents": {
-                    "x": 500,
-                    "y": 500,
-                    "z": 300
-                }
-            },
-            "type": "spawn",
-            "assets": [
-                "blockout_platform_01",
-                "spawn_marker_alpha"
-            ]
-        },
-        {
-            "id": "spawn_zone_beta",
-            "name": "Beta Spawn",
-            "bounds": {
-                "center": {
-                    "x": 5000,
-                    "y": 0,
-                    "z": 200
-                },
-                "extents": {
-                    "x": 500,
-                    "y": 500,
-                    "z": 300
-                }
-            },
-            "type": "spawn",
-            "assets": [
-                "blockout_platform_01",
-                "spawn_marker_beta"
-            ]
-        },
-        {
-            "id": "central_arena",
-            "name": "Central Arena",
-            "bounds": {
-                "center": {
-                    "x": 2500,
-                    "y": 0,
                     "z": 0
                 },
                 "extents": {
-                    "x": 2000,
-                    "y": 2000,
+                    "x": 2500,
+                    "y": 2500,
                     "z": 500
                 }
             },
             "type": "combat",
             "assets": [
-                "blockout_floor_01",
-                "blockout_pillar_01",
-                "crystal_cluster_placeholder"
+                "T0_Floor_Grid",
+                "T0_Wall_Placeholder",
+                "T1_Crystal_Large",
+                "T1_Crystal_Medium"
             ]
         },
         {
-            "id": "objective_point_a",
-            "name": "Capture Point A",
+            "id": "safe-northwest",
+            "name": "Safe Zone Northwest",
             "bounds": {
                 "center": {
-                    "x": 1500,
-                    "y": -1000,
+                    "x": -3000,
+                    "y": -3000,
                     "z": 0
                 },
                 "extents": {
-                    "x": 400,
-                    "y": 400,
-                    "z": 200
-                }
-            },
-            "type": "objective",
-            "assets": [
-                "capture_point_marker",
-                "blockout_platform_02"
-            ]
-        },
-        {
-            "id": "objective_point_b",
-            "name": "Capture Point B",
-            "bounds": {
-                "center": {
-                    "x": 3500,
-                    "y": 1000,
-                    "z": 0
-                },
-                "extents": {
-                    "x": 400,
-                    "y": 400,
-                    "z": 200
-                }
-            },
-            "type": "objective",
-            "assets": [
-                "capture_point_marker",
-                "blockout_platform_02"
-            ]
-        },
-        {
-            "id": "safe_zone_center",
-            "name": "Neutral Safe Zone",
-            "bounds": {
-                "center": {
-                    "x": 2500,
-                    "y": 0,
-                    "z": 800
-                },
-                "extents": {
-                    "x": 300,
-                    "y": 300,
-                    "z": 200
+                    "x": 500,
+                    "y": 500,
+                    "z": 500
                 }
             },
             "type": "safe",
             "assets": [
-                "blockout_platform_03",
-                "safe_zone_indicator"
+                "T0_SafeZone_Marker",
+                "T1_Healing_Crystal"
+            ]
+        },
+        {
+            "id": "safe-northeast",
+            "name": "Safe Zone Northeast",
+            "bounds": {
+                "center": {
+                    "x": 3000,
+                    "y": -3000,
+                    "z": 0
+                },
+                "extents": {
+                    "x": 500,
+                    "y": 500,
+                    "z": 500
+                }
+            },
+            "type": "safe",
+            "assets": [
+                "T0_SafeZone_Marker",
+                "T1_Healing_Crystal"
+            ]
+        },
+        {
+            "id": "safe-southwest",
+            "name": "Safe Zone Southwest",
+            "bounds": {
+                "center": {
+                    "x": -3000,
+                    "y": 3000,
+                    "z": 0
+                },
+                "extents": {
+                    "x": 500,
+                    "y": 500,
+                    "z": 500
+                }
+            },
+            "type": "safe",
+            "assets": [
+                "T0_SafeZone_Marker",
+                "T1_Healing_Crystal"
+            ]
+        },
+        {
+            "id": "safe-southeast",
+            "name": "Safe Zone Southeast",
+            "bounds": {
+                "center": {
+                    "x": 3000,
+                    "y": 3000,
+                    "z": 0
+                },
+                "extents": {
+                    "x": 500,
+                    "y": 500,
+                    "z": 500
+                }
+            },
+            "type": "safe",
+            "assets": [
+                "T0_SafeZone_Marker",
+                "T1_Healing_Crystal"
+            ]
+        },
+        {
+            "id": "objective-alpha",
+            "name": "Capture Point Alpha",
+            "bounds": {
+                "center": {
+                    "x": 1500,
+                    "y": 1500,
+                    "z": 0
+                },
+                "extents": {
+                    "x": 300,
+                    "y": 300,
+                    "z": 500
+                }
+            },
+            "type": "objective",
+            "assets": [
+                "T0_Objective_Marker",
+                "T1_Capture_Point_Alpha",
+                "T1_Crystal_Cluster"
+            ]
+        },
+        {
+            "id": "objective-beta",
+            "name": "Capture Point Beta",
+            "bounds": {
+                "center": {
+                    "x": -1500,
+                    "y": 1500,
+                    "z": 0
+                },
+                "extents": {
+                    "x": 300,
+                    "y": 300,
+                    "z": 500
+                }
+            },
+            "type": "objective",
+            "assets": [
+                "T0_Objective_Marker",
+                "T1_Capture_Point_Beta",
+                "T1_Crystal_Cluster"
+            ]
+        },
+        {
+            "id": "spawn-north",
+            "name": "Spawn Zone North",
+            "bounds": {
+                "center": {
+                    "x": 0,
+                    "y": -3500,
+                    "z": 0
+                },
+                "extents": {
+                    "x": 800,
+                    "y": 400,
+                    "z": 500
+                }
+            },
+            "type": "spawn",
+            "assets": [
+                "T0_Spawn_Marker"
+            ]
+        },
+        {
+            "id": "spawn-south",
+            "name": "Spawn Zone South",
+            "bounds": {
+                "center": {
+                    "x": 0,
+                    "y": 3500,
+                    "z": 0
+                },
+                "extents": {
+                    "x": 800,
+                    "y": 400,
+                    "z": 500
+                }
+            },
+            "type": "spawn",
+            "assets": [
+                "T0_Spawn_Marker"
             ]
         }
     ],
@@ -135,104 +200,221 @@
         {
             "position": {
                 "x": 0,
-                "y": 0,
-                "z": 250
+                "y": -3500,
+                "z": 100
             },
             "rotation": {
                 "pitch": 0,
                 "yaw": 90,
+                "roll": 0
+            }
+        },
+        {
+            "position": {
+                "x": 300,
+                "y": -3500,
+                "z": 100
+            },
+            "rotation": {
+                "pitch": 0,
+                "yaw": 90,
+                "roll": 0
+            }
+        },
+        {
+            "position": {
+                "x": -300,
+                "y": -3500,
+                "z": 100
+            },
+            "rotation": {
+                "pitch": 0,
+                "yaw": 90,
+                "roll": 0
+            }
+        },
+        {
+            "position": {
+                "x": 2598,
+                "y": -1500,
+                "z": 100
+            },
+            "rotation": {
+                "pitch": 0,
+                "yaw": 150,
+                "roll": 0
+            }
+        },
+        {
+            "position": {
+                "x": 2598,
+                "y": 1500,
+                "z": 100
+            },
+            "rotation": {
+                "pitch": 0,
+                "yaw": 210,
                 "roll": 0
             }
         },
         {
             "position": {
                 "x": 0,
-                "y": 400,
-                "z": 250
+                "y": 3500,
+                "z": 100
             },
             "rotation": {
                 "pitch": 0,
-                "yaw": 90,
+                "yaw": 270,
                 "roll": 0
             }
         },
         {
             "position": {
-                "x": 0,
-                "y": -400,
-                "z": 250
+                "x": 300,
+                "y": 3500,
+                "z": 100
             },
             "rotation": {
                 "pitch": 0,
-                "yaw": 90,
+                "yaw": 270,
                 "roll": 0
             }
         },
         {
             "position": {
-                "x": 5000,
+                "x": -300,
+                "y": 3500,
+                "z": 100
+            },
+            "rotation": {
+                "pitch": 0,
+                "yaw": 270,
+                "roll": 0
+            }
+        },
+        {
+            "position": {
+                "x": -2598,
+                "y": 1500,
+                "z": 100
+            },
+            "rotation": {
+                "pitch": 0,
+                "yaw": 330,
+                "roll": 0
+            }
+        },
+        {
+            "position": {
+                "x": -2598,
+                "y": -1500,
+                "z": 100
+            },
+            "rotation": {
+                "pitch": 0,
+                "yaw": 30,
+                "roll": 0
+            }
+        },
+        {
+            "position": {
+                "x": 3000,
                 "y": 0,
-                "z": 250
+                "z": 100
             },
             "rotation": {
                 "pitch": 0,
-                "yaw": -90,
+                "yaw": 180,
                 "roll": 0
             }
         },
         {
             "position": {
-                "x": 5000,
-                "y": 400,
-                "z": 250
+                "x": -3000,
+                "y": 0,
+                "z": 100
             },
             "rotation": {
                 "pitch": 0,
-                "yaw": -90,
-                "roll": 0
-            }
-        },
-        {
-            "position": {
-                "x": 5000,
-                "y": -400,
-                "z": 250
-            },
-            "rotation": {
-                "pitch": 0,
-                "yaw": -90,
+                "yaw": 0,
                 "roll": 0
             }
         }
     ],
     "objectives": [
         {
-            "id": "capture_point_a",
-            "type": "capture_point",
-            "description": "Capture and hold Point A for 30 seconds",
-            "rewardId": "first_objective_complete",
-            "position": {
-                "x": 1500,
-                "y": -1000,
-                "z": 50
+            "id": "capture-alpha",
+            "type": "capture",
+            "description": "Capture and hold Point Alpha for 30 seconds",
+            "rewardId": "first_capture",
+            "parameters": {
+                "captureTime": 30,
+                "contestable": true,
+                "respawnOnCapture": false
             }
         },
         {
-            "id": "capture_point_b",
-            "type": "capture_point",
-            "description": "Capture and hold Point B for 30 seconds",
-            "rewardId": "all_objectives_complete",
-            "position": {
-                "x": 3500,
-                "y": 1000,
-                "z": 50
+            "id": "capture-beta",
+            "type": "capture",
+            "description": "Capture and hold Point Beta for 30 seconds",
+            "rewardId": "second_capture",
+            "parameters": {
+                "captureTime": 30,
+                "contestable": true,
+                "respawnOnCapture": false
             }
         },
         {
-            "id": "win_match",
-            "type": "team_victory",
-            "description": "Win the match by capturing both points",
-            "rewardId": "team_victory"
+            "id": "capture-both",
+            "type": "multi-objective",
+            "description": "Capture both Alpha and Beta simultaneously",
+            "rewardId": "dual_capture",
+            "parameters": {
+                "requiredObjectives": [
+                    "capture-alpha",
+                    "capture-beta"
+                ],
+                "simultaneousRequired": true
+            }
+        },
+        {
+            "id": "match-complete",
+            "type": "completion",
+            "description": "Complete the match (win or participate for full duration)",
+            "rewardId": "match_complete",
+            "parameters": {
+                "minDuration": 600,
+                "requireWin": false
+            }
+        },
+        {
+            "id": "team-victory",
+            "type": "victory",
+            "description": "Win the match by capturing all objectives",
+            "rewardId": "team_victory",
+            "parameters": {
+                "requiredObjectives": [
+                    "capture-alpha",
+                    "capture-beta"
+                ],
+                "requireWin": true
+            }
         }
-    ]
+    ],
+    "metadata": {
+        "version": "1.0.0",
+        "author": "ConversationLevelDesignerAgent",
+        "createdAt": "2026-02-02T00:00:00Z",
+        "targetPlatform": "Quest3",
+        "recommendedPlayers": "10-15",
+        "estimatedDuration": "10-15 minutes",
+        "difficulty": "medium",
+        "tags": [
+            "arena",
+            "capture-points",
+            "crystals",
+            "vr"
+        ]
+    }
 }
