@@ -5,7 +5,22 @@
       "Bash(npx jest:*)",
       "Bash(cd:*)",
       "Bash(tail:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(aws sts:*)",
+      "Bash(aws s3:*)",
+      "Bash(aws dynamodb:*)",
+      "Bash(aws gamelift list-fleets --region eu-west-1 2>&1 && aws cognito-idp list-user-pools --max-results 10 --region eu-west-1 2>&1)",
+      "Bash(aws iam:*)",
+      "Bash(aws ec2:*)",
+      "Bash(aws lambda:*)",
+      "Bash(aws s3 mb s3://hypermage-vr-terraform-state --region eu-west-1 2>&1 && \\\\\naws s3api put-bucket-versioning --bucket hypermage-vr-terraform-state --versioning-configuration Status=Enabled 2>&1 && \\\\\naws s3api put-bucket-encryption --bucket hypermage-vr-terraform-state \\\\\n  --server-side-encryption-configuration '{\"Rules\":[{\"ApplyServerSideEncryptionByDefault\":{\"SSEAlgorithm\":\"AES256\"}}]}' 2>&1 && \\\\\naws s3api put-public-access-block --bucket hypermage-vr-terraform-state \\\\\n  --public-access-block-configuration \"BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true\" 2>&1)",
+      "Bash(terraform version:*)",
+      "Bash(cd \"C:/Users/j_e_a/OneDrive/Projects/Hypermage/Hypermage_VR/Infra/environments/dev\" && terraform init 2>&1)",
+      "Bash(cd \"C:/Users/j_e_a/OneDrive/Projects/Hypermage/Hypermage_VR/Infra/environments/dev\" && terraform plan 2>&1)",
+      "Bash(cd \"C:/Users/j_e_a/OneDrive/Projects/Hypermage/Hypermage_VR/Infra/environments/dev\" && terraform apply -auto-approve 2>&1)",
+      "Bash(cd \"C:/Users/j_e_a/OneDrive/Projects/Hypermage/Hypermage_VR/Infra/environments/dev\" && terraform state list 2>&1)",
+      "Bash(aws cognito-idp:*)",
+      "Bash(curl:*)"
     ]
   }
 }

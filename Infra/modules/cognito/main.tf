@@ -167,9 +167,9 @@ resource "aws_cognito_user_pool_client" "admin_client" {
   }
 
   # OAuth configuration
-  allowed_oauth_flows_user_pool_client = true
-  allowed_oauth_flows                  = ["client_credentials"]
-  allowed_oauth_scopes                 = ["openid"]
+  # Admin/backend client uses client secret auth directly, not OAuth flows.
+  # client_credentials requires a resource server with custom scopes — defer until needed.
+  allowed_oauth_flows_user_pool_client = false
   supported_identity_providers         = ["COGNITO"]
 
   # Security
