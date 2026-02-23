@@ -1,0 +1,16 @@
+[
+  {
+    "timestamp": "2026-02-23T20:45:30.100Z",
+    "actor": "ProducerOrchestratorAgent",
+    "action": "analyze_specification",
+    "description": "Analyze specification and determine required actions",
+    "specPath": "executions/3a478df3-9c97-4d7e-a448-368438982995/steps/d5864060-c0ca-472e-803b-23389e3f0a29.json"
+  },
+  {
+    "timestamp": "2026-02-23T20:45:30.177Z",
+    "actor": "TestAgent",
+    "action": "test_action",
+    "description": "Test change note",
+    "specPath": "test/path"
+  }
+]

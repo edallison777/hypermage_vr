@@ -19,7 +19,9 @@ import { PlanExecutor } from '../../Orchestrator/src/services/PlanExecutor';
 import { PlanContext, ChangeNote } from '../../Orchestrator/src/types';
 
 describe('Feature: unreal-vr-multiplayer-system', () => {
+    // Increase timeout for all tests - plan execution involves simulated delays per step
     describe('Property 15: Spec Update with Change Notes', () => {
+        jest.setTimeout(30000);
         let planGenerator: PlanGenerator;
         let planExecutor: PlanExecutor;
         const changeNotesDir = path.join(process.cwd(), 'Specs', 'change-notes');

@@ -1,21 +1,39 @@
 /**
  * Property Test: Multi-Agent Coordination
- * 
+ *
  * Feature: unreal-vr-multiplayer-system
  * Property 19: Multi-Agent Coordination
- * 
+ *
  * Validates: Requirements 19.5
- * 
+ *
  * Property: For any execution plan requiring multiple agents, the Orchestrator must
  * coordinate agent execution according to dependency order, passing outputs from
  * completed steps as inputs to dependent steps.
  */
 
 import fc from 'fast-check';
-import { describe, it, expect } from 'vitest';
-import { PlanExecutor } from '../../Orchestrator/src/services/PlanExecutor.js';
-import { PlanGenerator } from '../../Orchestrator/src/services/PlanGenerator.js';
-import type { ExecutionPlan, PlanStep } from '../../Orchestrator/src/services/PlanGenerator.js';
+import { describe, it, expect } from '@jest/globals';
+
+/**
+ * Local test step interface matching the shape used in coordination tests.
+ */
+interface TestPlanStep {
+    stepId: string;
+    agent: string;
+    action: string;
+    parameters: Record<string, unknown>;
+    dependencies: string[];
+    status: string;
+}
+
+interface TestExecutionPlan {
+    planId: string;
+    steps: TestPlanStep[];
+    status: string;
+    createdAt: string;
+    estimatedCost: number;
+    estimatedDuration: string;
+}
 
 describe('Feature: unreal-vr-multiplayer-system', () => {
     describe('Property 19: Multi-Agent Coordination', () => {
@@ -42,7 +60,7 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
                     }),
                     async (planConfig) => {
                         // Arrange
-                        const plan: ExecutionPlan = {
+                        const plan: TestExecutionPlan = {
                             planId: planConfig.planId,
                             steps: planConfig.steps.map((step, index) => ({
                                 stepId: `step-${index}`,
@@ -50,8 +68,8 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
                                 action: step.action,
                                 parameters: {},
                                 dependencies: step.dependencies
-                                    .filter((dep, i) => i < index) // Only depend on previous steps
-                                    .map((_, i) => `step-${i}`),
+                                    .filter((_dep, i) => i < index) // Only depend on previous steps
+                                    .map((_depValue, i) => `step-${i}`),
                                 status: 'pending' as const,
                             })),
                             status: 'pending' as const,
@@ -59,8 +77,6 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
                             estimatedCost: 0,
                             estimatedDuration: '10m',
                         };
-
-                        const executor = new PlanExecutor();
 
                         // Act
                         const executionOrder: string[] = [];
@@ -106,7 +122,7 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
                     fc.integer({ min: 2, max: 5 }),
                     async (numSteps) => {
                         // Arrange - Create a linear dependency chain
-                        const steps: PlanStep[] = [];
+                        const steps: TestPlanStep[] = [];
                         for (let i = 0; i < numSteps; i++) {
                             steps.push({
                                 stepId: `step-${i}`,
@@ -118,7 +134,7 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
                             });
                         }
 
-                        const plan: ExecutionPlan = {
+                        const plan: TestExecutionPlan = {
                             planId: 'test-plan',
                             steps,
                             status: 'pending',
@@ -172,7 +188,7 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
                     fc.integer({ min: 2, max: 4 }),
                     async (numParallelSteps) => {
                         // Arrange - Create parallel steps with no dependencies
-                        const parallelSteps: PlanStep[] = [];
+                        const parallelSteps: TestPlanStep[] = [];
                         for (let i = 0; i < numParallelSteps; i++) {
                             parallelSteps.push({
                                 stepId: `parallel-${i}`,
@@ -185,22 +201,13 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
                         }
 
                         // Add a final step that depends on all parallel steps
-                        const finalStep: PlanStep = {
+                        const finalStep: TestPlanStep = {
                             stepId: 'final',
                             agent: 'test-agent',
                             action: 'final-action',
                             parameters: {},
                             dependencies: parallelSteps.map(s => s.stepId),
                             status: 'pending',
-                        };
-
-                        const plan: ExecutionPlan = {
-                            planId: 'parallel-test',
-                            steps: [...parallelSteps, finalStep],
-                            status: 'pending',
-                            createdAt: new Date().toISOString(),
-                            estimatedCost: 0,
-                            estimatedDuration: '5m',
                         };
 
                         // Act - Simulate parallel execution
@@ -238,7 +245,7 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
                     fc.integer({ min: 2, max: 4 }),
                     async (chainLength) => {
                         // Arrange - Create a circular dependency
-                        const steps: PlanStep[] = [];
+                        const steps: TestPlanStep[] = [];
                         for (let i = 0; i < chainLength; i++) {
                             const nextIndex = (i + 1) % chainLength;
                             steps.push({
@@ -250,15 +257,6 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
                                 status: 'pending',
                             });
                         }
-
-                        const plan: ExecutionPlan = {
-                            planId: 'circular-test',
-                            steps,
-                            status: 'pending',
-                            createdAt: new Date().toISOString(),
-                            estimatedCost: 0,
-                            estimatedDuration: '5m',
-                        };
 
                         // Act - Detect circular dependencies
                         const visited = new Set<string>();
@@ -317,7 +315,7 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
                     }),
                     async (planConfig) => {
                         // Arrange
-                        const plan: ExecutionPlan = {
+                        const plan: TestExecutionPlan = {
                             planId: 'consistency-test',
                             steps: planConfig.steps.map(s => ({
                                 ...s,

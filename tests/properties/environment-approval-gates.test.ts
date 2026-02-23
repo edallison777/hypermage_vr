@@ -2,12 +2,12 @@
  * Property Test: Environment-Based Approval Gates
  * Feature: unreal-vr-multiplayer-system
  * Property 11: Environment-Based Approval Gates
- * 
+ *
  * Validates: Requirements 7.1, 7.2, 7.3, 7.4
- * 
- * For any infrastructure change, deployment, or budget increase operation in 
- * production environment, the operation must block and wait for manual approval 
- * before proceeding, while the same operations in development environment must 
+ *
+ * For any infrastructure change, deployment, or budget increase operation in
+ * production environment, the operation must block and wait for manual approval
+ * before proceeding, while the same operations in development environment must
  * proceed autonomously.
  */
 
@@ -37,9 +37,9 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
             resetApprovalGateManager();
         });
 
-        it('should require approval for infrastructure changes in prod', () => {
-            fc.assert(
-                fc.property(
+        it('should require approval for infrastructure changes in prod', async () => {
+            await fc.assert(
+                fc.asyncProperty(
                     fc.constantFrom<OperationType>(
                         'infra_change',
                         'terraform_apply',
@@ -75,9 +75,9 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
             );
         });
 
-        it('should allow autonomous operation for infrastructure changes in dev', () => {
-            fc.assert(
-                fc.property(
+        it('should allow autonomous operation for infrastructure changes in dev', async () => {
+            await fc.assert(
+                fc.asyncProperty(
                     fc.constantFrom<OperationType>(
                         'infra_change',
                         'terraform_apply',
@@ -111,9 +111,9 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
             );
         });
 
-        it('should require approval for deployments in prod', () => {
-            fc.assert(
-                fc.property(
+        it('should require approval for deployments in prod', async () => {
+            await fc.assert(
+                fc.asyncProperty(
                     fc.string({ minLength: 10, maxLength: 100 }),
                     fc.string({ minLength: 5, maxLength: 20 }),
                     async (description, requestedBy) => {
@@ -140,9 +140,9 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
             );
         });
 
-        it('should require approval for budget increases in prod', () => {
-            fc.assert(
-                fc.property(
+        it('should require approval for budget increases in prod', async () => {
+            await fc.assert(
+                fc.asyncProperty(
                     fc.string({ minLength: 10, maxLength: 100 }),
                     fc.string({ minLength: 5, maxLength: 20 }),
                     fc.integer({ min: 100, max: 10000 }),
@@ -244,9 +244,9 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
             expect(pendingApprovals.find(r => r.id === approvalId)).toBeUndefined();
         });
 
-        it('should maintain approval history', () => {
-            fc.assert(
-                fc.property(
+        it('should maintain approval history', async () => {
+            await fc.assert(
+                fc.asyncProperty(
                     fc.array(
                         fc.record({
                             operationType: fc.constantFrom<OperationType>(
@@ -261,6 +261,10 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
                         { minLength: 1, maxLength: 10 }
                     ),
                     async (operations) => {
+                        // Reset singletons per iteration to avoid history accumulation
+                        resetEnvironmentManager();
+                        resetApprovalGateManager();
+
                         const envManager = getEnvironmentManager();
                         const approvalManager = getApprovalGateManager();
 
@@ -310,9 +314,9 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
             );
         });
 
-        it('should enforce environment-specific behavior consistently', () => {
-            fc.assert(
-                fc.property(
+        it('should enforce environment-specific behavior consistently', async () => {
+            await fc.assert(
+                fc.asyncProperty(
                     fc.constantFrom<Environment>('dev', 'prod'),
                     fc.constantFrom<OperationType>(
                         'infra_change',

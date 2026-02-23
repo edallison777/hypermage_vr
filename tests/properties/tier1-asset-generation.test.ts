@@ -11,7 +11,7 @@
  */
 
 import fc from 'fast-check';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from '@jest/globals';
 import { TechArtVFXAudioAgent } from '../../Agents/TechArtVFXAudioAgent.js';
 import type { AgentContext } from '../../Agents/types.js';
 
@@ -23,9 +23,9 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
                     // Generate random asset configurations
                     fc.record({
                         inputImagePath: fc.string({ minLength: 5, maxLength: 100 }).map(s => `/concept-art/${s}.png`),
-                        assetType: fc.constantFrom('mesh', 'material', 'texture'),
-                        tier: fc.constant(1),
-                        targetPlatform: fc.constantFrom('Quest3', 'PC', 'All'),
+                        assetType: fc.constantFrom<'mesh' | 'material' | 'texture'>('mesh', 'material', 'texture'),
+                        tier: fc.constant(1 as const),
+                        targetPlatform: fc.constantFrom<'Quest3' | 'PC' | 'All'>('Quest3', 'PC', 'All'),
                     }),
                     async (assetConfig) => {
                         // Arrange
@@ -48,7 +48,7 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
                         expect(result.result).toBeDefined();
 
                         if (result.success && result.result) {
-                            const asset = result.result.asset;
+                            const asset = (result.result as any).asset;
 
                             // Verify asset has required fields
                             expect(asset.name).toBeDefined();
@@ -91,8 +91,8 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
         it('should generate assets with appropriate geometry for different asset types', async () => {
             await fc.assert(
                 fc.asyncProperty(
-                    fc.constantFrom('mesh', 'material', 'texture'),
-                    fc.constantFrom('Quest3', 'PC', 'All'),
+                    fc.constantFrom<'mesh' | 'material' | 'texture'>('mesh', 'material', 'texture'),
+                    fc.constantFrom<'Quest3' | 'PC' | 'All'>('Quest3', 'PC', 'All'),
                     async (assetType, targetPlatform) => {
                         // Arrange
                         const agent = new TechArtVFXAudioAgent([]);
@@ -119,7 +119,7 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
                         expect(result.success).toBe(true);
 
                         if (result.success && result.result) {
-                            const asset = result.result.asset;
+                            const asset = (result.result as any).asset;
 
                             // Mesh assets should have triangle count
                             if (assetType === 'mesh') {
@@ -145,9 +145,9 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
                 fc.asyncProperty(
                     fc.record({
                         inputImagePath: fc.string({ minLength: 5 }).map(s => `/concept-art/${s}.png`),
-                        assetType: fc.constantFrom('mesh', 'material', 'texture'),
-                        tier: fc.constant(1),
-                        targetPlatform: fc.constantFrom('Quest3', 'PC', 'All'),
+                        assetType: fc.constantFrom<'mesh' | 'material' | 'texture'>('mesh', 'material', 'texture'),
+                        tier: fc.constant(1 as const),
+                        targetPlatform: fc.constantFrom<'Quest3' | 'PC' | 'All'>('Quest3', 'PC', 'All'),
                     }),
                     async (assetConfig) => {
                         // Arrange
@@ -169,7 +169,7 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
                         expect(result.success).toBe(true);
 
                         if (result.success && result.result) {
-                            const provenance = result.result.asset.provenance;
+                            const provenance = (result.result as any).asset.provenance;
 
                             // All required provenance fields must be present
                             expect(provenance.origin).toBe('generated');
@@ -193,7 +193,7 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
         it('should optimize assets appropriately for target platform', async () => {
             await fc.assert(
                 fc.asyncProperty(
-                    fc.constantFrom('Quest3', 'PC', 'All'),
+                    fc.constantFrom<'Quest3' | 'PC' | 'All'>('Quest3', 'PC', 'All'),
                     async (targetPlatform) => {
                         // Arrange
                         const agent = new TechArtVFXAudioAgent([]);
@@ -220,7 +220,7 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
                         expect(result.success).toBe(true);
 
                         if (result.success && result.result) {
-                            const specs = result.result.asset.specifications;
+                            const specs = (result.result as any).asset.specifications;
 
                             // Quest 3 should have lower resolution textures
                             if (targetPlatform === 'Quest3') {
@@ -248,9 +248,9 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
                 fc.asyncProperty(
                     fc.record({
                         inputImagePath: fc.string({ minLength: 5 }).map(s => `/concept-art/${s}.png`),
-                        assetType: fc.constantFrom('mesh', 'material', 'texture'),
-                        tier: fc.constant(1),
-                        targetPlatform: fc.constantFrom('Quest3', 'PC', 'All'),
+                        assetType: fc.constantFrom<'mesh' | 'material' | 'texture'>('mesh', 'material', 'texture'),
+                        tier: fc.constant(1 as const),
+                        targetPlatform: fc.constantFrom<'Quest3' | 'PC' | 'All'>('Quest3', 'PC', 'All'),
                     }),
                     async (assetConfig) => {
                         // Arrange
@@ -272,7 +272,7 @@ describe('Feature: unreal-vr-multiplayer-system', () => {
                         expect(result.success).toBe(true);
 
                         if (result.success && result.result) {
-                            const specs = result.result.asset.specifications;
+                            const specs = (result.result as any).asset.specifications;
 
                             // All Tier 1 assets should use simple collision
                             expect(specs.collisionType).toBe('simple');

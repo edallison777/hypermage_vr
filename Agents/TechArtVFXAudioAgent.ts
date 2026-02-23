@@ -246,7 +246,7 @@ Be precise with performance budgets and optimization settings.`;
      */
     async generateTier1Asset(
         config: AssetGenerationConfig,
-        context: AgentContext
+        _context: AgentContext
     ): Promise<AgentResult> {
         try {
             const asset = {
@@ -295,7 +295,7 @@ Be precise with performance budgets and optimization settings.`;
     async implementNiagaraVFX(
         config: VFXConfig,
         effectName: string,
-        context: AgentContext
+        _context: AgentContext
     ): Promise<AgentResult> {
         try {
             const vfxSystem = {
@@ -346,7 +346,7 @@ Be precise with performance budgets and optimization settings.`;
      */
     async configureSpatialAudio(
         config: AudioConfig,
-        context: AgentContext
+        _context: AgentContext
     ): Promise<AgentResult> {
         try {
             const audioSetup = {
@@ -391,7 +391,7 @@ Be precise with performance budgets and optimization settings.`;
     async optimizeForQuest3(
         optimization: Quest3Optimization,
         targetAssets: string[],
-        context: AgentContext
+        _context: AgentContext
     ): Promise<AgentResult> {
         try {
             const optimizations = {

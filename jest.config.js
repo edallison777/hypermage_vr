@@ -22,12 +22,13 @@ module.exports = {
     moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
     moduleNameMapper: {
         '^(\\.{1,2}/.*)\\.js$': '$1',
+        '^@strands-agents/sdk$': '<rootDir>/__mocks__/@strands-agents/sdk.js',
     },
     transformIgnorePatterns: [
         'node_modules/(?!(@strands-agents|@aws-sdk)/)',
     ],
     transform: {
-        '^.+\\.tsx?$': ['ts-jest', {
+        '^.+\\.[tj]sx?$': ['ts-jest', {
             tsconfig: 'tsconfig.json',
         }],
     },

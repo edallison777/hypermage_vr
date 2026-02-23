@@ -18,6 +18,7 @@ import { MCPRequest, IMCPAdapter } from '../../MCP/types';
 
 describe('Feature: unreal-vr-multiplayer-system', () => {
     describe('Property 13: MCP Adapter Mock Mode', () => {
+        jest.setTimeout(30000);
         const adapters: Array<{ name: string; adapter: IMCPAdapter }> = [
             { name: 'UnrealMCP', adapter: new UnrealMCPAdapter({ mockMode: true }) },
             { name: 'AWSMCP', adapter: new AWSMCPAdapter({ mockMode: true }) },

@@ -1,0 +1,25 @@
+# AgentCore configuration file
+default_agent: simple-calculator-agent
+
+agents:
+  simple-calculator-agent:
+    name: simple-calculator-agent
+    entrypoint: src/main.py
+    runtime: python3.12
+    
+    # AWS configuration
+    aws:
+      account: "732231126129"
+      region: eu-west-1
+      execution_role:
+        auto_create: true
+    
+    # Memory configuration (start with NO_MEMORY for initial deployment)
+    memory:
+      mode: NO_MEMORY
+    
+    # Model configuration
+    model:
+      provider: bedrock
+      model_id: anthropic.claude-sonnet-4-20250514-v1:0
+      region: eu-west-1

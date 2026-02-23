@@ -1,0 +1,9 @@
+# AgentCore deployment
+bedrock-agentcore
+
+# Strands SDK
+strands-agents
+strands-agents-tools
+
+# AWS SDK
+boto3

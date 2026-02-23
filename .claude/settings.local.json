@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx jest --listTests)",
+      "Bash(npx jest:*)",
+      "Bash(cd:*)",
+      "Bash(tail:*)",
+      "Bash(grep:*)"
+    ]
+  }
+}

@@ -168,13 +168,13 @@ export class GitHubMCPAdapter extends BaseMCPAdapter {
     protected async executeCapability<T>(request: MCPRequest): Promise<T> {
         switch (request.capability) {
             case 'create_pr':
-                return (await this.createPR(request.parameters as CreatePRParams)) as T;
+                return (await this.createPR(request.parameters as unknown as CreatePRParams)) as T;
             case 'commit_changes':
-                return (await this.commitChanges(request.parameters as CommitChangesParams)) as T;
+                return (await this.commitChanges(request.parameters as unknown as CommitChangesParams)) as T;
             case 'create_tag':
-                return (await this.createTag(request.parameters as CreateTagParams)) as T;
+                return (await this.createTag(request.parameters as unknown as CreateTagParams)) as T;
             case 'get_file_content':
-                return (await this.getFileContent(request.parameters as GetFileContentParams)) as T;
+                return (await this.getFileContent(request.parameters as unknown as GetFileContentParams)) as T;
             default:
                 throw new Error(`Unknown capability: ${request.capability}`);
         }
@@ -186,35 +186,35 @@ export class GitHubMCPAdapter extends BaseMCPAdapter {
 
         switch (request.capability) {
             case 'create_pr':
-                return this.mockCreatePR(request.parameters as CreatePRParams) as T;
+                return this.mockCreatePR(request.parameters as unknown as CreatePRParams) as T;
             case 'commit_changes':
-                return this.mockCommitChanges(request.parameters as CommitChangesParams) as T;
+                return this.mockCommitChanges(request.parameters as unknown as CommitChangesParams) as T;
             case 'create_tag':
-                return this.mockCreateTag(request.parameters as CreateTagParams) as T;
+                return this.mockCreateTag(request.parameters as unknown as CreateTagParams) as T;
             case 'get_file_content':
-                return this.mockGetFileContent(request.parameters as GetFileContentParams) as T;
+                return this.mockGetFileContent(request.parameters as unknown as GetFileContentParams) as T;
             default:
                 throw new Error(`Unknown capability: ${request.capability}`);
         }
     }
 
     // Real implementations (would call GitHub API)
-    private async createPR(params: CreatePRParams): Promise<CreatePRResult> {
+    private async createPR(_params: CreatePRParams): Promise<CreatePRResult> {
         // TODO: Implement actual GitHub API call
         throw new Error('Real GitHub integration not yet implemented');
     }
 
-    private async commitChanges(params: CommitChangesParams): Promise<CommitChangesResult> {
+    private async commitChanges(_params: CommitChangesParams): Promise<CommitChangesResult> {
         // TODO: Implement actual GitHub API call
         throw new Error('Real GitHub integration not yet implemented');
     }
 
-    private async createTag(params: CreateTagParams): Promise<CreateTagResult> {
+    private async createTag(_params: CreateTagParams): Promise<CreateTagResult> {
         // TODO: Implement actual GitHub API call
         throw new Error('Real GitHub integration not yet implemented');
     }
 
-    private async getFileContent(params: GetFileContentParams): Promise<GetFileContentResult> {
+    private async getFileContent(_params: GetFileContentParams): Promise<GetFileContentResult> {
         // TODO: Implement actual GitHub API call
         throw new Error('Real GitHub integration not yet implemented');
     }

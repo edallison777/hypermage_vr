@@ -201,7 +201,7 @@ Be precise with replication settings and network optimization.`;
     async implementVRInteractions(
         config: VRInteractionConfig,
         targetClass: string,
-        context: AgentContext
+        _context: AgentContext
     ): Promise<AgentResult> {
         try {
             const components = [
@@ -254,7 +254,7 @@ Be precise with replication settings and network optimization.`;
     async implementObjectiveSystem(
         objectives: ObjectiveConfig[],
         mapName: string,
-        context: AgentContext
+        _context: AgentContext
     ): Promise<AgentResult> {
         try {
             const implementations = objectives.map((objective) => ({
@@ -293,7 +293,7 @@ Be precise with replication settings and network optimization.`;
     async implementRewardEmission(
         config: RewardEmissionConfig,
         catalogPath: string,
-        context: AgentContext
+        _context: AgentContext
     ): Promise<AgentResult> {
         try {
             const implementation = {

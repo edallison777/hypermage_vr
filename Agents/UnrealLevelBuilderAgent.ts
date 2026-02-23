@@ -218,7 +218,7 @@ Be precise with coordinates and maintain spatial consistency.`;
     async convertLevelPlanToMap(
         levelPlan: LevelPlan,
         outputMapName: string,
-        context: AgentContext,
+        _context: AgentContext,
         options?: {
             generateBlockout?: boolean;
         }

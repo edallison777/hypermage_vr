@@ -255,7 +255,7 @@ Be precise with infrastructure specifications and cost estimates.`;
      */
     async executeTerraform(
         config: TerraformConfig,
-        context: AgentContext
+        _context: AgentContext
     ): Promise<AgentResult> {
         try {
             const execution = {
@@ -293,7 +293,7 @@ Be precise with infrastructure specifications and cost estimates.`;
      */
     async manageCICDPipeline(
         config: CICDConfig,
-        context: AgentContext
+        _context: AgentContext
     ): Promise<AgentResult> {
         try {
             const pipeline = {
@@ -329,7 +329,7 @@ Be precise with infrastructure specifications and cost estimates.`;
      */
     async setupObservability(
         config: ObservabilityConfig,
-        context: AgentContext
+        _context: AgentContext
     ): Promise<AgentResult> {
         try {
             const observability = {
@@ -366,7 +366,7 @@ Be precise with infrastructure specifications and cost estimates.`;
     async deployInfrastructure(
         environment: string,
         modules: string[],
-        context: AgentContext
+        _context: AgentContext
     ): Promise<AgentResult> {
         try {
             const deployment = {

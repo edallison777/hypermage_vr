@@ -20,7 +20,8 @@ describe('Vertical Slice Integration Test', () => {
     let context: AgentContext;
     let levelPlan: LevelPlan;
     let mapName: string;
-    let deploymentId: string;
+    // @ts-expect-error assigned in test step for future use
+    let _deploymentId: string;
 
     beforeAll(() => {
         context = {
@@ -186,6 +187,14 @@ describe('Vertical Slice Integration Test', () => {
             const devOpsAgent = new DevOpsAWSAgent([]);
             const costMonitor = new CostMonitorFinOpsAgent([]);
 
+            // Register dev budget policy before checking
+            costMonitor['budgetPolicies'].set('dev-budget', {
+                id: 'dev-budget',
+                environment: 'dev',
+                limits: { total: 1000, currency: 'GBP', duration: '72h' },
+                enforcement: { mode: 'warn', warningThreshold: 0.8, approvalRequired: false },
+            });
+
             // Check budget before deployment
             const budgetCheck = await costMonitor.checkBudget(
                 'dev-budget',
@@ -205,7 +214,7 @@ describe('Vertical Slice Integration Test', () => {
             expect(deployResult.success).toBe(true);
             expect(deployResult.result).toBeDefined();
 
-            deploymentId = 'deployment-' + Date.now();
+            _deploymentId = 'deployment-' + Date.now();
 
             console.log('✅ Infrastructure deployed successfully');
         });
@@ -274,8 +283,9 @@ describe('Vertical Slice Integration Test', () => {
 
             // Complete session
             session.state = 'ENDED';
-            const endTime = new Date();
-            const ttl = Math.floor(endTime.getTime() / 1000) + 72 * 60 * 60; // 72 hours
+            // TTL calculation for DynamoDB (72 hours after session end)
+            // const endTime = new Date();
+            // const ttl = Math.floor(endTime.getTime() / 1000) + 72 * 60 * 60;
 
             // Assert session state
             expect(session.state).toBe('ENDED');
@@ -349,7 +359,8 @@ describe('Vertical Slice Integration Test', () => {
 
     describe('Step 6: Cost Tracking Throughout Vertical Slice', () => {
         it('should track costs for all operations', async () => {
-            const costMonitor = new CostMonitorFinOpsAgent([]);
+            // Cost monitor instance for tracking operations
+            // const costMonitor = new CostMonitorFinOpsAgent([]);
 
             // Simulate cost tracking
             const costs = [
@@ -364,7 +375,7 @@ describe('Vertical Slice Integration Test', () => {
 
             // Assert costs are tracked
             expect(costs.length).toBe(5);
-            expect(totalCost).toBe(12.3);
+            expect(totalCost).toBeCloseTo(12.3, 10);
 
             // Verify within budget (dev budget: £100)
             expect(totalCost).toBeLessThan(100);
