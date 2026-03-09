@@ -1,21 +1,21 @@
-default_agent: testcalc_Agent
+default_agent: UnrealLevelBuilder_Agent
 agents:
-  testcalc_Agent:
-    name: testcalc_Agent
+  UnrealLevelBuilder_Agent:
+    name: UnrealLevelBuilder_Agent
     language: python
     node_version: null
-    entrypoint: C:\Users\j_e_a\OneDrive\Projects\Hypermage\Hypermage_VR\Agents\testcalc\src\main.py
+    entrypoint: C:/Users/j_e_a/OneDrive/Projects/Hypermage/Hypermage_VR/Agents/unreal-level-builder/src/main.py
     deployment_type: container
     runtime_type: PYTHON_3_10
     platform: linux/amd64
     container_runtime: null
-    source_path: C:\Users\j_e_a\OneDrive\Projects\Hypermage\Hypermage_VR\Agents\testcalc\src
+    source_path: C:/Users/j_e_a/OneDrive/Projects/Hypermage/Hypermage_VR/Agents/unreal-level-builder/src
     aws:
       execution_role: arn:aws:iam::732231126129:role/AmazonBedrockAgentCoreSDKRuntime-eu-west-1-81c578ca1b
       execution_role_auto_create: false
       account: '732231126129'
       region: eu-west-1
-      ecr_repository: 732231126129.dkr.ecr.eu-west-1.amazonaws.com/bedrock-agentcore-testcalc_agent
+      ecr_repository: 732231126129.dkr.ecr.eu-west-1.amazonaws.com/bedrock-agentcore-unreallevelbuilder_agent
       ecr_auto_create: false
       s3_path: s3://bedrock-agentcore-codebuild-sources-732231126129-eu-west-1
       s3_auto_create: false
@@ -30,12 +30,12 @@ agents:
         idle_runtime_session_timeout: null
         max_lifetime: null
     bedrock_agentcore:
-      agent_id: testcalc_Agent-F6yhnwFpvF
-      agent_arn: arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/testcalc_Agent-F6yhnwFpvF
+      agent_id: null
+      agent_arn: null
       agent_session_id: null
     codebuild:
-      project_name: bedrock-agentcore-testcalc_agent-builder
-      execution_role: arn:aws:iam::732231126129:role/AmazonBedrockAgentCoreSDKCodeBuild-eu-west-1-81c578ca1b
+      project_name: bedrock-agentcore-unreallevelbuilder_agent-builder
+      execution_role: arn:aws:iam::732231126129:role/AmazonBedrockAgentCoreSDKCodeBuild-eu-west-1-ad5cc4fafc
       source_bucket: bedrock-agentcore-codebuild-sources-732231126129-eu-west-1
     memory:
       mode: NO_MEMORY

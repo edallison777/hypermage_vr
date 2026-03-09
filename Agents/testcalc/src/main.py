@@ -27,7 +27,7 @@ async def invoke(payload, context):
     try:
         # Use Claude 3.7 Sonnet
         model = BedrockModel(
-            model_id="anthropic.claude-3-7-sonnet-20250219-v1:0"
+            model_id="eu.anthropic.claude-sonnet-4-20250514-v1:0"
         )
         
         # Create agent inside handler
@@ -53,3 +53,7 @@ async def invoke(payload, context):
                 
     except Exception as e:
         yield json.dumps({'error': f'Agent error: {str(e)}'})
+
+
+if __name__ == '__main__':
+    app.run()

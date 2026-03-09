@@ -1,0 +1,68 @@
+[
+  {
+    "agent": "AssetPipeline_Agent",
+    "agent_id": "AssetPipeline_Agent-siqbOWHci2",
+    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/AssetPipeline_Agent-siqbOWHci2",
+    "status": "READY"
+  },
+  {
+    "agent": "ConversationLevelDesigner_Agent",
+    "agent_id": "ConversationLevelDesigner_Agent-1ZShl1E6H5",
+    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/ConversationLevelDesigner_Agent-1ZShl1E6H5",
+    "status": "READY"
+  },
+  {
+    "agent": "CostMonitorFinOps_Agent",
+    "agent_id": "CostMonitorFinOps_Agent-gI5m1PA2US",
+    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/CostMonitorFinOps_Agent-gI5m1PA2US",
+    "status": "READY"
+  },
+  {
+    "agent": "DevOpsAWS_Agent",
+    "agent_id": "DevOpsAWS_Agent-tjiWN5GCZV",
+    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/DevOpsAWS_Agent-tjiWN5GCZV",
+    "status": "READY"
+  },
+  {
+    "agent": "GameplaySystems_Agent",
+    "agent_id": "GameplaySystems_Agent-iBQ0EF4DP6",
+    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/GameplaySystems_Agent-iBQ0EF4DP6",
+    "status": "READY"
+  },
+  {
+    "agent": "MultiplayerNetcode_Agent",
+    "agent_id": "MultiplayerNetcode_Agent-GHsycuGb4A",
+    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/MultiplayerNetcode_Agent-GHsycuGb4A",
+    "status": "READY"
+  },
+  {
+    "agent": "ProducerOrchestrator_Agent",
+    "agent_id": "ProducerOrchestrator_Agent-8eBOlFDUfN",
+    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/ProducerOrchestrator_Agent-8eBOlFDUfN",
+    "status": "READY"
+  },
+  {
+    "agent": "QA_Agent",
+    "agent_id": "QA_Agent-2BGaK08sI3",
+    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/QA_Agent-2BGaK08sI3",
+    "status": "READY"
+  },
+  {
+    "agent": "TechArtVFXAudio_Agent",
+    "agent_id": "TechArtVFXAudio_Agent-08HN169vef",
+    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/TechArtVFXAudio_Agent-08HN169vef",
+    "status": "READY"
+  },
+  {
+    "agent": "UnrealLevelBuilder_Agent",
+    "agent_id": "UnrealLevelBuilder_Agent-rFwJdR9uPr",
+    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/UnrealLevelBuilder_Agent-rFwJdR9uPr",
+    "status": "READY"
+  },
+  {
+    "agent": "VoiceComms_Agent",
+    "agent_id": "VoiceComms_Agent-QOXHOyDNVk",
+    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/VoiceComms_Agent-QOXHOyDNVk",
+    "status": "READY"
+  }
+]

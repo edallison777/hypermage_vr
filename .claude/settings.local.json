@@ -20,7 +20,12 @@
       "Bash(cd \"C:/Users/j_e_a/OneDrive/Projects/Hypermage/Hypermage_VR/Infra/environments/dev\" && terraform apply -auto-approve 2>&1)",
       "Bash(cd \"C:/Users/j_e_a/OneDrive/Projects/Hypermage/Hypermage_VR/Infra/environments/dev\" && terraform state list 2>&1)",
       "Bash(aws cognito-idp:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(NO_COLOR=1 agentcore deploy:*)",
+      "Bash(python:*)",
+      "Bash(agentcore destroy:*)",
+      "Bash(agentcore deploy:*)",
+      "Bash(PYTHONIOENCODING=utf-8 python:*)"
     ]
   }
 }
