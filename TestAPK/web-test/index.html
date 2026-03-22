@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hypermage VR — Backend Integration Test</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: monospace; background: #0d1117; color: #c9d1d9; padding: 16px; font-size: 14px; }
+    h1 { color: #58a6ff; margin-bottom: 4px; font-size: 18px; }
+    .subtitle { color: #8b949e; margin-bottom: 20px; font-size: 12px; }
+    .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .card h2 { color: #e6edf3; font-size: 14px; margin-bottom: 12px; }
+    label { display: block; color: #8b949e; font-size: 12px; margin-bottom: 4px; }
+    input { width: 100%; padding: 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+            color: #c9d1d9; font-family: monospace; font-size: 13px; margin-bottom: 10px; }
+    input:focus { outline: none; border-color: #58a6ff; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    button { padding: 8px 14px; border: none; border-radius: 6px; cursor: pointer;
+             font-family: monospace; font-size: 13px; font-weight: bold; }
+    .btn-primary  { background: #238636; color: #fff; }
+    .btn-secondary{ background: #1f6feb; color: #fff; }
+    .btn-warning  { background: #9e6a03; color: #fff; }
+    .btn-danger   { background: #da3633; color: #fff; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #log { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px;
+           height: 320px; overflow-y: auto; font-size: 12px; line-height: 1.6; white-space: pre-wrap; }
+    .log-ok   { color: #3fb950; }
+    .log-err  { color: #f85149; }
+    .log-info { color: #79c0ff; }
+    .log-warn { color: #e3b341; }
+    .log-dim  { color: #8b949e; }
+    .token-box { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 8px;
+                 font-size: 11px; color: #8b949e; word-break: break-all; max-height: 80px; overflow-y: auto; }
+    #tokenDisplay { margin-top: 10px; display: none; }
+  </style>
+</head>
+<body>
+  <h1>Hypermage VR — Backend Test</h1>
+  <p class="subtitle">eu-west-1 · API Gateway + Cognito + DynamoDB integration tests</p>
+
+  <!-- Config -->
+  <div class="card">
+    <h2>Config (pre-filled from deployment)</h2>
+    <label>Cognito User Pool ID</label>
+    <input id="userPoolId" value="eu-west-1_q2rAaummA" readonly>
+    <label>Cognito App Client ID</label>
+    <input id="clientId" value="2iinqhoja78kj1et6rcv28bjvf" readonly>
+    <label>Session API Base URL</label>
+    <input id="apiUrl" value="https://fhjoxyk9x5.execute-api.eu-west-1.amazonaws.com/dev" readonly>
+    <label>Cognito Endpoint</label>
+    <input id="cognitoUrl" value="https://cognito-idp.eu-west-1.amazonaws.com/" readonly>
+  </div>
+
+  <!-- Auth -->
+  <div class="card">
+    <h2>1 · Authentication</h2>
+    <label>Email / Username</label>
+    <input id="username" type="email" placeholder="testplayer@example.com">
+    <label>Password (min 8 chars, uppercase, number, symbol)</label>
+    <input id="password" type="password" placeholder="TestPass123!">
+    <div class="btn-row">
+      <button class="btn-secondary" onclick="doSignUp()">Sign Up</button>
+      <button class="btn-warning" onclick="doConfirmSignUp()">Confirm Code</button>
+      <button class="btn-primary" onclick="doLogin()">Login</button>
+    </div>
+    <div id="tokenDisplay">
+      <label style="margin-top:10px">ID Token (truncated)</label>
+      <div class="token-box" id="tokenBox"></div>
+    </div>
+  </div>
+
+  <!-- Confirm -->
+  <div class="card">
+    <h2>1b · Confirm Sign-Up (check email for code)</h2>
+    <label>Confirmation Code</label>
+    <input id="confirmCode" placeholder="123456">
+  </div>
+
+  <!-- Session API -->
+  <div class="card">
+    <h2>2 · Session API Tests</h2>
+    <div class="btn-row">
+      <button class="btn-secondary" onclick="testHealth()">Health Check</button>
+      <button class="btn-primary" onclick="testCreateSession()">Create Session</button>
+      <button class="btn-warning" onclick="testGetSession()">Get Session</button>
+    </div>
+  </div>
+
+  <!-- Full flow -->
+  <div class="card">
+    <h2>3 · Full Integration Flow</h2>
+    <div class="btn-row">
+      <button class="btn-primary" onclick="runFullFlow()">Run Full Flow</button>
+      <button class="btn-danger" onclick="clearLog()">Clear Log</button>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="card">
+    <h2>Log</h2>
+    <div id="log"></div>
+  </div>
+
+  <script>
+    let idToken = null;
+    let sessionId = null;
+
+    // ── Logging ──────────────────────────────────────────────────────────────
+    function log(msg, type = 'info') {
+      const el = document.getElementById('log');
+      const ts = new Date().toISOString().substring(11, 23);
+      const line = document.createElement('div');
+      line.className = `log-${type}`;
+      line.textContent = `[${ts}] ${msg}`;
+      el.appendChild(line);
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function clearLog() { document.getElementById('log').innerHTML = ''; }
+
+    // ── Cognito helpers ───────────────────────────────────────────────────────
+    async function cognitoPost(target, body) {
+      const url = document.getElementById('cognitoUrl').value;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-amz-json-1.1',
+          'X-Amz-Target': target,
+        },
+        body: JSON.stringify(body),
+      });
+      const json = await resp.json();
+      if (!resp.ok) throw new Error(`${json.__type || 'Error'}: ${json.message || JSON.stringify(json)}`);
+      return json;
+    }
+
+    async function apiCall(method, path, body = null) {
+      const base = document.getElementById('apiUrl').value;
+      const headers = { 'Content-Type': 'application/json' };
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+      const opts = { method, headers };
+      if (body) opts.body = JSON.stringify(body);
+      const resp = await fetch(`${base}${path}`, opts);
+      const text = await resp.text();
+      let json;
+      try { json = JSON.parse(text); } catch { json = { raw: text }; }
+      return { status: resp.status, ok: resp.ok, body: json };
+    }
+
+    // ── Auth actions ─────────────────────────────────────────────────────────
+    async function doSignUp() {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const clientId = document.getElementById('clientId').value;
+      if (!username || !password) { log('Enter username and password first', 'err'); return; }
+      try {
+        log(`Signing up ${username}…`, 'info');
+        await cognitoPost('AWSCognitoIdentityProviderService.SignUp', {
+          ClientId: clientId,
+          Username: username,
+          Password: password,
+          UserAttributes: [{ Name: 'email', Value: username }],
+        });
+        log('✓ Sign up successful — check email for confirmation code', 'ok');
+      } catch (e) {
+        if (e.message.includes('UsernameExistsException')) {
+          log('User already exists — proceed to Login', 'warn');
+        } else {
+          log(`✗ Sign up failed: ${e.message}`, 'err');
+        }
+      }
+    }
+
+    async function doConfirmSignUp() {
+      const username = document.getElementById('username').value.trim();
+      const code = document.getElementById('confirmCode').value.trim();
+      const clientId = document.getElementById('clientId').value;
+      if (!username || !code) { log('Enter username and confirmation code', 'err'); return; }
+      try {
+        log(`Confirming ${username} with code ${code}…`, 'info');
+        await cognitoPost('AWSCognitoIdentityProviderService.ConfirmSignUp', {
+          ClientId: clientId,
+          Username: username,
+          ConfirmationCode: code,
+        });
+        log('✓ Account confirmed — you can now Login', 'ok');
+      } catch (e) {
+        log(`✗ Confirm failed: ${e.message}`, 'err');
+      }
+    }
+
+    async function doLogin() {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const clientId = document.getElementById('clientId').value;
+      if (!username || !password) { log('Enter username and password', 'err'); return; }
+      try {
+        log(`Authenticating ${username}…`, 'info');
+        const result = await cognitoPost('AWSCognitoIdentityProviderService.InitiateAuth', {
+          AuthFlow: 'USER_PASSWORD_AUTH',
+          ClientId: clientId,
+          AuthParameters: { USERNAME: username, PASSWORD: password },
+        });
+        idToken = result.AuthenticationResult.IdToken;
+        const tokenDisplay = document.getElementById('tokenDisplay');
+        document.getElementById('tokenBox').textContent = idToken.substring(0, 80) + '…';
+        tokenDisplay.style.display = 'block';
+        log('✓ Login successful — ID token obtained', 'ok');
+        log(`  AccessToken expires in: ${result.AuthenticationResult.ExpiresIn}s`, 'dim');
+      } catch (e) {
+        if (e.message.includes('USER_PASSWORD_AUTH')) {
+          log('✗ USER_PASSWORD_AUTH not enabled on this app client.', 'err');
+          log('  Fix: Cognito Console → User Pools → App clients → Edit → enable USER_PASSWORD_AUTH', 'warn');
+        } else {
+          log(`✗ Login failed: ${e.message}`, 'err');
+        }
+      }
+    }
+
+    // ── Session API actions ───────────────────────────────────────────────────
+    async function testHealth() {
+      log('Testing health endpoint…', 'info');
+      try {
+        const r = await apiCall('GET', '/health');
+        if (r.ok) {
+          log(`✓ Health OK (${r.status}): ${JSON.stringify(r.body)}`, 'ok');
+        } else {
+          log(`✗ Health returned ${r.status}: ${JSON.stringify(r.body)}`, 'err');
+        }
+      } catch (e) { log(`✗ Health check failed: ${e.message}`, 'err'); }
+    }
+
+    async function testCreateSession() {
+      if (!idToken) { log('Login first to get an ID token', 'warn'); return; }
+      log('Creating player session…', 'info');
+      const body = {
+        playerId: 'test-player-' + Date.now(),
+        region: 'eu-west-1',
+        gameMode: 'deathmatch',
+        platform: 'quest3',
+      };
+      try {
+        const r = await apiCall('POST', '/sessions', body);
+        if (r.ok) {
+          sessionId = r.body.sessionId || r.body.id;
+          log(`✓ Session created (${r.status}): sessionId=${sessionId}`, 'ok');
+          log(`  Full response: ${JSON.stringify(r.body)}`, 'dim');
+        } else {
+          log(`✗ Create session returned ${r.status}: ${JSON.stringify(r.body)}`, 'err');
+        }
+      } catch (e) { log(`✗ Create session failed: ${e.message}`, 'err'); }
+    }
+
+    async function testGetSession() {
+      if (!sessionId) { log('Create a session first', 'warn'); return; }
+      log(`Getting session ${sessionId}…`, 'info');
+      try {
+        const r = await apiCall('GET', `/sessions/${sessionId}`);
+        if (r.ok) {
+          log(`✓ Session retrieved (${r.status}): ${JSON.stringify(r.body)}`, 'ok');
+        } else {
+          log(`✗ Get session returned ${r.status}: ${JSON.stringify(r.body)}`, 'err');
+        }
+      } catch (e) { log(`✗ Get session failed: ${e.message}`, 'err'); }
+    }
+
+    async function runFullFlow() {
+      clearLog();
+      log('=== FULL INTEGRATION FLOW ===', 'info');
+      log('Step 1: Health check', 'info');
+      await testHealth();
+      if (!idToken) {
+        log('Step 2: Skipping auth tests — no token (Login first then re-run)', 'warn');
+        return;
+      }
+      log('Step 2: Create session', 'info');
+      await testCreateSession();
+      log('Step 3: Retrieve session', 'info');
+      await testGetSession();
+      log('=== FLOW COMPLETE ===', idToken && sessionId ? 'ok' : 'warn');
+    }
+
+    // Boot
+    log('Hypermage VR test harness ready.', 'info');
+    log('Steps: Sign Up → Confirm → Login → Run Full Flow', 'dim');
+    log('Or: just Run Full Flow if already logged in.', 'dim');
+  </script>
+</body>
+</html>

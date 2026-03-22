@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="#0d1117"
+    android:padding="12dp">
+
+    <!-- Left panel: controls -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:paddingEnd="8dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Hypermage VR — Backend Test"
+            android:textColor="#58a6ff"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:paddingBottom="4dp"/>
+
+        <TextView
+            android:id="@+id/tvTokenHint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="✓ Authenticated"
+            android:textColor="#3fb950"
+            android:textSize="11sp"
+            android:paddingBottom="8dp"
+            android:visibility="gone"/>
+
+        <!-- Auth section -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="— Auth —" android:textColor="#8b949e" android:textSize="11sp"
+            android:paddingBottom="4dp"/>
+
+        <EditText android:id="@+id/etUsername"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:hint="email / username" android:inputType="textEmailAddress"
+            android:textColor="#c9d1d9" android:textColorHint="#484f58"
+            android:background="@drawable/input_bg"
+            android:padding="8dp" android:layout_marginBottom="6dp"
+            android:textSize="13sp" android:fontFamily="monospace"/>
+
+        <EditText android:id="@+id/etPassword"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:hint="password" android:inputType="textPassword"
+            android:textColor="#c9d1d9" android:textColorHint="#484f58"
+            android:background="@drawable/input_bg"
+            android:padding="8dp" android:layout_marginBottom="6dp"
+            android:textSize="13sp" android:fontFamily="monospace"/>
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:layout_marginBottom="4dp">
+            <Button android:id="@+id/btnSignUp" style="@style/BtnSecondary"
+                android:layout_width="0dp" android:layout_weight="1"
+                android:text="Sign Up" android:layout_marginEnd="4dp"/>
+            <Button android:id="@+id/btnLogin" style="@style/BtnPrimary"
+                android:layout_width="0dp" android:layout_weight="1"
+                android:text="Login"/>
+        </LinearLayout>
+
+        <EditText android:id="@+id/etConfirmCode"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:hint="confirmation code (from email)"
+            android:inputType="number"
+            android:textColor="#c9d1d9" android:textColorHint="#484f58"
+            android:background="@drawable/input_bg"
+            android:padding="8dp" android:layout_marginBottom="4dp"
+            android:textSize="13sp" android:fontFamily="monospace"/>
+
+        <Button android:id="@+id/btnConfirm" style="@style/BtnWarning"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Confirm Sign-Up" android:layout_marginBottom="8dp"/>
+
+        <!-- Session API section -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="— Session API —" android:textColor="#8b949e" android:textSize="11sp"
+            android:paddingBottom="4dp"/>
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:layout_marginBottom="4dp">
+            <Button android:id="@+id/btnHealth" style="@style/BtnSecondary"
+                android:layout_width="0dp" android:layout_weight="1"
+                android:text="Health" android:layout_marginEnd="4dp"/>
+            <Button android:id="@+id/btnCreateSession" style="@style/BtnPrimary"
+                android:layout_width="0dp" android:layout_weight="1"
+                android:text="Create Session"/>
+        </LinearLayout>
+
+        <Button android:id="@+id/btnGetSession" style="@style/BtnWarning"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Get Session" android:layout_marginBottom="8dp"/>
+
+        <!-- Full flow -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="— Full Flow —" android:textColor="#8b949e" android:textSize="11sp"
+            android:paddingBottom="4dp"/>
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <Button android:id="@+id/btnFullFlow" style="@style/BtnPrimary"
+                android:layout_width="0dp" android:layout_weight="1"
+                android:text="Run Full Flow" android:layout_marginEnd="4dp"/>
+            <Button android:id="@+id/btnClear" style="@style/BtnDanger"
+                android:layout_width="0dp" android:layout_weight="1"
+                android:text="Clear Log"/>
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Right panel: log -->
+    <ScrollView
+        android:id="@+id/logScroll"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1.2"
+        android:background="#161b22"
+        android:padding="8dp">
+
+        <TextView
+            android:id="@+id/logView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:fontFamily="monospace"
+            android:textColor="#c9d1d9"
+            android:lineSpacingExtra="2dp"/>
+    </ScrollView>
+
+</LinearLayout>

@@ -1,0 +1,57 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.hypermage.vrtest'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.hypermage.vrtest"
+        minSdk 29          // Android 10 — minimum for Quest 2/3
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+
+        // Inject config at compile time so it's not in source control
+        buildConfigField "String", "COGNITO_USER_POOL_ID",  '"eu-west-1_q2rAaummA"'
+        buildConfigField "String", "COGNITO_CLIENT_ID",     '"2iinqhoja78kj1et6rcv28bjvf"'
+        buildConfigField "String", "COGNITO_ENDPOINT",      '"https://cognito-idp.eu-west-1.amazonaws.com/"'
+        buildConfigField "String", "SESSION_API_URL",       '"https://fhjoxyk9x5.execute-api.eu-west-1.amazonaws.com/dev"'
+    }
+
+    buildFeatures {
+        buildConfig true
+        viewBinding true
+    }
+
+    buildTypes {
+        debug {
+            debuggable true
+        }
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    // OkHttp for HTTP calls (cleaner than HttpURLConnection)
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    // Coroutines
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+}

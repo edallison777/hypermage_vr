@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.HyperMageVRTest" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#58a6ff</item>
+        <item name="colorPrimaryVariant">#1f6feb</item>
+        <item name="colorOnPrimary">#ffffff</item>
+        <item name="android:windowBackground">#0d1117</item>
+        <item name="android:statusBarColor">#0d1117</item>
+    </style>
+
+    <style name="BtnPrimary" parent="Widget.MaterialComponents.Button">
+        <item name="backgroundTint">#238636</item>
+        <item name="android:textColor">#ffffff</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:layout_height">36dp</item>
+        <item name="android:paddingStart">8dp</item>
+        <item name="android:paddingEnd">8dp</item>
+    </style>
+
+    <style name="BtnSecondary" parent="Widget.MaterialComponents.Button">
+        <item name="backgroundTint">#1f6feb</item>
+        <item name="android:textColor">#ffffff</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:layout_height">36dp</item>
+        <item name="android:paddingStart">8dp</item>
+        <item name="android:paddingEnd">8dp</item>
+    </style>
+
+    <style name="BtnWarning" parent="Widget.MaterialComponents.Button">
+        <item name="backgroundTint">#9e6a03</item>
+        <item name="android:textColor">#ffffff</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:layout_height">36dp</item>
+        <item name="android:paddingStart">8dp</item>
+        <item name="android:paddingEnd">8dp</item>
+    </style>
+
+    <style name="BtnDanger" parent="Widget.MaterialComponents.Button">
+        <item name="backgroundTint">#da3633</item>
+        <item name="android:textColor">#ffffff</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:layout_height">36dp</item>
+        <item name="android:paddingStart">8dp</item>
+        <item name="android:paddingEnd">8dp</item>
+    </style>
+</resources>
