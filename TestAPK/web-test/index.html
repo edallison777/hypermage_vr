@@ -46,8 +46,8 @@
     <input id="userPoolId" value="eu-west-1_q2rAaummA" readonly>
     <label>Cognito App Client ID</label>
     <input id="clientId" value="2iinqhoja78kj1et6rcv28bjvf" readonly>
-    <label>Session API Base URL</label>
-    <input id="apiUrl" value="https://fhjoxyk9x5.execute-api.eu-west-1.amazonaws.com/dev" readonly>
+    <label>Session API Base URL (proxied — no CORS issues)</label>
+    <input id="apiUrl" value="" readonly>
     <label>Cognito Endpoint</label>
     <input id="cognitoUrl" value="https://cognito-idp.eu-west-1.amazonaws.com/" readonly>
   </div>
@@ -79,11 +79,10 @@
 
   <!-- Session API -->
   <div class="card">
-    <h2>2 · Session API Tests</h2>
+    <h2>2 · Matchmaking API Tests</h2>
     <div class="btn-row">
-      <button class="btn-secondary" onclick="testHealth()">Health Check</button>
-      <button class="btn-primary" onclick="testCreateSession()">Create Session</button>
-      <button class="btn-warning" onclick="testGetSession()">Get Session</button>
+      <button class="btn-primary" onclick="testStartMatchmaking()">Start Matchmaking</button>
+      <button class="btn-warning" onclick="testGetStatus()">Get Status</button>
     </div>
   </div>
 
@@ -104,7 +103,10 @@
 
   <script>
     let idToken = null;
-    let sessionId = null;
+    let ticketId = null;
+
+    // API calls go to the proxy (same origin) — proxy forwards to API Gateway
+    document.getElementById('apiUrl').value = window.location.origin + ' → API Gateway';
 
     // ── Logging ──────────────────────────────────────────────────────────────
     function log(msg, type = 'info') {
@@ -136,12 +138,12 @@
     }
 
     async function apiCall(method, path, body = null) {
-      const base = document.getElementById('apiUrl').value;
+      // Use same-origin proxy path — avoids CORS entirely
       const headers = { 'Content-Type': 'application/json' };
-      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+      if (idToken) headers['Authorization'] = idToken;
       const opts = { method, headers };
       if (body) opts.body = JSON.stringify(body);
-      const resp = await fetch(`${base}${path}`, opts);
+      const resp = await fetch(path, opts);   // relative URL → proxy server
       const text = await resp.text();
       let json;
       try { json = JSON.parse(text); } catch { json = { raw: text }; }
@@ -218,73 +220,59 @@
       }
     }
 
-    // ── Session API actions ───────────────────────────────────────────────────
-    async function testHealth() {
-      log('Testing health endpoint…', 'info');
-      try {
-        const r = await apiCall('GET', '/health');
-        if (r.ok) {
-          log(`✓ Health OK (${r.status}): ${JSON.stringify(r.body)}`, 'ok');
-        } else {
-          log(`✗ Health returned ${r.status}: ${JSON.stringify(r.body)}`, 'err');
-        }
-      } catch (e) { log(`✗ Health check failed: ${e.message}`, 'err'); }
-    }
-
-    async function testCreateSession() {
+    // ── Matchmaking API actions ───────────────────────────────────────────────
+    async function testStartMatchmaking() {
       if (!idToken) { log('Login first to get an ID token', 'warn'); return; }
-      log('Creating player session…', 'info');
+      log('Starting matchmaking…', 'info');
       const body = {
-        playerId: 'test-player-' + Date.now(),
-        region: 'eu-west-1',
+        playerId: 'quest3-' + Date.now(),
         gameMode: 'deathmatch',
+        region: 'eu-west-1',
         platform: 'quest3',
       };
       try {
-        const r = await apiCall('POST', '/sessions', body);
+        const r = await apiCall('POST', '/matchmaking/start', body);
         if (r.ok) {
-          sessionId = r.body.sessionId || r.body.id;
-          log(`✓ Session created (${r.status}): sessionId=${sessionId}`, 'ok');
-          log(`  Full response: ${JSON.stringify(r.body)}`, 'dim');
+          ticketId = r.body.ticketId || r.body.TicketId;
+          log(`✓ Matchmaking started (${r.status}): ticketId=${ticketId}`, 'ok');
+          log(`  Response: ${JSON.stringify(r.body)}`, 'dim');
         } else {
-          log(`✗ Create session returned ${r.status}: ${JSON.stringify(r.body)}`, 'err');
+          log(`✗ Start matchmaking ${r.status}: ${JSON.stringify(r.body)}`, 'err');
         }
-      } catch (e) { log(`✗ Create session failed: ${e.message}`, 'err'); }
+      } catch (e) { log(`✗ Start matchmaking failed: ${e.message}`, 'err'); }
     }
 
-    async function testGetSession() {
-      if (!sessionId) { log('Create a session first', 'warn'); return; }
-      log(`Getting session ${sessionId}…`, 'info');
+    async function testGetStatus() {
+      if (!ticketId) { log('Start matchmaking first', 'warn'); return; }
+      log(`Getting status for ticket ${ticketId}…`, 'info');
       try {
-        const r = await apiCall('GET', `/sessions/${sessionId}`);
+        const r = await apiCall('GET', `/matchmaking/status/${ticketId}`);
         if (r.ok) {
-          log(`✓ Session retrieved (${r.status}): ${JSON.stringify(r.body)}`, 'ok');
+          log(`✓ Status retrieved (${r.status}): ${JSON.stringify(r.body)}`, 'ok');
         } else {
-          log(`✗ Get session returned ${r.status}: ${JSON.stringify(r.body)}`, 'err');
+          log(`✗ Get status ${r.status}: ${JSON.stringify(r.body)}`, 'err');
         }
-      } catch (e) { log(`✗ Get session failed: ${e.message}`, 'err'); }
+      } catch (e) { log(`✗ Get status failed: ${e.message}`, 'err'); }
     }
 
     async function runFullFlow() {
       clearLog();
       log('=== FULL INTEGRATION FLOW ===', 'info');
-      log('Step 1: Health check', 'info');
-      await testHealth();
       if (!idToken) {
-        log('Step 2: Skipping auth tests — no token (Login first then re-run)', 'warn');
+        log('No token — Login first then re-run', 'warn');
         return;
       }
-      log('Step 2: Create session', 'info');
-      await testCreateSession();
-      log('Step 3: Retrieve session', 'info');
-      await testGetSession();
-      log('=== FLOW COMPLETE ===', idToken && sessionId ? 'ok' : 'warn');
+      log('Step 1: Start matchmaking', 'info');
+      await testStartMatchmaking();
+      log('Step 2: Get matchmaking status', 'info');
+      await testGetStatus();
+      log('=== FLOW COMPLETE ===', ticketId ? 'ok' : 'warn');
     }
 
     // Boot
-    log('Hypermage VR test harness ready.', 'info');
-    log('Steps: Sign Up → Confirm → Login → Run Full Flow', 'dim');
-    log('Or: just Run Full Flow if already logged in.', 'dim');
+    log('Hypermage VR test harness ready (proxy mode — CORS resolved).', 'info');
+    log('Steps: Login → Run Full Flow', 'dim');
+    log('Endpoints: POST /matchmaking/start  GET /matchmaking/status/{ticketId}', 'dim');
   </script>
 </body>
 </html>

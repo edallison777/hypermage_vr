@@ -25,7 +25,27 @@
       "Bash(python:*)",
       "Bash(agentcore destroy:*)",
       "Bash(agentcore deploy:*)",
-      "Bash(PYTHONIOENCODING=utf-8 python:*)"
+      "Bash(PYTHONIOENCODING=utf-8 python:*)",
+      "Bash(where adb:*)",
+      "Bash(cmd /c \"where adb 2>&1\")",
+      "Bash(cmd /c \"where adb\" 2>&1 && cmd /c \"adb version\" 2>&1)",
+      "Bash(cmd /c \"where adb\")",
+      "Bash(cmd /c \"dir /b C:\\\\Users\\\\j_e_a\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe 2>nul && echo found || echo not found\")",
+      "Bash(cmd /c \"dir /b \\\\\"C:\\\\Program Files\\\\Android\\\\Android Studio\\\\sdk\\\\platform-tools\\\\adb.exe\\\\\" 2>nul && echo found || echo not found\")",
+      "Bash(cmd /c \"C:\\\\Users\\\\j_e_a\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe version\")",
+      "Bash(cmd /c \"dir /b C:\\\\Users\\\\j_e_a\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\build-tools\")",
+      "Bash(\"/c/Users/j_e_a/AppData/Local/Android/Sdk/platform-tools/adb.exe\" version:*)",
+      "Read(//c/Users/j_e_a/AppData/Local/Programs//**)",
+      "Read(//c/Program Files/**)",
+      "Read(//c/Users/j_e_a/**)",
+      "Read(//c/Users/j_e_a/AppData/Local/**)",
+      "Bash(find:*)",
+      "Bash(\"/c/Users/j_e_a/AppData/Local/Android/Sdk/platform-tools/adb.exe\" connect:*)",
+      "Bash(powershell -Command \"\\(Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.IPAddress -like '192.168.*' -or $_.IPAddress -like '10.*' -or $_.IPAddress -like '172.*'} | Select-Object -First 1\\).IPAddress\" 2>&1)",
+      "Bash(powershell -Command \"Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.PrefixOrigin -eq 'Dhcp' -or $_.PrefixOrigin -eq 'Manual' } | Select-Object IPAddress\" 2>&1)",
+      "Bash(ipconfig:*)",
+      "Bash(powershell -Command \"New-NetFirewallRule -DisplayName 'HyperMage VR Test Server' -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -Profile Private\" 2>&1)",
+      "Bash(pkill:*)"
     ]
   }
 }
