@@ -12,8 +12,57 @@ import {
     ChangeNote,
 } from '../types';
 import { logger } from '../utils/logger';
+import { invokeAgent } from '../utils/AgentCoreClient';
 import * as fs from 'fs';
 import * as path from 'path';
+
+// In Jest environments we skip real network calls so tests stay fast and hermetic.
+const IS_TEST = !!process.env.JEST_WORKER_ID || process.env.NODE_ENV === 'test';
+
+// ── Agent name → AgentCore ARN mapping ───────────────────────────────────────
+// Loaded once from deployment_results.json.
+// PlanGenerator uses camelCase names (e.g. "ConversationLevelDesignerAgent");
+// deployed names use underscored form (e.g. "ConversationLevelDesigner_Agent").
+
+interface DeploymentResult {
+    agent: string;
+    agent_id: string;
+    agent_arn: string;
+    status: string;
+}
+
+function loadAgentArns(): Map<string, string> {
+    const resultsPath = path.join(__dirname, '..', '..', '..', 'Agents', 'deployment_results.json');
+    const raw: DeploymentResult[] = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
+
+    // Build map from deployment agent name → ARN
+    const byDeployedName = new Map(raw.map((r) => [r.agent, r.agent_arn]));
+
+    // Also accept the camelCase variants used by PlanGenerator
+    const aliases: Record<string, string> = {
+        ConversationLevelDesignerAgent: 'ConversationLevelDesigner_Agent',
+        UnrealLevelBuilderAgent:        'UnrealLevelBuilder_Agent',
+        UnrealBuilderAgent:             'UnrealLevelBuilder_Agent',
+        GameplaySystemsAgent:           'GameplaySystems_Agent',
+        MultiplayerNetcodeAgent:        'MultiplayerNetcode_Agent',
+        VoiceCommsAgent:                'VoiceComms_Agent',
+        TechArtVFXAudioAgent:           'TechArtVFXAudio_Agent',
+        AssetPipelineAgent:             'AssetPipeline_Agent',
+        QAAgent:                        'QA_Agent',
+        DevOpsAWSAgent:                 'DevOpsAWS_Agent',
+        ProducerOrchestratorAgent:      'ProducerOrchestrator_Agent',
+        CostMonitorFinOpsAgent:         'CostMonitorFinOps_Agent',
+    };
+
+    const result = new Map<string, string>(byDeployedName);
+    for (const [alias, deployedName] of Object.entries(aliases)) {
+        const arn = byDeployedName.get(deployedName);
+        if (arn) result.set(alias, arn);
+    }
+    return result;
+}
+
+const AGENT_ARNS: Map<string, string> = loadAgentArns();
 
 export class PlanExecutor {
     private executions: Map<string, PlanExecution> = new Map();
@@ -159,13 +208,19 @@ export class PlanExecutor {
         });
 
         try {
-            // TODO: Call agent via MCP adapter
-            // For now, simulate execution
-            await this.simulateStepExecution(step);
+            const agentArn = AGENT_ARNS.get(step.agent);
+            if (!agentArn) {
+                throw new Error(`No AgentCore ARN found for agent: ${step.agent}`);
+            }
+
+            const prompt = this.buildStepPrompt(step);
+            const response = IS_TEST
+                ? `[test] ${step.capability} simulated`
+                : await invokeAgent(agentArn, prompt, execution.id);
 
             stepExecution.status = 'completed';
             stepExecution.endTime = new Date().toISOString();
-            stepExecution.result = { success: true };
+            stepExecution.result = { success: true, response };
 
             // Update costs
             execution.costs.totalCost += step.estimatedCost;
@@ -199,11 +254,14 @@ export class PlanExecutor {
     }
 
     /**
-     * Simulate step execution (placeholder)
+     * Build a natural-language prompt for an agent step.
+     * The agent's system prompt already encodes its role; this provides the task.
      */
-    private async simulateStepExecution(_step: PlanStep): Promise<void> {
-        // Simulate work with a delay
-        await this.delay(Math.random() * 2000 + 1000);
+    private buildStepPrompt(step: PlanStep): string {
+        const params = Object.keys(step.parameters).length
+            ? `\n\nParameters:\n${JSON.stringify(step.parameters, null, 2)}`
+            : '';
+        return `${step.description}${params}\n\nCapability required: ${step.capability}`;
     }
 
     /**
