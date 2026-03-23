@@ -101,10 +101,10 @@ class MainActivity : AppCompatActivity() {
         logInfo("Creating session for $playerId…")
         val r = withContext(Dispatchers.IO) { client.createSession(playerId) }
         if (r.ok) {
-            lastSessionId = r.body.optString("sessionId").ifEmpty {
-                r.body.optString("id")
+            lastSessionId = r.body.optString("ticketId").ifEmpty {
+                r.body.optString("sessionId").ifEmpty { r.body.optString("id") }
             }
-            logOk("✓ Session created (${r.status}) — sessionId=$lastSessionId")
+            logOk("✓ Matchmaking started (${r.status}) — ticketId=$lastSessionId")
             logDim("  ${r.body}")
         } else {
             logErr("✗ Create session ${r.status}: ${r.body}")

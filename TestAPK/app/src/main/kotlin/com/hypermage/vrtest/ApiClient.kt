@@ -77,23 +77,29 @@ class ApiClient {
     // ── Session API ───────────────────────────────────────────────────────────
 
     fun healthCheck(): ApiResult {
-        val req = buildRequest("GET", "/health", null)
-        return execute(req)
+        // No /health endpoint exists — POST /matchmaking/start without auth.
+        // Any HTTP response (including 401) means the API is reachable.
+        val req = Request.Builder()
+            .url(BuildConfig.SESSION_API_URL + "/matchmaking/start")
+            .post("{}".toRequestBody(JSON))
+            .build()
+        val result = execute(req)
+        // 401 = API is up but needs auth — treat as healthy
+        return if (result.status == 401 || result.ok)
+            ApiResult(result.status, JSONObject().put("status", "API reachable (${result.status})"), true)
+        else result
     }
 
     fun createSession(playerId: String): ApiResult {
         val body = JSONObject().apply {
             put("playerId", playerId)
-            put("region", "eu-west-1")
-            put("gameMode", "deathmatch")
-            put("platform", "quest3")
         }
-        val req = buildRequest("POST", "/sessions", body)
+        val req = buildRequest("POST", "/matchmaking/start", body)
         return execute(req)
     }
 
-    fun getSession(sessionId: String): ApiResult {
-        val req = buildRequest("GET", "/sessions/$sessionId", null)
+    fun getSession(ticketId: String): ApiResult {
+        val req = buildRequest("GET", "/matchmaking/status/$ticketId", null)
         return execute(req)
     }
 

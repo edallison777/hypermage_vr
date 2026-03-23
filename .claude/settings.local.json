@@ -45,7 +45,22 @@
       "Bash(powershell -Command \"Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.PrefixOrigin -eq 'Dhcp' -or $_.PrefixOrigin -eq 'Manual' } | Select-Object IPAddress\" 2>&1)",
       "Bash(ipconfig:*)",
       "Bash(powershell -Command \"New-NetFirewallRule -DisplayName 'HyperMage VR Test Server' -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -Profile Private\" 2>&1)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(terraform apply:*)",
+      "Bash(./gradlew assembleDebug)",
+      "Bash(where gradle:*)",
+      "Bash(GRADLE_EXE=\"$USERPROFILE/.gradle/wrapper/dists/gradle-9.3.1-bin/23ovyewtku6u96viwx3xl3oks/gradle-9.3.1/bin/gradle\")",
+      "Bash(\"$GRADLE_EXE\" assembleDebug)",
+      "Bash(JAVA_HOME=\"C:/Program Files/Android/Android Studio1/jbr\" GRADLE_EXE=\"$USERPROFILE/.gradle/wrapper/dists/gradle-9.3.1-bin/23ovyewtku6u96viwx3xl3oks/gradle-9.3.1/bin/gradle\")",
+      "Bash(JAVA_HOME=\"$JAVA_HOME\" \"$GRADLE_EXE\" assembleDebug)",
+      "Bash(JAVA_HOME=\"C:/Program Files/Android/Android Studio1/jbr\" \"$USERPROFILE/.gradle/wrapper/dists/gradle-9.3.1-bin/23ovyewtku6u96viwx3xl3oks/gradle-9.3.1/bin/gradle\" --stop 2>&1)",
+      "Bash(tasklist)",
+      "Bash(\"C:\\\\Users\\\\j_e_a\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" devices:*)",
+      "Bash(\"C:\\\\Users\\\\j_e_a\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" kill-server:*)",
+      "Bash(\"C:\\\\Users\\\\j_e_a\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" start-server:*)",
+      "Bash(\"C:\\\\Users\\\\j_e_a\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" install:*)",
+      "Bash(\"C:\\\\Users\\\\j_e_a\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" logcat:*)",
+      "Bash(\"C:\\\\Users\\\\j_e_a\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" shell:*)"
     ]
   }
 }

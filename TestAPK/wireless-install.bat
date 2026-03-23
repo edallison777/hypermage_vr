@@ -2,7 +2,7 @@
 setlocal
 
 set ADB=C:\Users\j_e_a\AppData\Local\Android\Sdk\platform-tools\adb.exe
-set APK=app\build\outputs\apk\debug\app-debug.apk
+set APK=C:\builds\hypermage-vrtest\app\outputs\apk\debug\app-debug.apk
 
 echo.
 echo  Hypermage VR — Wireless APK Install

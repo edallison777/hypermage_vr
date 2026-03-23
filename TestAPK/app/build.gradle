@@ -3,6 +3,9 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+// Redirect build output outside OneDrive to avoid file-locking during sync
+buildDir = "C:/builds/hypermage-vrtest/app"
+
 android {
     namespace 'com.hypermage.vrtest'
     compileSdk 35
