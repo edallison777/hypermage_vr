@@ -60,7 +60,10 @@
       "Bash(\"C:\\\\Users\\\\j_e_a\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" start-server:*)",
       "Bash(\"C:\\\\Users\\\\j_e_a\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" install:*)",
       "Bash(\"C:\\\\Users\\\\j_e_a\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" logcat:*)",
-      "Bash(\"C:\\\\Users\\\\j_e_a\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" shell:*)"
+      "Bash(\"C:\\\\Users\\\\j_e_a\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" shell:*)",
+      "Bash(mkdir -p \"C:\\\\Users\\\\j_e_a\\\\OneDrive\\\\Projects\\\\Hypermage\\\\Hypermage_VR\\\\Infra\\\\packer\\\\scripts\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\j_e_a\\\\OneDrive\\\\Projects\\\\Hypermage\\\\Hypermage_VR\\\\scripts\\\\phase4\")",
+      "Bash(chmod +x \"C:\\\\Users\\\\j_e_a\\\\OneDrive\\\\Projects\\\\Hypermage\\\\Hypermage_VR\\\\scripts\\\\phase4\\\\01-create-ami.sh\" \"C:\\\\Users\\\\j_e_a\\\\OneDrive\\\\Projects\\\\Hypermage\\\\Hypermage_VR\\\\scripts\\\\phase4\\\\02-compile-server.sh\" \"C:\\\\Users\\\\j_e_a\\\\OneDrive\\\\Projects\\\\Hypermage\\\\Hypermage_VR\\\\scripts\\\\phase4\\\\03-deploy-gamelift.sh\" \"C:\\\\Users\\\\j_e_a\\\\OneDrive\\\\Projects\\\\Hypermage\\\\Hypermage_VR\\\\Infra\\\\packer\\\\scripts\\\\bootstrap.sh\")"
     ]
   }
 }

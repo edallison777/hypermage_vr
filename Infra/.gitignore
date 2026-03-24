@@ -2,6 +2,7 @@
 *.tfstate
 *.tfstate.*
 *.tfvars
+!ami_id.auto.tfvars
 .terraform/
 .terraform.lock.hcl
 crash.log

@@ -38,6 +38,10 @@ Specs/change-notes/
 .terraform.lock.hcl
 terraform.tfvars
 *.tfvars
+!Infra/environments/dev/ami_id.auto.tfvars
+
+# Packer
+Infra/packer/packer-manifest.json
 
 # Unreal Engine
 UnrealProject/Binaries/

@@ -47,5 +47,5 @@ output "cloudwatch_log_group_name" {
 
 output "ami_id" {
   description = "AMI ID used for build instances"
-  value       = var.ami_id != "" ? var.ami_id : data.aws_ami.unreal_build.id
+  value       = local.resolved_ami_id
 }

@@ -179,7 +179,7 @@ resource "aws_security_group" "build_instance" {
 # Launch template for build instances
 resource "aws_launch_template" "build_instance" {
   name_prefix   = "${var.project_name}-unreal-build-"
-  image_id      = var.ami_id != "" ? var.ami_id : data.aws_ami.unreal_build.id
+  image_id      = local.resolved_ami_id
   instance_type = var.instance_type
 
   iam_instance_profile {
@@ -235,8 +235,9 @@ resource "aws_launch_template" "build_instance" {
   })
 }
 
-# Data source for latest Unreal build AMI (if custom AMI not provided)
+# Data source for latest Unreal build AMI (only queried when ami_id variable is not provided)
 data "aws_ami" "unreal_build" {
+  count       = var.ami_id == "" ? 1 : 0
   most_recent = true
   owners      = ["self"]
 
@@ -254,6 +255,10 @@ data "aws_ami" "unreal_build" {
     name   = "state"
     values = ["available"]
   }
+}
+
+locals {
+  resolved_ami_id = var.ami_id != "" ? var.ami_id : data.aws_ami.unreal_build[0].id
 }
 
 # CloudWatch log group for build logs

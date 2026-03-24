@@ -33,26 +33,27 @@ provider "aws" {
   }
 }
 
-# Data source for default VPC — used by unreal_build module when enabled
-# data "aws_vpc" "default" { default = true }
+# Default VPC — used by unreal_build module
+data "aws_vpc" "default" { default = true }
 
 # Unreal Build Infrastructure Module
-# NOTE: Requires a custom AMI tagged "unreal-5.3-build-*" to exist in eu-west-1.
-# Uncomment once the AMI has been created with UE5.3, Android SDK, and GameLift SDK.
-# See: Infra/modules/unreal-build/README.md for AMI creation instructions.
-# module "unreal_build" {
-#   source                = "../../modules/unreal-build"
-#   project_name          = var.project_name
-#   environment           = "dev"
-#   aws_region            = var.aws_region
-#   vpc_id                = data.aws_vpc.default.id
-#   instance_type         = "g4dn.xlarge"
-#   enable_spot_instances = true
-#   spot_max_price        = "0.50"
-#   root_volume_size      = 150
-#   log_retention_days    = 30
-#   tags = { CostCenter = "Development", Owner = "DevOps Team" }
-# }
+# AMI ID is populated by scripts/phase4/01-create-ami.sh → ami_id.auto.tfvars
+module "unreal_build" {
+  source = "../../modules/unreal-build"
+
+  project_name          = var.project_name
+  environment           = "dev"
+  aws_region            = var.aws_region
+  vpc_id                = data.aws_vpc.default.id
+  ami_id                = var.ami_id
+  instance_type         = "g4dn.xlarge"
+  enable_spot_instances = true
+  spot_max_price        = "0.50"
+  root_volume_size      = 150
+  log_retention_days    = 30
+
+  tags = { CostCenter = "Development", Owner = "DevOps Team" }
+}
 
 # DynamoDB Tables Module
 module "dynamodb" {
@@ -72,45 +73,47 @@ module "dynamodb" {
 }
 
 # GameLift Fleet Module
-# NOTE: Requires a compiled server build uploaded to S3 first.
-# Uncomment once HyperMageVRServer.zip is available in the build bucket.
-# module "gamelift_fleet" {
-#   source = "../../modules/gamelift-fleet"
-#   project_name         = var.project_name
-#   environment          = "dev"
-#   aws_region           = var.aws_region
-#   build_s3_bucket_name = module.unreal_build.s3_bucket_name
-#   build_s3_bucket_arn  = module.unreal_build.s3_bucket_arn
-#   server_build_s3_key  = "builds/latest/HyperMageVRServer.zip"
-#   fleet_type           = "SPOT"
-#   ec2_instance_type    = "c5.large"
-#   enable_auto_scaling  = true
-#   min_fleet_capacity   = 1
-#   max_fleet_capacity   = 3
-#   desired_capacity     = 1
-#   server_launch_path   = "/local/game/HyperMageVRServer.sh"
-#   server_parameters    = "-log -port=7777"
-#   tags = { CostCenter = "Development", Owner = "DevOps Team" }
-# }
+# Requires HyperMageVRServer.zip in S3 (run scripts/phase4/02-compile-server.sh first)
+module "gamelift_fleet" {
+  source = "../../modules/gamelift-fleet"
+
+  project_name         = var.project_name
+  environment          = "dev"
+  aws_region           = var.aws_region
+  build_s3_bucket_name = module.unreal_build.s3_bucket_name
+  build_s3_bucket_arn  = module.unreal_build.s3_bucket_arn
+  server_build_s3_key  = "builds/latest/HyperMageVRServer.zip"
+  fleet_type           = "SPOT"
+  ec2_instance_type    = "c5.large"
+  enable_auto_scaling  = true
+  min_fleet_capacity   = 1
+  max_fleet_capacity   = 3
+  desired_capacity     = 1
+  server_launch_path   = "/local/game/HyperMageVRServer.sh"
+  server_parameters    = "-log -port=7777"
+
+  tags = { CostCenter = "Development", Owner = "DevOps Team" }
+}
 
 # FlexMatch Matchmaking Module
-# NOTE: Depends on gamelift_fleet. Uncomment together with gamelift_fleet above.
-# module "flexmatch" {
-#   source                      = "../../modules/flexmatch"
-#   project_name                = var.project_name
-#   environment                 = "dev"
-#   aws_region                  = var.aws_region
-#   fleet_arns                  = [module.gamelift_fleet.fleet_arn]
-#   min_players_per_match       = 10
-#   max_players_per_match       = 15
-#   matchmaking_timeout_seconds = 120
-#   acceptance_timeout_seconds  = 30
-#   acceptance_required         = true
-#   skill_distance_threshold    = 5
-#   max_latency_ms              = 100
-#   backfill_mode               = "AUTOMATIC"
-#   tags = { CostCenter = "Development", Owner = "DevOps Team" }
-# }
+module "flexmatch" {
+  source = "../../modules/flexmatch"
+
+  project_name                = var.project_name
+  environment                 = "dev"
+  aws_region                  = var.aws_region
+  fleet_arns                  = [module.gamelift_fleet.fleet_arn]
+  min_players_per_match       = 10
+  max_players_per_match       = 15
+  matchmaking_timeout_seconds = 120
+  acceptance_timeout_seconds  = 30
+  acceptance_required         = true
+  skill_distance_threshold    = 5
+  max_latency_ms              = 100
+  backfill_mode               = "AUTOMATIC"
+
+  tags = { CostCenter = "Development", Owner = "DevOps Team" }
+}
 
 # Cognito User Pools Module
 module "cognito" {
@@ -206,30 +209,46 @@ resource "aws_api_gateway_account" "main" {
 }
 
 # Outputs
-# Unreal build outputs — uncomment when unreal_build module is enabled
-# output "build_s3_bucket"       { value = module.unreal_build.s3_bucket_name }
-# output "build_launch_template" { value = module.unreal_build.launch_template_id }
-# output "build_iam_profile"     { value = module.unreal_build.iam_instance_profile_name }
 
-# GameLift/FlexMatch outputs — uncomment when those modules are enabled
-# output "gamelift_fleet_id" {
-#   value = module.gamelift_fleet.fleet_id
-# }
-# output "gamelift_alias_id" {
-#   value = module.gamelift_fleet.alias_id
-# }
-# output "gamelift_fleet_arn" {
-#   value = module.gamelift_fleet.fleet_arn
-# }
-# output "matchmaking_configuration_name" {
-#   value = module.flexmatch.matchmaking_configuration_name
-# }
-# output "matchmaking_deployment_instructions" {
-#   value = module.flexmatch.deployment_instructions
-# }
-# output "game_session_queue_arn" {
-#   value = module.flexmatch.game_session_queue_arn
-# }
+output "build_s3_bucket" {
+  description = "S3 bucket for Unreal Engine build artifacts"
+  value       = module.unreal_build.s3_bucket_name
+}
+
+output "build_launch_template" {
+  description = "EC2 launch template ID for build instances"
+  value       = module.unreal_build.launch_template_id
+}
+
+output "build_iam_profile" {
+  description = "IAM instance profile name for build instances"
+  value       = module.unreal_build.iam_instance_profile_name
+}
+
+output "gamelift_fleet_id" {
+  description = "GameLift fleet ID"
+  value       = module.gamelift_fleet.fleet_id
+}
+
+output "gamelift_alias_id" {
+  description = "GameLift fleet alias ID"
+  value       = module.gamelift_fleet.alias_id
+}
+
+output "gamelift_fleet_arn" {
+  description = "GameLift fleet ARN"
+  value       = module.gamelift_fleet.fleet_arn
+}
+
+output "matchmaking_configuration_name" {
+  description = "FlexMatch matchmaking configuration name"
+  value       = module.flexmatch.matchmaking_configuration_name
+}
+
+output "game_session_queue_arn" {
+  description = "GameLift game session queue ARN"
+  value       = module.flexmatch.game_session_queue_arn
+}
 
 output "dynamodb_table_names" {
   description = "All DynamoDB table names"
