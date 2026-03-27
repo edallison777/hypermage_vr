@@ -16,8 +16,15 @@ variable "aws_region" {
 
 variable "instance_type" {
   type    = string
-  default = "g4dn.xlarge"
-  # g4dn.xlarge: 4 vCPU, 16 GB RAM, NVIDIA T4 GPU (UE5.3 shader compilation)
+  default = "c5.18xlarge"
+  # c5.18xlarge: 72 vCPU, 144 GB RAM — UE5.3 source compile in ~1.5-2 hours vs 4-8 on g4dn.xlarge
+}
+
+variable "ue5_github_token" {
+  type        = string
+  description = "GitHub PAT with access to EpicGames/UnrealEngine (linked Epic account required)"
+  default     = ""
+  sensitive   = true
 }
 
 variable "ssh_keypair_name" {
@@ -106,9 +113,10 @@ build {
 
   # Step 1–9: Install all dependencies and UE5.3 from source
   provisioner "shell" {
-    script          = "${path.root}/scripts/bootstrap.sh"
-    timeout         = "480m" # 8 hours — UE5.3 compilation from source
-    execute_command = "chmod +x {{ .Path }}; sudo -H -u ec2-user bash '{{ .Path }}'"
+    script            = "${path.root}/scripts/bootstrap.sh"
+    timeout           = "480m" # 8 hours — UE5.3 compilation from source
+    execute_command   = "chmod +x {{ .Path }}; sudo -H -u ec2-user bash '{{ .Path }}'"
+    environment_vars  = ["UE5_GITHUB_TOKEN=${var.ue5_github_token}"]
   }
 
   # Step 10: Verify build environment

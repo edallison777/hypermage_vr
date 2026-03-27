@@ -17,7 +17,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TF_DIR="$REPO_ROOT/Infra/environments/dev"
 AWS_REGION="${AWS_REGION:-eu-west-1}"
 ACCOUNT_ID="${AWS_ACCOUNT_ID:-732231126129}"
-PROJECT_REPO="${PROJECT_REPO:-https://github.com/YOUR_ORG/hypermage-vr.git}"
+PROJECT_REPO="${PROJECT_REPO:-https://github.com/edallison777/hypermage_vr.git}"
 
 echo "=== Phase 4 / Step 2: Compile UE5.3 Linux Server ==="
 
@@ -91,7 +91,7 @@ cd /build/workspace
 # Clone repository
 echo "Cloning repository..."
 git clone --depth 1 \
-  "https://${GITHUB_TOKEN:-}${GITHUB_TOKEN:+@}github.com/YOUR_ORG/hypermage-vr.git" \
+  "https://${GITHUB_TOKEN:-}${GITHUB_TOKEN:+@}github.com/edallison777/hypermage_vr.git" \
   HyperMageVR
 
 cd HyperMageVR/UnrealProject
