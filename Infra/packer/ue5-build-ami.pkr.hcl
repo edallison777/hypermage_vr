@@ -56,10 +56,9 @@ data "amazon-ami" "al2023" {
 # ── Source ────────────────────────────────────────────────────────────────────
 
 source "amazon-ebs" "ue5_build" {
-  region        = var.aws_region
-  instance_type = var.instance_type
-  source_ami    = data.amazon-ami.al2023.id
-  ssh_username  = "ec2-user"
+  region       = var.aws_region
+  source_ami   = data.amazon-ami.al2023.id
+  ssh_username = "ec2-user"
 
   # IMDSv2 required
   metadata_options {
@@ -113,10 +112,11 @@ build {
 
   # Step 1–9: Install all dependencies and UE5.3 from source
   provisioner "shell" {
-    script            = "${path.root}/scripts/bootstrap.sh"
-    timeout           = "480m" # 8 hours — UE5.3 compilation from source
-    execute_command   = "chmod +x {{ .Path }}; sudo -H -u ec2-user bash '{{ .Path }}'"
-    environment_vars  = ["UE5_GITHUB_TOKEN=${var.ue5_github_token}"]
+    script             = "${path.root}/scripts/bootstrap.sh"
+    timeout            = "480m" # 8 hours — UE5.3 compilation from source
+    execute_command    = "chmod +x {{ .Path }}; sudo -H -u ec2-user env UE5_GITHUB_TOKEN='${var.ue5_github_token}' bash '{{ .Path }}'"
+    expect_disconnect  = true
+    valid_exit_codes   = [0]
   }
 
   # Step 10: Verify build environment

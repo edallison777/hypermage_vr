@@ -20,7 +20,6 @@ sudo dnf install -y \
   jq \
   aws-cli \
   dotnet-sdk-8.0 \
-  mono-complete \
   perl \
   libuuid-devel \
   openssl-devel \
@@ -41,14 +40,22 @@ log "System dependencies installed."
 # The instance must have an IAM role or the repo must be public — use a GitHub PAT via
 # the UE5_GITHUB_TOKEN env var if needed, or pre-authorise the key pair.
 log "Cloning Unreal Engine 5.3 (this takes ~30 minutes)..."
-cd /opt
-sudo git clone \
+sudo mkdir -p /opt/UnrealEngine
+sudo chown ec2-user:ec2-user /opt/UnrealEngine
+
+# Use a credential helper so the PAT never appears in the remote URL, process
+# listings, or .git/config.  The helper is unset immediately after the clone.
+git config --global credential.helper \
+  '!f() { echo "username=oauth2"; echo "password='"${UE5_GITHUB_TOKEN}"'"; }; f'
+
+git clone \
   --depth 1 \
   --branch "5.3" \
-  "https://${UE5_GITHUB_TOKEN:-}${UE5_GITHUB_TOKEN:+@}github.com/EpicGames/UnrealEngine.git" \
-  UnrealEngine
+  "https://github.com/EpicGames/UnrealEngine.git" \
+  /opt/UnrealEngine
 
-sudo chown -R ec2-user:ec2-user /opt/UnrealEngine
+# Remove the credential helper — token must not persist in git config
+git config --global --unset credential.helper
 
 log "Running Setup.sh (~15 minutes)..."
 cd /opt/UnrealEngine
@@ -151,5 +158,11 @@ EOF
 # ── 7. Build workspace ────────────────────────────────────────────────────────
 sudo mkdir -p /build/workspace /build/output
 sudo chown -R ec2-user:ec2-user /build
+
+# ── 8. Final credential scrub ─────────────────────────────────────────────────
+# Ensure no PAT survives in git remote URLs inside the cloned repo or global config.
+git -C /opt/UnrealEngine remote set-url origin "https://github.com/EpicGames/UnrealEngine.git"
+git config --global --unset-all credential.helper 2>/dev/null || true
+rm -f ~/.git-credentials /root/.git-credentials
 
 log "Bootstrap complete. Build environment ready."
