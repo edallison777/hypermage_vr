@@ -24,10 +24,8 @@ echo "Region : $AWS_REGION"
 echo "Packer : $(packer version 2>/dev/null || echo 'NOT FOUND — install from https://developer.hashicorp.com/packer/install')"
 echo ""
 
-# Warn about build time
-echo "WARNING: UE5.3 build from source takes 4-8 hours and costs ~\$3-5 in EC2 spot fees."
-echo "Press ENTER to continue or Ctrl-C to abort."
-read -r
+# Warn about build time (~1.5-2 hours on c5.18xlarge, ~$1-1.50 spot)
+echo "INFO: UE5.3 build from source takes ~1.5-2 hours and costs ~\$1-1.50 in EC2 spot fees."
 
 # Validate and build
 cd "$PACKER_DIR"
