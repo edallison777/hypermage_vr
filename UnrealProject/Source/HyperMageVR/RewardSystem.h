@@ -170,7 +170,7 @@ protected:
 
 	// Player rewards (PlayerId -> Set of RewardIds)
 	// In production, this would be stored in DynamoDB PlayerRewards table
-	UPROPERTY()
+	// Not UPROPERTY — nested containers (TMap<FString, TArray<FString>>) are not supported by UHT
 	TMap<FString, TArray<FString>> PlayerRewards;
 
 	// Catalog loading status
