@@ -21,10 +21,12 @@ public class HyperMageVR : ModuleRules
 			"GameLiftServerSDK"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] 
-		{ 
+		PrivateDependencyModuleNames.AddRange(new string[]
+		{
 			"Slate",
-			"SlateCore"
+			"SlateCore",
+			"Json",
+			"JsonUtilities"
 		});
 
 		// VR-specific modules
