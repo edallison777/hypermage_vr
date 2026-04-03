@@ -49,7 +49,7 @@ module "unreal_build" {
   instance_type         = "g4dn.xlarge"
   enable_spot_instances = true
   spot_max_price        = "0.50"
-  root_volume_size      = 150
+  root_volume_size      = 300
   log_retention_days    = 30
 
   tags = { CostCenter = "Development", Owner = "DevOps Team" }

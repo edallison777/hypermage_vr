@@ -1,3 +1,17 @@
+# Temp files from phase4 scripts
+.ssm-build-script.sh
+.ssm-build-params.json
+make-cook-params.js
+cook-params.json
+patch-*.js
+patch-*.json
+find-*.js
+find-*.json
+get-log-params.js
+get-log-params.json
+upload-cook-log-params.js
+upload-cook-log-params.json
+
 # Dependencies
 node_modules/
 npm-debug.log*

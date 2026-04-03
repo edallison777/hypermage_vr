@@ -47,6 +47,9 @@ echo "S3 bucket      : $S3_BUCKET"
 echo "Launch template: $LAUNCH_TEMPLATE_ID"
 echo "IAM profile    : $IAM_PROFILE"
 
+# Clear previous compile-success marker so a stale marker never masks a fresh compile failure
+aws s3 rm "s3://$S3_BUCKET/builds/latest/compile-success.txt" --region "$AWS_REGION" 2>/dev/null || true
+
 # ── 3. Launch build instance via launch template ──────────────────────────────
 echo ""
 echo "--- Launching build instance ---"
@@ -62,7 +65,6 @@ INSTANCE_ID=$(aws ec2 run-instances \
   --region "$AWS_REGION" \
   --launch-template "LaunchTemplateId=$LAUNCH_TEMPLATE_ID,Version=\$Latest" \
   --subnet-id "$SUBNET_ID" \
-  --iam-instance-profile "Name=$IAM_PROFILE" \
   --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=hypermage-vr-server-build},{Key=Phase,Value=4}]' \
   --query 'Instances[0].InstanceId' \
   --output text)
@@ -74,21 +76,50 @@ aws ec2 wait instance-running \
   --instance-ids "$INSTANCE_ID"
 
 echo "Waiting for SSM agent to be ready..."
-sleep 60  # Give SSM agent time to register
+SSM_WAIT=0
+SSM_MAX=300
+until aws ssm describe-instance-information \
+    --region "$AWS_REGION" \
+    --filters "Key=InstanceIds,Values=$INSTANCE_ID" \
+    --query 'InstanceInformationList[0].PingStatus' \
+    --output text 2>/dev/null | grep -q "Online"; do
+  if [[ $SSM_WAIT -ge $SSM_MAX ]]; then
+    echo "ERROR: SSM agent did not come online within ${SSM_MAX}s." >&2
+    aws ec2 terminate-instances --region "$AWS_REGION" --instance-ids "$INSTANCE_ID"
+    exit 1
+  fi
+  sleep 15
+  SSM_WAIT=$((SSM_WAIT + 15))
+  echo "  [${SSM_WAIT}s] Waiting for SSM..."
+done
+echo "SSM agent online."
 
 # ── 4. Run build commands via SSM ─────────────────────────────────────────────
 echo ""
 echo "--- Running server build on $INSTANCE_ID (this takes 30-90 minutes) ---"
 
-BUILD_COMMANDS=$(cat <<HEREDOC
+SCRIPT_FILE="$REPO_ROOT/.ssm-build-script.sh"
+PARAMS_FILE="$REPO_ROOT/.ssm-build-params.json"
+
+cat > "$SCRIPT_FILE" << ENDBUILDSCRIPT
 #!/usr/bin/env bash
 set -euo pipefail
+# SSM runs without a login shell — set home dirs required by .NET/Unreal toolchain
+export HOME=/root
+export DOTNET_CLI_HOME=/root
+export DOTNET_NOLOGO=1
 source /etc/profile.d/hypermage-build.sh 2>/dev/null || source /etc/environment || true
 
 echo "=== Starting HyperMage VR server build ==="
+echo "--- Disk space ---"
+df -h /
+echo "--- S3 write test ---"
+echo "ok" | aws s3 cp - "s3://${S3_BUCKET}/builds/latest/build-start.txt" --region "${AWS_REGION}" \
+  && echo "S3 write: OK" \
+  || echo "S3 write: FAILED"
+
 cd /build/workspace
 
-# Clone repository
 echo "Cloning repository..."
 git clone --depth 1 \
   "https://${GITHUB_TOKEN:-}${GITHUB_TOKEN:+@}github.com/edallison777/hypermage_vr.git" \
@@ -96,22 +127,115 @@ git clone --depth 1 \
 
 cd HyperMageVR/UnrealProject
 
-# Build Linux dedicated server
-echo "Building Linux server (30-90 minutes)..."
-\$UE5_ROOT/Engine/Build/BatchFiles/RunUAT.sh BuildCookRun \
-  -project="\$(pwd)/HyperMageVR.uproject" \
-  -platform=Linux \
-  -configuration=Development \
-  -cook -build -stage -package -server -noclient \
-  -archive -archivedirectory=/build/output \
-  -log
+# Fix safe.directory so git/find work when running as root on ec2-user-owned dirs
+git config --global --add safe.directory '*' 2>/dev/null || true
 
-# Package into zip
+echo "Setting up GameLift SDK..."
+echo "  /opt/GameLiftSDK contents: \$(ls /opt/GameLiftSDK/)"
+
+# Run the repo's own setup script if present — it wires GameLiftServerSDK/ into the plugin ThirdParty
+if [[ -f /opt/GameLiftSDK/setup.sh ]]; then
+  echo "  Running setup.sh..."
+  PREV_DIR=\$(pwd)
+  cd /opt/GameLiftSDK
+  bash setup.sh 2>&1 | tail -20
+  cd "\$PREV_DIR"
+  echo "  setup.sh complete (back in \$(pwd))."
+fi
+
+# Verify headers are now in place
+echo "  Outcome.h locations: \$(find /opt/GameLiftSDK -name 'Outcome.h' 2>/dev/null | tr '\n' ' ')"
+
+# Install GameLift UE plugin and wire the C++ SDK into its ThirdParty directory
+echo "Installing GameLift Server SDK plugin..."
+GAMELIFT_UPLUGIN=\$(find /opt/GameLiftSDK -name "GameLiftServerSDK.uplugin" -print -quit 2>/dev/null || echo "")
+if [[ -n "\$GAMELIFT_UPLUGIN" ]]; then
+  GAMELIFT_PLUGIN_DIR=\$(dirname "\$GAMELIFT_UPLUGIN")
+  mkdir -p Plugins/GameLiftServerSDK
+  cp -r "\$GAMELIFT_PLUGIN_DIR/." Plugins/GameLiftServerSDK/
+
+  # Find where the Build.cs expects the C++ SDK (look for PublicIncludePaths in Build.cs)
+  PLUGIN_THIRDPARTY_SDK=\$(grep -r "ThirdParty" Plugins/GameLiftServerSDK/Source/GameLiftServerSDK/*.Build.cs 2>/dev/null \
+    | grep -i "gamelift" | grep "Path.Combine" | head -1 \
+    | sed 's/.*Path.Combine(\(.*\))/\1/' || echo "")
+  # Pull pre-built ThirdParty (headers + libs) from the release ZIP if present
+  # Verify headers are accessible via the plugin's own Source/ (no separate ThirdParty copy needed)
+  echo "  Outcome.h present: \$(find Plugins/GameLiftServerSDK -name 'Outcome.h' | head -1 || echo 'NOT FOUND')"
+  echo "GameLift plugin installed."
+else
+  echo "ERROR: GameLiftServerSDK.uplugin not found under /opt/GameLiftSDK" >&2
+  exit 1
+fi
+
+# UAT requires an Editor target to cook content — create one if missing
+if ! ls Source/*Editor.Target.cs 2>/dev/null | head -1 > /dev/null; then
+  echo "No Editor target found — creating minimal one for cooking..."
+  mkdir -p Source
+  # Use primary module name if a .Build.cs exists, otherwise Blueprint-only project
+  PRIMARY_MODULE=\$(ls Source/*.Build.cs 2>/dev/null | grep -iv editor | head -1 | xargs -I{} basename {} .Build.cs || echo "")
+  if [[ -n "\$PRIMARY_MODULE" ]]; then
+    EXTRA_MODULES="        ExtraModuleNames.Add(\\\"\$PRIMARY_MODULE\\\");"
+  else
+    EXTRA_MODULES=""
+  fi
+  cat > "Source/HyperMageVREditor.Target.cs" << CSEOF
+using UnrealBuildTool;
+public class HyperMageVREditorTarget : TargetRules {
+    public HyperMageVREditorTarget(TargetInfo Target) : base(Target) {
+        Type = TargetType.Editor;
+        DefaultBuildSettings = BuildSettingsVersion.V2;
+        IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_1;
+\$EXTRA_MODULES
+    }
+}
+CSEOF
+  echo "Created Source/HyperMageVREditor.Target.cs"
+fi
+
+# UnrealEditor (cook step) refuses to run as root — chown workspace to ec2-user first
+chown -R ec2-user:ec2-user /build/workspace /build/output
+
+SUDO_UAT="sudo -u ec2-user env HOME=/home/ec2-user PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin UE5_ROOT=/opt/UnrealEngine DOTNET_CLI_HOME=/home/ec2-user DOTNET_NOLOGO=1 /opt/UnrealEngine/Engine/Build/BatchFiles/RunUAT.sh"
+UAT_BASE="-project=/build/workspace/HyperMageVR/UnrealProject/HyperMageVR.uproject -platform=Linux -configuration=Development -server -noclient"
+
+# ── Phase 1: Compile (30-90 minutes) ─────────────────────────────────────────
+echo "=== PHASE 1: Compile ==="
+set +e
+\$SUDO_UAT BuildCookRun \$UAT_BASE -build -log 2>&1 | tee /build/compile.log
+COMPILE_EXIT=\${PIPESTATUS[0]}
+set -e
+
+aws s3 cp /build/compile.log "s3://${S3_BUCKET}/builds/latest/compile.log" --region "${AWS_REGION}" || true
+
+if [[ \$COMPILE_EXIT -ne 0 ]]; then
+  echo "PHASE:COMPILE_FAILED (exit \$COMPILE_EXIT). Log: s3://${S3_BUCKET}/builds/latest/compile.log"
+  exit \$COMPILE_EXIT
+fi
+echo "ok" | aws s3 cp - "s3://${S3_BUCKET}/builds/latest/compile-success.txt" --region "${AWS_REGION}"
+echo "PHASE:COMPILE_OK"
+
+# ── Phase 2: Cook + Stage + Package ──────────────────────────────────────────
+echo "=== PHASE 2: Cook + Stage + Package ==="
+# Bridge plugin requires libatk (GUI lib) which isn't installed by default on headless AL2023
+sudo dnf install -y atk 2>&1 | tail -3 || true
+
+set +e
+\$SUDO_UAT BuildCookRun \$UAT_BASE -cook -stage -package -archive -archivedirectory=/build/output -skipbuild -log 2>&1 | tee /build/cook.log
+COOK_EXIT=\${PIPESTATUS[0]}
+set -e
+
+aws s3 cp /build/cook.log "s3://${S3_BUCKET}/builds/latest/cook.log" --region "${AWS_REGION}" || true
+
+if [[ \$COOK_EXIT -ne 0 ]]; then
+  echo "PHASE:COOK_FAILED (exit \$COOK_EXIT). Log: s3://${S3_BUCKET}/builds/latest/cook.log"
+  exit \$COOK_EXIT
+fi
+echo "PHASE:ALL_OK"
+
 echo "Packaging server build..."
 cd /build/output/LinuxServer
 zip -r /build/output/HyperMageVRServer.zip .
 
-# Upload to S3
 echo "Uploading to S3..."
 aws s3 cp /build/output/HyperMageVRServer.zip \
   "s3://${S3_BUCKET}/builds/latest/HyperMageVRServer.zip" \
@@ -119,18 +243,29 @@ aws s3 cp /build/output/HyperMageVRServer.zip \
 
 echo "=== Server build complete ==="
 aws s3 ls "s3://${S3_BUCKET}/builds/latest/"
-HEREDOC
-)
+ENDBUILDSCRIPT
+
+# Encode the script as a JSON parameters file to avoid CLI multiline parsing issues
+# Use cygpath to convert Git Bash paths to Windows paths for Node.js
+SCRIPT_WIN=$(cygpath -w "$SCRIPT_FILE")
+PARAMS_WIN=$(cygpath -w "$PARAMS_FILE")
+SCRIPT_WIN="$SCRIPT_WIN" PARAMS_WIN="$PARAMS_WIN" node -e "
+const fs = require('fs');
+const script = fs.readFileSync(process.env.SCRIPT_WIN, 'utf8');
+fs.writeFileSync(process.env.PARAMS_WIN, JSON.stringify({commands: [script], executionTimeout: ['7200']}));
+"
 
 COMMAND_ID=$(aws ssm send-command \
   --region "$AWS_REGION" \
   --instance-ids "$INSTANCE_ID" \
   --document-name "AWS-RunShellScript" \
-  --parameters "commands=[\"$BUILD_COMMANDS\"]" \
+  --parameters "file://$PARAMS_WIN" \
   --timeout-seconds 7200 \
   --comment "HyperMage VR server build" \
   --query 'Command.CommandId' \
   --output text)
+
+rm -f "$SCRIPT_FILE" "$PARAMS_FILE"
 
 echo "SSM command ID: $COMMAND_ID"
 echo "Waiting for build to complete (up to 2 hours)..."
@@ -157,15 +292,45 @@ while [[ "$STATUS" == "InProgress" || "$STATUS" == "Pending" ]]; do
 done
 
 if [[ "$STATUS" != "Success" ]]; then
-  echo "Build failed. Fetching output..."
+  echo "Build failed. Fetching SSM output..."
+  aws ssm get-command-invocation \
+    --region "$AWS_REGION" \
+    --command-id "$COMMAND_ID" \
+    --instance-id "$INSTANCE_ID" \
+    --query 'StandardOutputContent' \
+    --output text
   aws ssm get-command-invocation \
     --region "$AWS_REGION" \
     --command-id "$COMMAND_ID" \
     --instance-id "$INSTANCE_ID" \
     --query 'StandardErrorContent' \
     --output text
-  echo "Terminating instance..."
-  aws ec2 terminate-instances --region "$AWS_REGION" --instance-ids "$INSTANCE_ID"
+
+  # If compile succeeded and only cook failed, keep the instance alive for iteration
+  COMPILE_OK=$(aws s3 ls "s3://$S3_BUCKET/builds/latest/compile-success.txt" \
+    --region "$AWS_REGION" >/dev/null 2>&1 && echo "yes" || echo "no")
+
+  if [[ "$COMPILE_OK" == "yes" ]]; then
+    echo ""
+    echo "=== Compile SUCCEEDED — cook FAILED. Instance $INSTANCE_ID is still running. ==="
+    echo "Cook log: aws s3 cp s3://$S3_BUCKET/builds/latest/cook.log ./cook.log --region $AWS_REGION && tail -100 ./cook.log"
+    echo ""
+    echo "To retry the cook without recompiling, open an SSM session:"
+    echo "  aws ssm start-session --target $INSTANCE_ID --region $AWS_REGION"
+    echo ""
+    echo "Then in the session run:"
+    echo "  sudo -u ec2-user env HOME=/home/ec2-user UE5_ROOT=/opt/UnrealEngine DOTNET_CLI_HOME=/home/ec2-user DOTNET_NOLOGO=1 \\"
+    echo "    /opt/UnrealEngine/Engine/Build/BatchFiles/RunUAT.sh BuildCookRun \\"
+    echo "    -project=/build/workspace/HyperMageVR/UnrealProject/HyperMageVR.uproject \\"
+    echo "    -platform=Linux -configuration=Development -server -noclient \\"
+    echo "    -cook -stage -package -archive -archivedirectory=/build/output -skipbuild -log \\"
+    echo "    2>&1 | tee /build/cook.log"
+    echo ""
+    echo "Terminate when done: aws ec2 terminate-instances --region $AWS_REGION --instance-ids $INSTANCE_ID"
+  else
+    echo "Compile failed. Terminating instance..."
+    aws ec2 terminate-instances --region "$AWS_REGION" --instance-ids "$INSTANCE_ID"
+  fi
   exit 1
 fi
 

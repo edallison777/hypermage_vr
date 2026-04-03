@@ -144,6 +144,12 @@ resource "aws_iam_role_policy" "build_instance_logs" {
   })
 }
 
+# SSM managed policy — required for SSM agent to register and accept commands
+resource "aws_iam_role_policy_attachment" "build_instance_ssm" {
+  role       = aws_iam_role.build_instance.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 # IAM instance profile
 resource "aws_iam_instance_profile" "build_instance" {
   name = "${var.project_name}-unreal-build-instance-${var.environment}"
