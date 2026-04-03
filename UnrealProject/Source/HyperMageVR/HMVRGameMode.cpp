@@ -423,19 +423,6 @@ void AHMVRGameMode::RemovePlayerSession(const FString& PlayerSessionId)
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Removed player session: %s"), *PlayerSessionId);
 }
 
-void AHMVRGameMode::ProcessPlayerSessionValidation(const FString& PlayerSessionId)
-{
-	// Legacy method - replaced by ValidatePlayerSession and AcceptPlayerSession
-	FString ErrorMessage;
-	if (ValidatePlayerSession(PlayerSessionId, ErrorMessage))
-	{
-		AcceptPlayerSession(PlayerSessionId);
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("HMVRGameMode: Player session validation failed: %s"), *ErrorMessage);
-	}
-}
 
 void AHMVRGameMode::OnPlayerJoined(APlayerController* NewPlayer)
 {
