@@ -10,6 +10,8 @@
 #include "SessionAPIClient.h"
 #include "HMVRGameMode.generated.h"
 
+class FGameLiftServerSDKModule;
+
 /**
  * Server-authoritative Game Mode for VR Multiplayer
  * Implements Requirement 2.1: Dedicated server authoritative architecture
@@ -98,6 +100,7 @@ private:
 	bool bGameLiftInitialized = false;
 	bool bGameLiftProcessReady = false;
 	FTimerHandle HealthReportTimerHandle;
+	FGameLiftServerSDKModule* GameLiftSdkModule = nullptr;
 	
 	// Track player sessions for GameLift
 	TMap<FString, FString> PlayerSessionMap; // PlayerSessionId -> PlayerId

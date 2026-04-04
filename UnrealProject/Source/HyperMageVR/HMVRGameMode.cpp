@@ -11,8 +11,7 @@
 #include "Engine/World.h"
 #include "TimerManager.h"
 
-// GameLift SDK includes would go here
-// #include "GameLiftServerSDK.h"
+#include "GameLiftServerSDK.h"
 
 AHMVRGameMode::AHMVRGameMode()
 {
@@ -226,82 +225,68 @@ bool AHMVRGameMode::ValidateJWTToken(const FString& Token, FString& OutPlayerId,
 
 void AHMVRGameMode::InitializeGameLift()
 {
-	// GameLift SDK initialization (Requirement 2.4)
-	// In production, this would:
-	// 1. Initialize GameLift Server SDK
-	// 2. Call ProcessReady() to signal server is ready
-	// 3. Set up callbacks for player session validation
-	// 4. Start health reporting
-
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Initializing GameLift SDK"));
 
-	// Check if running in GameLift environment
-	// In production, check for GameLift environment variables
-	const bool bIsGameLiftEnvironment = false; // TODO: Check for GameLift env vars
+	GameLiftSdkModule = &FModuleManager::LoadModuleChecked<FGameLiftServerSDKModule>(FName("GameLiftServerSDK"));
 
-	if (bIsGameLiftEnvironment)
+	auto InitSDKOutcome = GameLiftSdkModule->InitSDK();
+	if (!InitSDKOutcome.IsSuccess())
 	{
-		// Initialize GameLift Server SDK
-		// auto InitSDKOutcome = Aws::GameLift::Server::InitSDK();
-		// if (!InitSDKOutcome.IsSuccess())
-		// {
-		//     UE_LOG(LogTemp, Error, TEXT("GameLift InitSDK failed: %s"), 
-		//         *FString(InitSDKOutcome.GetError().GetErrorMessage().c_str()));
-		//     return;
-		// }
-
-		// Set up process parameters
-		// Aws::GameLift::Server::ProcessParameters ProcessParams;
-		// ProcessParams.OnStartGameSession = [this](Aws::GameLift::Server::Model::GameSession GameSession)
-		// {
-		//     // Handle game session start
-		//     CurrentSessionId = FString(GameSession.GetGameSessionId().c_str());
-		//     UE_LOG(LogTemp, Log, TEXT("GameLift: Game session started: %s"), *CurrentSessionId);
-		// };
-		// 
-		// ProcessParams.OnProcessTerminate = [this]()
-		// {
-		//     // Handle process termination
-		//     UE_LOG(LogTemp, Log, TEXT("GameLift: Process terminating"));
-		//     // Graceful shutdown
-		// };
-		// 
-		// ProcessParams.OnHealthCheck = []() -> bool
-		// {
-		//     // Return server health status
-		//     return true;
-		// };
-		// 
-		// ProcessParams.port = 7777; // Game server port
-		// 
-		// // Call ProcessReady
-		// auto ProcessReadyOutcome = Aws::GameLift::Server::ProcessReady(ProcessParams);
-		// if (!ProcessReadyOutcome.IsSuccess())
-		// {
-		//     UE_LOG(LogTemp, Error, TEXT("GameLift ProcessReady failed: %s"),
-		//         *FString(ProcessReadyOutcome.GetError().GetErrorMessage().c_str()));
-		//     return;
-		// }
-
-		bGameLiftInitialized = true;
-		bGameLiftProcessReady = true;
-		UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: GameLift SDK initialized and ProcessReady called"));
-	}
-	else
-	{
-		// Mock initialization for development
-		bGameLiftInitialized = false;
-		UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Running in development mode (GameLift disabled)"));
+		UE_LOG(LogTemp, Error, TEXT("HMVRGameMode: GameLift InitSDK failed: %s"),
+			*InitSDKOutcome.GetError().GetErrorMessage());
+		return;
 	}
 
-	// Start health reporting timer
+	FProcessParameters ProcessParams;
+
+	ProcessParams.OnStartGameSession.BindLambda([this](Aws::GameLift::Server::Model::GameSession GameSession)
+	{
+		CurrentSessionId = FString(GameSession.GetGameSessionId());
+		UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: GameLift game session started: %s"), *CurrentSessionId);
+		GameLiftSdkModule->ActivateGameSession();
+	});
+
+	ProcessParams.OnUpdateGameSession.BindLambda([](Aws::GameLift::Server::Model::UpdateGameSession)
+	{
+		// Backfill not supported
+	});
+
+	ProcessParams.OnHealthCheck.BindLambda([]() { return true; });
+
+	ProcessParams.OnProcessTerminate.BindLambda([this]()
+	{
+		UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: GameLift process terminating"));
+		if (GameLiftSdkModule)
+		{
+			GameLiftSdkModule->ProcessEnding();
+		}
+		FGenericPlatformMisc::RequestExit(false);
+	});
+
+	ProcessParams.port = 7777;
+	TArray<FString> LogFiles;
+	LogFiles.Add(TEXT("/local/game/logs/myserver.log"));
+	ProcessParams.logParameters = FLogParameters(LogFiles);
+
+	auto ProcessReadyOutcome = GameLiftSdkModule->ProcessReady(ProcessParams);
+	if (!ProcessReadyOutcome.IsSuccess())
+	{
+		UE_LOG(LogTemp, Error, TEXT("HMVRGameMode: GameLift ProcessReady failed: %s"),
+			*ProcessReadyOutcome.GetError().GetErrorMessage());
+		return;
+	}
+
+	bGameLiftInitialized = true;
+	bGameLiftProcessReady = true;
+	UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: GameLift SDK initialized and ProcessReady called"));
+
 	if (GetWorld())
 	{
 		GetWorld()->GetTimerManager().SetTimer(
 			HealthReportTimerHandle,
 			this,
 			&AHMVRGameMode::ReportServerHealth,
-			30.0f, // Report every 30 seconds
+			30.0f,
 			true
 		);
 	}
@@ -374,52 +359,39 @@ bool AHMVRGameMode::ValidatePlayerSession(const FString& PlayerSessionId, FStrin
 
 void AHMVRGameMode::AcceptPlayerSession(const FString& PlayerSessionId)
 {
-	// Accept player session with GameLift (Requirement 2.4)
-	if (!bGameLiftInitialized || !bGameLiftProcessReady)
+	if (!bGameLiftInitialized || !bGameLiftProcessReady || !GameLiftSdkModule)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("HMVRGameMode: Cannot accept player session - GameLift not initialized"));
 		return;
 	}
 
-	// In production, call GameLift SDK AcceptPlayerSession
-	// auto AcceptOutcome = Aws::GameLift::Server::AcceptPlayerSession(TCHAR_TO_UTF8(*PlayerSessionId));
-	// if (!AcceptOutcome.IsSuccess())
-	// {
-	//     UE_LOG(LogTemp, Error, TEXT("HMVRGameMode: AcceptPlayerSession failed: %s"),
-	//         *FString(AcceptOutcome.GetError().GetErrorMessage().c_str()));
-	//     return;
-	// }
+	auto AcceptOutcome = GameLiftSdkModule->AcceptPlayerSession(PlayerSessionId);
+	if (!AcceptOutcome.IsSuccess())
+	{
+		UE_LOG(LogTemp, Error, TEXT("HMVRGameMode: AcceptPlayerSession failed: %s"),
+			*AcceptOutcome.GetError().GetErrorMessage());
+		return;
+	}
 
-	// Track the player session
 	PlayerSessionMap.Add(PlayerSessionId, FGuid::NewGuid().ToString());
-
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Accepted player session: %s"), *PlayerSessionId);
 }
 
 void AHMVRGameMode::RemovePlayerSession(const FString& PlayerSessionId)
 {
-	// Remove player session from GameLift (Requirement 2.4)
-	if (PlayerSessionId.IsEmpty())
+	if (PlayerSessionId.IsEmpty() || !bGameLiftInitialized || !bGameLiftProcessReady || !GameLiftSdkModule)
 	{
 		return;
 	}
 
-	if (!bGameLiftInitialized || !bGameLiftProcessReady)
+	auto RemoveOutcome = GameLiftSdkModule->RemovePlayerSession(PlayerSessionId);
+	if (!RemoveOutcome.IsSuccess())
 	{
-		return;
+		UE_LOG(LogTemp, Error, TEXT("HMVRGameMode: RemovePlayerSession failed: %s"),
+			*RemoveOutcome.GetError().GetErrorMessage());
 	}
 
-	// In production, call GameLift SDK RemovePlayerSession
-	// auto RemoveOutcome = Aws::GameLift::Server::RemovePlayerSession(TCHAR_TO_UTF8(*PlayerSessionId));
-	// if (!RemoveOutcome.IsSuccess())
-	// {
-	//     UE_LOG(LogTemp, Error, TEXT("HMVRGameMode: RemovePlayerSession failed: %s"),
-	//         *FString(RemoveOutcome.GetError().GetErrorMessage().c_str()));
-	// }
-
-	// Remove from tracking
 	PlayerSessionMap.Remove(PlayerSessionId);
-
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Removed player session: %s"), *PlayerSessionId);
 }
 
