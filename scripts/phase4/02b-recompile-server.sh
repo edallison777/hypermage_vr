@@ -136,6 +136,12 @@ git clone --depth 1 \
 cd HyperMageVR/UnrealProject
 git config --global --add safe.directory '*' 2>/dev/null || true
 
+# ── Run setup.sh to stage C++ SDK headers/libs into the plugin ───────────────
+echo "Running GameLift SDK setup.sh..."
+cd /opt/GameLiftSDK
+bash setup.sh 2>&1 | tail -20
+cd /build/workspace/HyperMageVR/UnrealProject
+
 # ── Install GameLift plugin ────────────────────────────────────────────────────
 echo "Setting up GameLift SDK plugin..."
 GAMELIFT_UPLUGIN=\$(find /opt/GameLiftSDK -name "GameLiftServerSDK.uplugin" -print -quit 2>/dev/null || echo "")
