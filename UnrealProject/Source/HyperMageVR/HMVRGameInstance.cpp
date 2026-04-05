@@ -60,7 +60,12 @@ void UHMVRGameInstance::InitializeGameLift()
 
 	GameLiftSdkModule = &FModuleManager::LoadModuleChecked<FGameLiftServerSDKModule>(FName("GameLiftServerSDK"));
 
-	auto InitSDKOutcome = GameLiftSdkModule->InitSDK();
+	// SDK 5.x on AMAZON_LINUX_2 fleets (AuxProxy agent) requires explicit WebSocket URL.
+	// AuxProxy listens on 127.0.0.1:5757 for SDK 5.x WebSocket connections.
+	FServerParameters ServerParams;
+	ServerParams.m_webSocketUrl = TEXT("wss://127.0.0.1:5757");
+
+	auto InitSDKOutcome = GameLiftSdkModule->InitSDK(ServerParams);
 	if (!InitSDKOutcome.IsSuccess())
 	{
 		UE_LOG(LogTemp, Error, TEXT("HMVRGameInstance: GameLift InitSDK failed: %s"),
