@@ -89,7 +89,7 @@ resource "aws_iam_role_policy" "fleet_s3" {
 # GameLift build resource
 resource "aws_gamelift_build" "server" {
   name             = "${var.project_name}-server-${var.environment}"
-  operating_system = "AMAZON_LINUX_2"
+  operating_system = "AMAZON_LINUX_2023"
 
   storage_location {
     bucket   = var.build_s3_bucket_name
