@@ -7,6 +7,8 @@
 #include "VoiceChatInterface.h"
 #include "HMVRGameInstance.generated.h"
 
+class FGameLiftServerSDKModule;
+
 /**
  * Game Instance for managing session state and authentication
  */
@@ -72,10 +74,19 @@ protected:
 	UVoiceChatManager* VoiceChatManager;
 
 public:
-	/**
-	 * Get the voice chat manager
-	 * @return The voice chat manager instance
-	 */
 	UFUNCTION(BlueprintCallable, Category = "Voice Chat")
 	UVoiceChatManager* GetVoiceChatManager() const { return VoiceChatManager; }
+
+	// GameLift SDK access for game mode
+	FGameLiftServerSDKModule* GetGameLiftSdkModule() const { return GameLiftSdkModule; }
+	bool IsGameLiftInitialized() const { return bGameLiftInitialized; }
+	FString GetGameLiftSessionId() const { return GameLiftSessionId; }
+
+protected:
+	void InitializeGameLift();
+
+private:
+	FGameLiftServerSDKModule* GameLiftSdkModule = nullptr;
+	bool bGameLiftInitialized = false;
+	FString GameLiftSessionId;
 };

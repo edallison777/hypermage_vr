@@ -12,6 +12,7 @@
 #include "TimerManager.h"
 
 #include "GameLiftServerSDK.h"
+#include "HMVRGameInstance.h"
 
 AHMVRGameMode::AHMVRGameMode()
 {
@@ -225,60 +226,17 @@ bool AHMVRGameMode::ValidateJWTToken(const FString& Token, FString& OutPlayerId,
 
 void AHMVRGameMode::InitializeGameLift()
 {
-	UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Initializing GameLift SDK"));
-
-	GameLiftSdkModule = &FModuleManager::LoadModuleChecked<FGameLiftServerSDKModule>(FName("GameLiftServerSDK"));
-
-	auto InitSDKOutcome = GameLiftSdkModule->InitSDK();
-	if (!InitSDKOutcome.IsSuccess())
+	UHMVRGameInstance* GameInstance = Cast<UHMVRGameInstance>(GetGameInstance());
+	if (!GameInstance || !GameInstance->IsGameLiftInitialized())
 	{
-		UE_LOG(LogTemp, Error, TEXT("HMVRGameMode: GameLift InitSDK failed: %s"),
-			*InitSDKOutcome.GetError().GetErrorMessage());
+		UE_LOG(LogTemp, Warning, TEXT("HMVRGameMode: GameLift SDK not yet initialized in game instance"));
 		return;
 	}
 
-	FProcessParameters ProcessParams;
-
-	ProcessParams.OnStartGameSession.BindLambda([this](Aws::GameLift::Server::Model::GameSession GameSession)
-	{
-		CurrentSessionId = FString(GameSession.GetGameSessionId());
-		UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: GameLift game session started: %s"), *CurrentSessionId);
-		GameLiftSdkModule->ActivateGameSession();
-	});
-
-	ProcessParams.OnUpdateGameSession.BindLambda([](Aws::GameLift::Server::Model::UpdateGameSession)
-	{
-		// Backfill not supported
-	});
-
-	ProcessParams.OnHealthCheck.BindLambda([]() { return true; });
-
-	ProcessParams.OnProcessTerminate.BindLambda([this]()
-	{
-		UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: GameLift process terminating"));
-		if (GameLiftSdkModule)
-		{
-			GameLiftSdkModule->ProcessEnding();
-		}
-		FGenericPlatformMisc::RequestExit(false);
-	});
-
-	ProcessParams.port = 7777;
-	TArray<FString> LogFiles;
-	LogFiles.Add(TEXT("/local/game/logs/myserver.log"));
-	ProcessParams.logParameters = FLogParameters(LogFiles);
-
-	auto ProcessReadyOutcome = GameLiftSdkModule->ProcessReady(ProcessParams);
-	if (!ProcessReadyOutcome.IsSuccess())
-	{
-		UE_LOG(LogTemp, Error, TEXT("HMVRGameMode: GameLift ProcessReady failed: %s"),
-			*ProcessReadyOutcome.GetError().GetErrorMessage());
-		return;
-	}
-
+	GameLiftSdkModule = GameInstance->GetGameLiftSdkModule();
+	CurrentSessionId = GameInstance->GetGameLiftSessionId();
 	bGameLiftInitialized = true;
 	bGameLiftProcessReady = true;
-	UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: GameLift SDK initialized and ProcessReady called"));
 
 	if (GetWorld())
 	{
@@ -290,6 +248,8 @@ void AHMVRGameMode::InitializeGameLift()
 			true
 		);
 	}
+
+	UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: GameLift SDK reference acquired, session: %s"), *CurrentSessionId);
 }
 
 void AHMVRGameMode::ReportServerHealth()

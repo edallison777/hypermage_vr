@@ -6,10 +6,16 @@
 #include "MockVoiceProvider.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
+#include "GameLiftServerSDK.h"
 
 void UHMVRGameInstance::Init()
 {
 	Super::Init();
+
+	if (IsRunningDedicatedServer())
+	{
+		InitializeGameLift();
+	}
 
 	// Initialize voice chat manager with mock provider
 	VoiceChatManager = NewObject<UVoiceChatManager>(this);
@@ -46,6 +52,63 @@ void UHMVRGameInstance::Shutdown()
 	}
 
 	Super::Shutdown();
+}
+
+void UHMVRGameInstance::InitializeGameLift()
+{
+	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Initializing GameLift SDK"));
+
+	GameLiftSdkModule = &FModuleManager::LoadModuleChecked<FGameLiftServerSDKModule>(FName("GameLiftServerSDK"));
+
+	auto InitSDKOutcome = GameLiftSdkModule->InitSDK();
+	if (!InitSDKOutcome.IsSuccess())
+	{
+		UE_LOG(LogTemp, Error, TEXT("HMVRGameInstance: GameLift InitSDK failed: %s"),
+			*InitSDKOutcome.GetError().GetErrorMessage());
+		return;
+	}
+
+	FProcessParameters ProcessParams;
+
+	ProcessParams.OnStartGameSession.BindLambda([this](Aws::GameLift::Server::Model::GameSession GameSession)
+	{
+		GameLiftSessionId = FString(GameSession.GetGameSessionId());
+		UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: GameLift game session started: %s"), *GameLiftSessionId);
+		GameLiftSdkModule->ActivateGameSession();
+	});
+
+	ProcessParams.OnUpdateGameSession.BindLambda([](Aws::GameLift::Server::Model::UpdateGameSession)
+	{
+		// Backfill not supported
+	});
+
+	ProcessParams.OnHealthCheck.BindLambda([]() { return true; });
+
+	ProcessParams.OnProcessTerminate.BindLambda([this]()
+	{
+		UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: GameLift process terminating"));
+		if (GameLiftSdkModule)
+		{
+			GameLiftSdkModule->ProcessEnding();
+		}
+		FGenericPlatformMisc::RequestExit(false);
+	});
+
+	ProcessParams.port = 7777;
+	TArray<FString> LogFiles;
+	LogFiles.Add(TEXT("/local/game/logs/myserver.log"));
+	ProcessParams.logParameters = FLogParameters(LogFiles);
+
+	auto ProcessReadyOutcome = GameLiftSdkModule->ProcessReady(ProcessParams);
+	if (!ProcessReadyOutcome.IsSuccess())
+	{
+		UE_LOG(LogTemp, Error, TEXT("HMVRGameInstance: GameLift ProcessReady failed: %s"),
+			*ProcessReadyOutcome.GetError().GetErrorMessage());
+		return;
+	}
+
+	bGameLiftInitialized = true;
+	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: GameLift SDK initialized and ProcessReady called"));
 }
 
 void UHMVRGameInstance::SetJWTToken(const FString& Token)
