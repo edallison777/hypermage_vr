@@ -64,7 +64,7 @@ void UHMVRGameInstance::InitializeGameLift()
 	if (!InitSDKOutcome.IsSuccess())
 	{
 		UE_LOG(LogTemp, Error, TEXT("HMVRGameInstance: GameLift InitSDK failed: %s"),
-			*InitSDKOutcome.GetError().GetErrorMessage());
+			*InitSDKOutcome.GetError().m_errorMessage);
 		return;
 	}
 
@@ -84,7 +84,7 @@ void UHMVRGameInstance::InitializeGameLift()
 
 	ProcessParams.OnHealthCheck.BindLambda([]() { return true; });
 
-	ProcessParams.OnProcessTerminate.BindLambda([this]()
+	ProcessParams.OnTerminate.BindLambda([this]()
 	{
 		UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: GameLift process terminating"));
 		if (GameLiftSdkModule)
@@ -95,15 +95,13 @@ void UHMVRGameInstance::InitializeGameLift()
 	});
 
 	ProcessParams.port = 7777;
-	TArray<FString> LogFiles;
-	LogFiles.Add(TEXT("/local/game/logs/myserver.log"));
-	ProcessParams.logParameters = FLogParameters(LogFiles);
+	ProcessParams.logParameters.Add(TEXT("/local/game/logs/myserver.log"));
 
 	auto ProcessReadyOutcome = GameLiftSdkModule->ProcessReady(ProcessParams);
 	if (!ProcessReadyOutcome.IsSuccess())
 	{
 		UE_LOG(LogTemp, Error, TEXT("HMVRGameInstance: GameLift ProcessReady failed: %s"),
-			*ProcessReadyOutcome.GetError().GetErrorMessage());
+			*ProcessReadyOutcome.GetError().m_errorMessage);
 		return;
 	}
 

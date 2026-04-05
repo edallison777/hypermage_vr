@@ -295,7 +295,7 @@ bool AHMVRGameMode::ValidatePlayerSession(const FString& PlayerSessionId, FStrin
 	// 
 	// if (!DescribeOutcome.IsSuccess())
 	// {
-	//     OutErrorMessage = FString(DescribeOutcome.GetError().GetErrorMessage().c_str());
+	//     OutErrorMessage = FString(DescribeOutcome.GetError().m_errorMessage.c_str());
 	//     return false;
 	// }
 	// 
@@ -329,7 +329,7 @@ void AHMVRGameMode::AcceptPlayerSession(const FString& PlayerSessionId)
 	if (!AcceptOutcome.IsSuccess())
 	{
 		UE_LOG(LogTemp, Error, TEXT("HMVRGameMode: AcceptPlayerSession failed: %s"),
-			*AcceptOutcome.GetError().GetErrorMessage());
+			*AcceptOutcome.GetError().m_errorMessage);
 		return;
 	}
 
@@ -348,7 +348,7 @@ void AHMVRGameMode::RemovePlayerSession(const FString& PlayerSessionId)
 	if (!RemoveOutcome.IsSuccess())
 	{
 		UE_LOG(LogTemp, Error, TEXT("HMVRGameMode: RemovePlayerSession failed: %s"),
-			*RemoveOutcome.GetError().GetErrorMessage());
+			*RemoveOutcome.GetError().m_errorMessage);
 	}
 
 	PlayerSessionMap.Remove(PlayerSessionId);
