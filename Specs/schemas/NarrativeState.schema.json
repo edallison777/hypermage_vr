@@ -1,0 +1,74 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://hypermage.vr/schemas/NarrativeState.schema.json",
+    "title": "Narrative State",
+    "description": "A snapshot of the current narrative state for a live scene session. Stored in DynamoDB and pushed to all participants via WebSocket when it changes.",
+    "type": "object",
+    "required": [
+        "session_id",
+        "scene_plan_id",
+        "current_state_id",
+        "current_state_name",
+        "updated_at",
+        "updated_by"
+    ],
+    "properties": {
+        "session_id": {
+            "type": "string",
+            "description": "The active session ID this narrative state belongs to"
+        },
+        "scene_plan_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The ScenePlan this session is running"
+        },
+        "current_state_id": {
+            "type": "string",
+            "description": "ID of the current narrative state (references ScenePlan.narrative_states[].id)"
+        },
+        "current_state_name": {
+            "type": "string",
+            "description": "Human-readable name of the current state (denormalised for display)"
+        },
+        "fired_hooks": {
+            "type": "array",
+            "description": "History of GM hooks fired in this session, in order",
+            "items": {
+                "type": "object",
+                "required": ["hook_id", "fired_at", "fired_by"],
+                "properties": {
+                    "hook_id": {"type": "string"},
+                    "fired_at": {"type": "string", "format": "date-time"},
+                    "fired_by": {"type": "string", "description": "GM user ID who fired this hook"}
+                }
+            }
+        },
+        "completed_objectives": {
+            "type": "array",
+            "description": "Objective IDs completed so far in this session",
+            "items": {"type": "string"}
+        },
+        "active_participants": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of currently connected participants"
+        },
+        "platform_counts": {
+            "type": "object",
+            "description": "Participants by platform",
+            "properties": {
+                "vr": {"type": "integer", "minimum": 0},
+                "web": {"type": "integer", "minimum": 0}
+            }
+        },
+        "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp of last state change"
+        },
+        "updated_by": {
+            "type": "string",
+            "description": "User ID (GM or system) who last changed the state"
+        }
+    }
+}

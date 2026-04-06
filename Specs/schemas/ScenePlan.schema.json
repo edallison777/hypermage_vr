@@ -1,0 +1,424 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://hypermage.vr/schemas/ScenePlan.schema.json",
+    "title": "Scene Plan",
+    "description": "A structured specification for a Hypermage VR/Web environment. Supports traditional game levels, LARP scenes, cyberspace nodes, ritual spaces, and any experiential environment. Platform-agnostic: outputs to Unreal Engine VR, Babylon.js web, or both.",
+    "type": "object",
+    "required": [
+        "id",
+        "name",
+        "description",
+        "scene_type",
+        "platforms",
+        "narrative_context",
+        "atmosphere",
+        "zones",
+        "participant_spawns",
+        "objectives",
+        "narrative_states",
+        "gm_hooks"
+    ],
+    "properties": {
+        "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the scene plan"
+        },
+        "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Human-readable name for the scene"
+        },
+        "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Full description of the scene, its purpose, and intended experience"
+        },
+        "scene_type": {
+            "type": "string",
+            "enum": [
+                "exploration",
+                "ritual",
+                "cyberspace",
+                "social",
+                "combat",
+                "sanctuary",
+                "hybrid"
+            ],
+            "description": "Primary scene archetype. 'hybrid' for scenes combining multiple types."
+        },
+        "platforms": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "type": "string",
+                "enum": ["vr", "web"]
+            },
+            "description": "Target delivery platforms. 'vr' = Unreal Engine / Quest 3. 'web' = Babylon.js browser."
+        },
+        "narrative_context": {
+            "type": "object",
+            "required": ["setting", "tone", "initial_state"],
+            "description": "The narrative and thematic frame for this scene",
+            "properties": {
+                "setting": {
+                    "type": "string",
+                    "description": "Where and when this scene takes place. E.g. 'Corporate cyberspace node, 2077', 'Ancient forest ritual circle, dusk'"
+                },
+                "tone": {
+                    "type": "string",
+                    "description": "Emotional and atmospheric tone. E.g. 'tense, industrial, oppressive', 'mysterious, sacred, awe-inspiring'"
+                },
+                "lore": {
+                    "type": "string",
+                    "description": "Optional background lore or world-building context relevant to this scene"
+                },
+                "initial_state": {
+                    "type": "string",
+                    "description": "The narrative state ID this scene begins in (must match a narrative_states entry)"
+                },
+                "content_warnings": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional content warnings for LARP safety (e.g. 'loud sounds', 'strobe effects', 'themes of loss')"
+                }
+            }
+        },
+        "atmosphere": {
+            "type": "object",
+            "required": ["lighting_mood", "vfx_density", "audio_palette"],
+            "description": "Visual and audio atmosphere specification",
+            "properties": {
+                "lighting_mood": {
+                    "type": "string",
+                    "description": "Lighting description. E.g. 'neon blue and purple, high contrast shadows', 'warm firelight, flickering', 'cold clinical white'"
+                },
+                "time_of_day": {
+                    "type": "string",
+                    "enum": ["dawn", "morning", "midday", "afternoon", "dusk", "night", "midnight", "none"],
+                    "description": "Time of day for outdoor lighting. 'none' for interior/cyberspace scenes."
+                },
+                "weather": {
+                    "type": "string",
+                    "description": "Optional weather description. E.g. 'light rain, mist', 'clear', 'electrical storm'"
+                },
+                "vfx_density": {
+                    "type": "string",
+                    "enum": ["none", "low", "medium", "high"],
+                    "description": "Particle/VFX density. Keep 'low' or 'medium' for Quest 3 VR performance."
+                },
+                "audio_palette": {
+                    "type": "string",
+                    "description": "Audio mood description for AI audio generation. E.g. 'industrial synth drone, distant machinery, occasional alert chimes', 'forest ambience, ritual chanting, deep resonant drums'"
+                },
+                "post_process": {
+                    "type": "string",
+                    "description": "Optional post-processing description. E.g. 'chromatic aberration, scan lines', 'slight desaturation, film grain', 'vivid saturated'"
+                }
+            }
+        },
+        "zones": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Spatial zones defining the scene layout. Each zone is a named 3D volume.",
+            "items": {
+                "type": "object",
+                "required": ["id", "name", "bounds", "type"],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Unique identifier for the zone"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Human-readable name. E.g. 'The Oracle Chamber', 'ICE Wall Alpha', 'Ritual Circle'"
+                    },
+                    "bounds": {
+                        "type": "object",
+                        "required": ["center", "extents"],
+                        "description": "3D bounding box in Unreal units (cm). 1 metre = 100 units.",
+                        "properties": {
+                            "center": {
+                                "type": "object",
+                                "required": ["x", "y", "z"],
+                                "properties": {
+                                    "x": {"type": "number"},
+                                    "y": {"type": "number"},
+                                    "z": {"type": "number"}
+                                }
+                            },
+                            "extents": {
+                                "type": "object",
+                                "required": ["x", "y", "z"],
+                                "description": "Half-extents from center",
+                                "properties": {
+                                    "x": {"type": "number", "minimum": 0},
+                                    "y": {"type": "number", "minimum": 0},
+                                    "z": {"type": "number", "minimum": 0}
+                                }
+                            }
+                        }
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "exploration",
+                            "ritual",
+                            "social",
+                            "sanctuary",
+                            "cyberspace",
+                            "narrative",
+                            "combat",
+                            "objective",
+                            "spawn",
+                            "transition"
+                        ],
+                        "description": "Functional type of the zone"
+                    },
+                    "atmosphere_override": {
+                        "type": "object",
+                        "description": "Optional per-zone atmosphere overrides (e.g. a darker sub-area within the scene)",
+                        "properties": {
+                            "lighting_mood": {"type": "string"},
+                            "audio_palette": {"type": "string"},
+                            "vfx_density": {"type": "string", "enum": ["none", "low", "medium", "high"]}
+                        }
+                    },
+                    "asset_references": {
+                        "type": "array",
+                        "description": "Asset IDs or S3 URIs for commissioned assets to place in this zone",
+                        "items": {"type": "string"}
+                    },
+                    "narrative_state_visibility": {
+                        "type": "array",
+                        "description": "If set, this zone is only visible/accessible in these narrative states",
+                        "items": {"type": "string"}
+                    }
+                }
+            }
+        },
+        "participant_spawns": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Participant entry points. Can be role-specific.",
+            "items": {
+                "type": "object",
+                "required": ["position", "rotation"],
+                "properties": {
+                    "position": {
+                        "type": "object",
+                        "required": ["x", "y", "z"],
+                        "description": "World position in Unreal units (cm)",
+                        "properties": {
+                            "x": {"type": "number"},
+                            "y": {"type": "number"},
+                            "z": {"type": "number"}
+                        }
+                    },
+                    "rotation": {
+                        "type": "object",
+                        "required": ["pitch", "yaw", "roll"],
+                        "properties": {
+                            "pitch": {"type": "number", "minimum": -180, "maximum": 180},
+                            "yaw": {"type": "number", "minimum": -180, "maximum": 180},
+                            "roll": {"type": "number", "minimum": -180, "maximum": 180}
+                        }
+                    },
+                    "role": {
+                        "type": "string",
+                        "description": "Optional participant role for this spawn. E.g. 'player', 'observer', 'gm', 'npc'"
+                    }
+                }
+            }
+        },
+        "objectives": {
+            "type": "array",
+            "description": "Scene objectives. LARP-friendly: can be narrative, exploratory, social, or mechanical.",
+            "items": {
+                "type": "object",
+                "required": ["id", "type", "description"],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Unique identifier for this objective"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "find",
+                            "speak",
+                            "survive",
+                            "choose",
+                            "trigger",
+                            "witness",
+                            "reach",
+                            "collect",
+                            "protect",
+                            "capture",
+                            "custom"
+                        ],
+                        "description": "Objective archetype. 'custom' for anything not covered."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Human-readable description. E.g. 'Find the Oracle and receive her prophecy', 'Survive the ICE breach for 3 minutes'"
+                    },
+                    "zone_id": {
+                        "type": "string",
+                        "description": "Zone this objective is associated with"
+                    },
+                    "position": {
+                        "type": "object",
+                        "description": "Optional world position",
+                        "properties": {
+                            "x": {"type": "number"},
+                            "y": {"type": "number"},
+                            "z": {"type": "number"}
+                        }
+                    },
+                    "reward_id": {
+                        "type": "string",
+                        "description": "Reward ID from rewards catalog to grant on completion"
+                    },
+                    "requires_state": {
+                        "type": "string",
+                        "description": "Optional: narrative state that must be active for this objective to be available"
+                    },
+                    "triggers_hook": {
+                        "type": "string",
+                        "description": "Optional: GM hook ID to fire when this objective completes"
+                    },
+                    "is_optional": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Whether this objective is optional (side content) vs required"
+                    }
+                }
+            }
+        },
+        "narrative_states": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Named states the scene can be in. GMs transition between states via hooks. At least one must be the initial state.",
+            "items": {
+                "type": "object",
+                "required": ["id", "name", "description"],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Unique identifier for this state. Used in references throughout the plan."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Human-readable name. E.g. 'Pre-Ritual', 'ICE Breach Active', 'The Aftermath'"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "What the world looks/feels like in this state"
+                    },
+                    "is_initial": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Exactly one narrative state should have is_initial: true"
+                    },
+                    "transitions": {
+                        "type": "array",
+                        "description": "How to leave this state",
+                        "items": {
+                            "type": "object",
+                            "required": ["trigger_hook_id", "next_state_id"],
+                            "properties": {
+                                "trigger_hook_id": {
+                                    "type": "string",
+                                    "description": "GM hook ID that triggers this transition"
+                                },
+                                "next_state_id": {
+                                    "type": "string",
+                                    "description": "State to transition to"
+                                }
+                            }
+                        }
+                    },
+                    "atmosphere_override": {
+                        "$ref": "#/properties/zones/items/properties/atmosphere_override",
+                        "description": "Atmosphere changes when in this state"
+                    }
+                }
+            }
+        },
+        "gm_hooks": {
+            "type": "array",
+            "description": "Named trigger points a GM can fire from the control panel to affect the scene.",
+            "items": {
+                "type": "object",
+                "required": ["id", "name", "description"],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Unique identifier. E.g. 'ice_breach_start', 'oracle_awakens', 'ritual_complete'"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "GM-facing label. Should be clear and action-oriented."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "What this hook does when fired. E.g. 'Activates the ICE wall VFX and locks the data vault door'"
+                    },
+                    "effects": {
+                        "type": "array",
+                        "description": "List of effects triggered. E.g. ['vfx: activate ice_wall', 'audio: play alarm_loop', 'lock: data_vault_door']",
+                        "items": {"type": "string"}
+                    },
+                    "is_reversible": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Whether the GM can undo this hook's effects"
+                    }
+                }
+            }
+        },
+        "asset_sources": {
+            "type": "array",
+            "description": "Commissioned or external assets to incorporate. S3 URIs pointing to uploaded artwork, models, or audio.",
+            "items": {
+                "type": "object",
+                "required": ["s3_uri", "asset_type", "description"],
+                "properties": {
+                    "s3_uri": {
+                        "type": "string",
+                        "description": "S3 URI of the source asset. E.g. s3://hypermage-vr-unreal-build-artifacts-dev/assets/incoming/oracle_statue.fbx"
+                    },
+                    "asset_type": {
+                        "type": "string",
+                        "enum": ["mesh", "texture", "audio", "concept_art", "animation", "material"],
+                        "description": "Type of asset"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "What this asset is and how it should be used in the scene"
+                    },
+                    "target_zone_id": {
+                        "type": "string",
+                        "description": "Zone where this asset should be placed (optional)"
+                    }
+                }
+            }
+        },
+        "participant_capacity": {
+            "type": "object",
+            "description": "Recommended participant numbers",
+            "properties": {
+                "min": {"type": "integer", "minimum": 1},
+                "max": {"type": "integer", "minimum": 1},
+                "recommended": {"type": "integer", "minimum": 1}
+            }
+        },
+        "tags": {
+            "type": "array",
+            "description": "Free-form tags for cataloguing. E.g. ['cyberpunk', 'larp', 'ritual', 'outdoor']",
+            "items": {"type": "string"}
+        }
+    }
+}

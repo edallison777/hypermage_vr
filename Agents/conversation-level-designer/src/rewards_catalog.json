@@ -1,0 +1,54 @@
+{
+    "version": "1.0.0",
+    "lastUpdated": "2026-01-30T20:00:00Z",
+    "rewards": [
+        {
+            "id": "first_objective_complete",
+            "name": "First Objective Complete",
+            "description": "Completed the first objective in a session",
+            "category": "progression"
+        },
+        {
+            "id": "session_complete",
+            "name": "Session Complete",
+            "description": "Successfully completed a full game session",
+            "category": "completion"
+        },
+        {
+            "id": "team_victory",
+            "name": "Team Victory",
+            "description": "Won the match as part of the winning team",
+            "category": "victory"
+        },
+        {
+            "id": "all_objectives_complete",
+            "name": "All Objectives Complete",
+            "description": "Completed all objectives in a single session",
+            "category": "achievement"
+        },
+        {
+            "id": "zone_explorer",
+            "name": "Zone Explorer",
+            "description": "Visited all zones in the level",
+            "category": "exploration"
+        },
+        {
+            "id": "quick_completion",
+            "name": "Quick Completion",
+            "description": "Completed session in under 10 minutes",
+            "category": "speed"
+        },
+        {
+            "id": "team_player",
+            "name": "Team Player",
+            "description": "Assisted teammates with objectives",
+            "category": "cooperation"
+        },
+        {
+            "id": "perfect_run",
+            "name": "Perfect Run",
+            "description": "Completed all objectives without failures",
+            "category": "mastery"
+        }
+    ]
+}

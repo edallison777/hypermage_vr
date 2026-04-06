@@ -65,15 +65,24 @@ responding to live GM direction, with commissioned art and original audio.
 > **Goal:** Type a description, get a valid ScenePlan.json in S3.
 > **Done when:** `python invoke.py "a neon-lit cyberspace node for a cyberpunk LARP"` → valid ScenePlan.json saved to S3.
 
-- [ ] Design `ScenePlan.schema.json` (extends LevelPlan with narrative fields, atmosphere, GM hooks, platform targets, asset sources)
-- [ ] Define new schemas: `NarrativeState.schema.json`, `GMControlEvent.schema.json`, `WebSceneSpec.schema.json`
-- [ ] Update EnvironmentDesigner (ConversationLevelDesigner) system prompt for LARP/scene thinking
-- [ ] Implement `generate_scene_plan` tool — real LLM reasoning + jsonschema validation
-- [ ] Implement `validate_scene_plan` tool — validates against ScenePlan schema
-- [ ] Implement `place_narrative_hooks` tool — reads rewards catalog + scene type, places GM hooks
-- [ ] Redeploy EnvironmentDesigner to AgentCore
-- [ ] Build CLI entry point (`scripts/invoke.py`) — calls ProducerOrchestrator, saves result to S3
-- [ ] End-to-end test: description in → ScenePlan.json out
+- [x] Design `ScenePlan.schema.json` (LARP-aware: narrative states, GM hooks, atmosphere, dual platform, asset sources)
+- [x] Define new schemas: `NarrativeState.schema.json`, `GMControlEvent.schema.json`, `WebSceneSpec.schema.json`
+- [x] Update EnvironmentDesigner (ConversationLevelDesigner) system prompt for LARP/scene thinking
+- [x] Implement `get_available_rewards` tool — reads real rewards catalog
+- [x] Implement `validate_scene_plan` tool — full schema + cross-reference validation
+- [x] Implement `save_scene_plan` tool — persists to S3 with metadata
+- [x] Implement `place_narrative_hooks` tool — analyses hooks and suggests effects
+- [x] Redeploy EnvironmentDesigner to AgentCore (ECR: 20260406-210944-136)
+- [x] Update ProducerOrchestrator decompose_specification to request ScenePlan (not LevelPlan)
+- [x] Redeploy ProducerOrchestrator (ECR: 20260406-211729-331)
+- [x] Build CLI entry point (`scripts/invoke.py`) — calls EnvironmentDesigner directly, extracts + displays ScenePlan
+- [-] End-to-end test: description in → ScenePlan.json out ← **IN PROGRESS / RESUME HERE**
+
+**Notes for resume:**
+- Run: `PYTHONIOENCODING=utf-8 /c/Python312/python.exe scripts/invoke.py "description" --type cyberspace --platforms vr web`
+- Python to use: `/c/Python312/python.exe` (has bedrock-agentcore-starter-toolkit in user site-packages at AppData\Roaming\Python\Python312)
+- boto3 response key is `response` (not `body`) — already fixed in both invoke.py and producer-orchestrator/src/main.py
+- Read timeout must be 300s — already set in invoke.py
 
 ---
 

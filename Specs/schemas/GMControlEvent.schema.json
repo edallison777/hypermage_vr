@@ -1,0 +1,52 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://hypermage.vr/schemas/GMControlEvent.schema.json",
+    "title": "GM Control Event",
+    "description": "An event fired by a GM (or physical prop / external LARP system) to affect the running scene. Posted to POST /gm/event on the LARP Integration API.",
+    "type": "object",
+    "required": [
+        "event_id",
+        "session_id",
+        "hook_id",
+        "fired_by",
+        "fired_at"
+    ],
+    "properties": {
+        "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this event instance"
+        },
+        "session_id": {
+            "type": "string",
+            "description": "The session to deliver this event to"
+        },
+        "hook_id": {
+            "type": "string",
+            "description": "The GM hook ID to fire (must exist in the session's ScenePlan.gm_hooks)"
+        },
+        "fired_by": {
+            "type": "string",
+            "description": "User ID or system identifier that fired this event. E.g. 'gm:user-123', 'prop:nfc-door-01', 'system:timer'"
+        },
+        "fired_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp when the event was fired"
+        },
+        "parameters": {
+            "type": "object",
+            "description": "Optional additional parameters to pass with the hook. Hook-specific.",
+            "additionalProperties": true
+        },
+        "source": {
+            "type": "string",
+            "enum": ["gm_panel", "physical_prop", "external_system", "timer", "participant_action"],
+            "description": "What triggered this event"
+        },
+        "note": {
+            "type": "string",
+            "description": "Optional GM note for the event log. E.g. 'Players found the keycard'"
+        }
+    }
+}

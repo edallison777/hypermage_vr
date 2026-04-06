@@ -65,7 +65,7 @@ def invoke_worker_agent(agent_key: str, prompt: str) -> str:
     )
 
     # Response body is a streaming SSE body
-    raw = resp["body"].read().decode("utf-8")
+    raw = resp["response"].read().decode("utf-8")
 
     # Parse SSE lines: data: "chunk"
     chunks = []
@@ -88,25 +88,27 @@ def invoke_worker_agent(agent_key: str, prompt: str) -> str:
 def decompose_specification(specification: str, context: str = '') -> str:
     """Break down a natural language VR specification into structured tasks with dependencies, agent assignments, and cost estimates."""
     prompt = (
-        f"Analyse the following VR multiplayer level specification and convert it into a "
-        f"structured LevelPlan.json with zones, spawns, and objectives.\n\n"
-        f"Specification: {specification}"
+        f"Design a scene for: {specification}\n\n"
+        f"Generate a complete ScenePlan conforming to ScenePlan.schema.json. "
+        f"Call get_available_rewards() first, then generate the ScenePlan JSON, "
+        f"validate it with validate_scene_plan(), fix any errors, and save it with save_scene_plan(). "
+        f"Return the final ScenePlan JSON and the S3 URI."
     )
     if context:
         prompt += f"\n\nAdditional context: {context}"
 
-    level_plan_response = invoke_worker_agent("ConversationLevelDesigner", prompt)
+    scene_plan_response = invoke_worker_agent("ConversationLevelDesigner", prompt)
 
     return json.dumps({
         "capability": "decompose_specification",
         "status": "completed",
-        "level_plan": level_plan_response,
+        "scene_plan": scene_plan_response,
         "tasks": [
-            {"agent": "ConversationLevelDesigner", "capability": "generate_level_plan", "status": "completed"},
-            {"agent": "UnrealLevelBuilder",        "capability": "generate_level",      "status": "pending"},
-            {"agent": "GameplaySystems",           "capability": "implement_gameplay",   "status": "pending"},
-            {"agent": "TechArtVFXAudio",           "capability": "generate_placeholder","status": "pending"},
-            {"agent": "QA",                        "capability": "generate_tests",       "status": "pending"},
+            {"agent": "EnvironmentDesigner", "capability": "generate_scene_plan", "status": "completed"},
+            {"agent": "UnrealLevelBuilder",  "capability": "generate_level",      "status": "pending"},
+            {"agent": "WebPlatformAgent",    "capability": "generate_web_scene",  "status": "pending"},
+            {"agent": "TechArtVFXAudio",     "capability": "generate_audio",      "status": "pending"},
+            {"agent": "QA",                  "capability": "generate_tests",      "status": "pending"},
         ],
     })
 

@@ -30,8 +30,8 @@ agents:
         idle_runtime_session_timeout: null
         max_lifetime: null
     bedrock_agentcore:
-      agent_id: null
-      agent_arn: null
+      agent_id: ConversationLevelDesigner_Agent-1ZShl1E6H5
+      agent_arn: arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/ConversationLevelDesigner_Agent-1ZShl1E6H5
       agent_session_id: null
     codebuild:
       project_name: bedrock-agentcore-conversationleveldesigner_agent-builder
