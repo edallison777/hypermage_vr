@@ -91,8 +91,12 @@ locals {
   rule_set_body = jsonencode({
     ruleLanguageVersion = "1.0"
 
-    # Skill-based distance rules are deferred until end-to-end testing is complete.
-    # Using latency-only matching for initial deployment.
+    # Declare all player attributes the Lambda sends (even if rules don't use them).
+    # FlexMatch rejects undeclared attributes sent in StartMatchmaking.
+    playerAttributes = [
+      { name = "skill",  type = "number", default = 10 },
+      { name = "region", type = "string", default = "eu-west-1" }
+    ]
 
     teams = [
       {

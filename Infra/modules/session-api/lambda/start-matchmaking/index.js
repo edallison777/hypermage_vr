@@ -41,11 +41,12 @@ exports.handler = async (event) => {
 
         log('DEBUG', 'Player info extracted', { playerId, cognitoUsername, cognitoEmail });
 
-        // Build player attributes with defaults
+        // GameLift SDK v3 PlayerAttributes requires AttributeValue objects, not raw values.
+        // LatencyInMs is a separate field — exclude it from PlayerAttributes.
+        const { latencyInMs, ...otherAttributes } = playerAttributes;
         const attributes = {
-            skill: playerAttributes.skill || 10,
-            region: playerAttributes.region || 'eu-west-1',
-            ...playerAttributes
+            skill:  { N: otherAttributes.skill  !== undefined ? Number(otherAttributes.skill)  : 10 },
+            region: { S: otherAttributes.region !== undefined ? String(otherAttributes.region) : 'eu-west-1' }
         };
 
         // Start matchmaking
@@ -55,7 +56,7 @@ exports.handler = async (event) => {
                 {
                     PlayerId: playerId,
                     PlayerAttributes: attributes,
-                    LatencyInMs: playerAttributes.latencyInMs || {}
+                    LatencyInMs: latencyInMs || {}
                 }
             ]
         });
