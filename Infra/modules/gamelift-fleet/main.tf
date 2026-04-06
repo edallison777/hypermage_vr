@@ -86,30 +86,17 @@ resource "aws_iam_role_policy" "fleet_s3" {
   })
 }
 
-# GameLift build resource
-resource "aws_gamelift_build" "server" {
-  name             = "${var.project_name}-server-${var.environment}"
-  operating_system = "AMAZON_LINUX_2023"
-
-  storage_location {
-    bucket   = var.build_s3_bucket_name
-    key      = var.server_build_s3_key
-    role_arn = aws_iam_role.fleet.arn
-  }
-
-  tags = merge(var.tags, {
-    Name        = "${var.project_name}-server-build"
-    Environment = var.environment
-    BuildType   = "DedicatedServer"
-  })
-}
+# GameLift build resource is created by 03-deploy-gamelift.sh via AWS CLI
+# (aws gamelift create-build --server-sdk-version 5.4.0) because the Terraform
+# AWS provider does not yet support the server_sdk_version argument.
+# The resulting build ID is passed in as var.build_id.
 
 # GameLift fleet
 resource "aws_gamelift_fleet" "main" {
   name        = "${var.project_name}-fleet-${var.environment}"
   description = "GameLift fleet for ${var.project_name} ${var.environment} environment"
 
-  build_id = aws_gamelift_build.server.id
+  build_id = var.build_id
 
   # Fleet configuration
   fleet_type        = var.fleet_type

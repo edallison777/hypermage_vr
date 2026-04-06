@@ -1,6 +1,11 @@
 # Temp files from phase4 scripts
 .ssm-build-script.sh
 .ssm-build-params.json
+.ssm-recompile-script.sh
+.ssm-recompile-params.json
+.ssm-hotpatch-script.sh
+.ssm-hotpatch-params.json
+.warm-build-instance
 make-cook-params.js
 cook-params.json
 patch-*.js

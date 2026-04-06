@@ -21,6 +21,11 @@ variable "aws_region" {
   default     = "eu-west-1"
 }
 
+variable "build_id" {
+  description = "GameLift build ID created by 03-deploy-gamelift.sh (build-xxxxxxxx)"
+  type        = string
+}
+
 variable "build_s3_bucket_name" {
   description = "S3 bucket name containing server build"
   type        = string

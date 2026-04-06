@@ -79,13 +79,14 @@ module "gamelift_fleet" {
 
   project_name         = var.project_name
   environment          = "dev"
+  build_id             = var.gamelift_build_id
   aws_region           = var.aws_region
   build_s3_bucket_name = module.unreal_build.s3_bucket_name
   build_s3_bucket_arn  = module.unreal_build.s3_bucket_arn
   server_build_s3_key  = "builds/latest/HyperMageVRServer.zip"
   fleet_type           = "SPOT"
   ec2_instance_type    = "c5.large"
-  enable_auto_scaling  = true
+  enable_auto_scaling  = false
   min_fleet_capacity   = 1
   max_fleet_capacity   = 3
   desired_capacity     = 1

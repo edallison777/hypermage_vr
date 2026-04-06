@@ -89,25 +89,14 @@ resource "aws_gamelift_game_session_queue" "main" {
 
 locals {
   rule_set_body = jsonencode({
-    name = "${var.project_name}-${var.environment}-rules"
     ruleLanguageVersion = "1.0"
-    
-    playerAttributes = [
-      {
-        name = "skill"
-        type = "number"
-        default = 10
-      },
-      {
-        name = "region"
-        type = "string"
-        default = "eu-west-1"
-      }
-    ]
+
+    # Skill-based distance rules are deferred until end-to-end testing is complete.
+    # Using latency-only matching for initial deployment.
 
     teams = [
       {
-        name = "players"
+        name       = "players"
         minPlayers = var.min_players_per_match
         maxPlayers = var.max_players_per_match
       }
@@ -115,90 +104,45 @@ locals {
 
     rules = [
       {
-        name = "FairTeamSkill"
-        description = "Ensure players have similar skill levels"
-        type = "distance"
-        measurements = ["skill"]
-        referenceValue = 10
-        maxDistance = var.skill_distance_threshold
-      },
-      {
-        name = "FastConnection"
+        name        = "FastConnection"
         description = "Ensure players have acceptable latency"
-        type = "latency"
-        maxLatency = var.max_latency_ms
-      },
-      {
-        name = "RegionPreference"
-        description = "Prefer players from same region"
-        type = "collection"
-        measurements = ["region"]
-        operation = "intersection"
-        minCount = 1
+        type        = "latency"
+        maxLatency  = var.max_latency_ms
       }
     ]
 
     expansions = [
       {
-        target = "rules[FairTeamSkill].maxDistance"
-        steps = [
-          {
-            waitTimeSeconds = 10
-            value = var.skill_distance_threshold * 1.5
-          },
-          {
-            waitTimeSeconds = 20
-            value = var.skill_distance_threshold * 2
-          }
-        ]
-      },
-      {
         target = "rules[FastConnection].maxLatency"
         steps = [
-          {
-            waitTimeSeconds = 10
-            value = var.max_latency_ms * 1.2
-          },
-          {
-            waitTimeSeconds = 20
-            value = var.max_latency_ms * 1.5
-          }
+          { waitTimeSeconds = 10, value = var.max_latency_ms + 20 },
+          { waitTimeSeconds = 20, value = var.max_latency_ms + 50 }
         ]
       }
     ]
   })
 }
 
-# Output rule set for manual deployment
+# Rule set JSON — written locally so 03-deploy-gamelift.sh can deploy it via AWS CLI.
+# aws_gamelift_matchmaking_rule_set and aws_gamelift_matchmaking_configuration are not
+# supported by the Terraform AWS provider; both are deployed by the script instead.
 resource "local_file" "rule_set" {
   content  = local.rule_set_body
   filename = "${path.module}/generated/rule-set-${var.environment}.json"
 }
 
-# Matchmaking configuration (stored as JSON file for AWS CLI deployment)
-# Note: aws_gamelift_matchmaking_configuration is not available in Terraform AWS provider
-# Deploy using AWS CLI: aws gamelift create-matchmaking-configuration --cli-input-json file://matchmaking-config.json
-
-locals {
-  matchmaking_config = jsonencode({
-    Name = "${var.project_name}-${var.environment}"
-    Description = "FlexMatch configuration for ${var.project_name} ${var.environment}"
-    GameSessionQueueArns = [aws_gamelift_game_session_queue.main.arn]
-    RuleSetName = "${var.project_name}-${var.environment}-rules"
-    RequestTimeoutSeconds = var.matchmaking_timeout_seconds
-    AcceptanceTimeoutSeconds = var.acceptance_timeout_seconds
-    AcceptanceRequired = var.acceptance_required
-    BackfillMode = var.backfill_mode
-    AdditionalPlayerCount = var.additional_player_count
-    CustomEventData = var.custom_event_data
-    GameSessionData = var.game_session_data
-    NotificationTarget = var.enable_notifications ? var.notification_sns_topic_arn : null
-  })
-}
-
-# Output matchmaking configuration for manual deployment
 resource "local_file" "matchmaking_config" {
-  content  = local.matchmaking_config
+  content = jsonencode({
+    Name                     = "${var.project_name}-${var.environment}"
+    Description              = "FlexMatch configuration for ${var.project_name} ${var.environment}"
+    GameSessionQueueArns     = [aws_gamelift_game_session_queue.main.arn]
+    RuleSetName              = "${var.project_name}-${var.environment}-rules"
+    RequestTimeoutSeconds    = var.matchmaking_timeout_seconds
+    AcceptanceTimeoutSeconds = var.acceptance_timeout_seconds
+    AcceptanceRequired       = var.acceptance_required
+    BackfillMode             = var.backfill_mode
+    AdditionalPlayerCount    = var.additional_player_count
+  })
   filename = "${path.module}/generated/matchmaking-config-${var.environment}.json"
 }
 

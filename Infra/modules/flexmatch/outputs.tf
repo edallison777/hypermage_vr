@@ -1,7 +1,7 @@
 # Outputs for FlexMatch Module
 
 output "matchmaking_configuration_name" {
-  description = "Name of the matchmaking configuration (deploy via AWS CLI)"
+  description = "Name of the matchmaking configuration (deployed via AWS CLI by 03-deploy-gamelift.sh)"
   value       = "${var.project_name}-${var.environment}"
 }
 
@@ -11,7 +11,7 @@ output "matchmaking_configuration_file" {
 }
 
 output "rule_set_name" {
-  description = "Name of the matchmaking rule set (deploy via AWS CLI)"
+  description = "Name of the matchmaking rule set (deployed via AWS CLI by 03-deploy-gamelift.sh)"
   value       = "${var.project_name}-${var.environment}-rules"
 }
 

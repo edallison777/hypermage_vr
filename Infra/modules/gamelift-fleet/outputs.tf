@@ -16,13 +16,8 @@ output "fleet_name" {
 }
 
 output "build_id" {
-  description = "ID of the GameLift build"
-  value       = aws_gamelift_build.server.id
-}
-
-output "build_arn" {
-  description = "ARN of the GameLift build"
-  value       = aws_gamelift_build.server.arn
+  description = "ID of the GameLift build (passed in, created by deploy script)"
+  value       = var.build_id
 }
 
 output "alias_id" {

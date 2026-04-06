@@ -17,3 +17,9 @@ variable "ami_id" {
   type        = string
   default     = ""
 }
+
+variable "gamelift_build_id" {
+  description = "GameLift build ID (created by 03-deploy-gamelift.sh via AWS CLI with --server-sdk-version 5.4.0)"
+  type        = string
+  default     = ""
+}

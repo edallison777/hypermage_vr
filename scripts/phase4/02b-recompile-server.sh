@@ -226,7 +226,7 @@ PARAMS_WIN=$(cygpath -w "$PARAMS_FILE")
 SCRIPT_WIN="$SCRIPT_WIN" PARAMS_WIN="$PARAMS_WIN" node -e "
 const fs = require('fs');
 const script = fs.readFileSync(process.env.SCRIPT_WIN, 'utf8');
-fs.writeFileSync(process.env.PARAMS_WIN, JSON.stringify({commands: [script], executionTimeout: ['3600']}));
+fs.writeFileSync(process.env.PARAMS_WIN, JSON.stringify({commands: [script], executionTimeout: ['10800']}));
 "
 
 COMMAND_ID=$(aws ssm send-command \
@@ -234,7 +234,7 @@ COMMAND_ID=$(aws ssm send-command \
   --instance-ids "$INSTANCE_ID" \
   --document-name "AWS-RunShellScript" \
   --parameters "file://$PARAMS_WIN" \
-  --timeout-seconds 3600 \
+  --timeout-seconds 10800 \
   --comment "HyperMage VR C++ recompile" \
   --query 'Command.CommandId' \
   --output text)
@@ -244,7 +244,7 @@ rm -f "$SCRIPT_FILE" "$PARAMS_FILE"
 echo "SSM command ID: $COMMAND_ID"
 echo "Waiting for recompile to complete (up to 60 minutes)..."
 
-MAX_WAIT=3600
+MAX_WAIT=10800
 WAITED=0
 INTERVAL=30
 STATUS="InProgress"
