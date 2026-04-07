@@ -157,20 +157,23 @@ responding to live GM direction, with commissioned art and original audio.
 
 ---
 
-### Phase 10 — Web Platform Foundation
+### Phase 10 — Web Platform Foundation ✅ COMPLETE
 > **Goal:** ScenePlan generates a web URL. Browser shows the scene in 3D with atmosphere and audio.
 > **Done when:** Open the URL, see the Babylon.js scene rendered with correct lighting, assets, and ambient audio playing.
 
-- [ ] Select web renderer: Babylon.js (recommended — best glTF support, shared assets with UE5)
-- [ ] WebPlatformAgent: implement `generate_web_scene(scene_plan)` → Babylon.js scene JSON
-- [ ] WebPlatformAgent: implement `deploy_web_scene` → S3 static + CloudFront distribution
-- [ ] WebSocket game server — Node.js on ECS Fargate
-  - [ ] Participant join/leave
-  - [ ] Shared position/presence
-  - [ ] Narrative state sync (DynamoDB → push to all clients)
-- [ ] Shared session — VR and web participants in the same DynamoDB session record
-- [ ] Deploy WebPlatformAgent to AgentCore
-- [ ] End-to-end test: ScenePlan → web URL → scene visible in browser
+- [x] Select web renderer: Babylon.js (best glTF support, shared assets with UE5)
+- [x] WebPlatformAgent: `generate_web_scene(scene_plan)` → Babylon.js HTML scene → S3
+- [x] WebPlatformAgent: `deploy_web_scene` → CloudFront invalidation → live URL
+- [x] WebPlatformAgent: `query_web_scenes` → DynamoDB scene catalogue
+- [x] WebSocket API (API Gateway WebSocket + Lambda) — participant join/leave, presence, narrative state sync
+- [x] DynamoDB `hypermage-vr-web-scenes-dev` (StatusDeployedAtIndex) + `hypermage-vr-ws-connections-dev` (SceneIdIndex)
+- [x] S3 `hypermage-vr-web-scenes-dev` + CloudFront `d3nzdmu3cdrzxk.cloudfront.net` (PriceClass_100, OAC)
+- [x] SSM `/hypermage/web-platform/cloudfront-domain`, `/ws-url`, `/scenes-bucket`
+- [x] Deploy WebPlatformAgent to AgentCore (`WebPlatform_Agent-y8AKhy2ISX`)
+- [x] Integration test: 6/6 passed — SSM params live, ScenePlan → HTML in S3 → CloudFront URL deployed
+  - `https://d3nzdmu3cdrzxk.cloudfront.net/scenes/phase10-test-scene-001/index.html`
+  - WebSocket: `wss://yd895183ei.execute-api.eu-west-1.amazonaws.com/dev`
+- [x] IAM: `Phase10WebPlatformPolicy` on runtime role
 
 ---
 

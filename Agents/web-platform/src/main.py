@@ -337,7 +337,7 @@ def generate_web_scene(scene_plan_json: str) -> dict:
             "s3Uri":                s3_uri,
             "webUrl":               web_url,
             "generatedAt":          datetime.now(timezone.utc).isoformat(),
-            "deployedAt":           "",
+            "deployedAt":           "0000-00-00T00:00:00+00:00",  # placeholder; updated on deploy
             "zoneCount":            len(scene_plan.get("zones", [])),
             "atmosphereMood":       scene_plan.get("atmosphere", {}).get("lighting_mood", ""),
             "currentNarrativeState": next(
@@ -525,3 +525,7 @@ async def main(payload: dict) -> str:
         if isinstance(event, dict) and "data" in event:
             result_chunks.append(str(event["data"]))
     return "".join(result_chunks)
+
+
+if __name__ == "__main__":
+    app.run()

@@ -64,5 +64,11 @@
     "agent_id": "UnrealLevelBuilder_Agent-rFwJdR9uPr",
     "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/UnrealLevelBuilder_Agent-rFwJdR9uPr",
     "status": "READY"
+  },
+  {
+    "agent": "WebPlatform_Agent",
+    "agent_id": "WebPlatform_Agent-y8AKhy2ISX",
+    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/WebPlatform_Agent-y8AKhy2ISX",
+    "status": "READY"
   }
 ]
