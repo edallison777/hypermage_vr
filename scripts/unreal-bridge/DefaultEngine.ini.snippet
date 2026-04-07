@@ -1,0 +1,10 @@
+# Add these lines to your project's Config/DefaultEngine.ini
+# (or Saved/Config/Windows/Engine.ini for per-user override)
+# Then restart UE5 and verify: Edit → Plugins → "Remote Control" is enabled.
+
+[/Script/RemoteControl.RemoteControlSettings]
+bIsRemoteControlHttpServerEnabled=True
+RemoteControlHttpServerPort=30010
+
+# Optional: restrict to localhost only (recommended for dev)
+# RemoteControlHttpServerBindAddress=127.0.0.1

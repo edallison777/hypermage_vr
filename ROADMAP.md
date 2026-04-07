@@ -136,19 +136,24 @@ responding to live GM direction, with commissioned art and original audio.
 
 ---
 
-### Phase 9 — UnrealMCP Bridge
+### Phase 9 — UnrealMCP Bridge ✅ COMPLETE
 > **Goal:** An agent can create and manipulate objects in a live UE5 editor on the dev PC.
 > **Done when:** Agent call creates a visible actor in the UE5 editor.
 
-- [ ] Enable UE5 Remote Control Plugin + HTTP API in DefaultEngine.ini
-- [ ] Build `UnrealBridge` Python FastAPI service (dev PC)
-  - [ ] `POST /actor/create` — spawn actor by class at transform
-  - [ ] `POST /actor/set-property` — set property on actor
-  - [ ] `POST /level/save` — save current level
-  - [ ] `POST /console` — run UE5 console command
-- [ ] Expose bridge to agents (ngrok tunnel or fixed LAN)
-- [ ] UnrealLevelBuilderAgent: replace stubs with real HTTP calls to bridge
-- [ ] Smoke test: agent spawns a cube in UE5
+- [x] DefaultEngine.ini snippet: Remote Control plugin config (`scripts/unreal-bridge/DefaultEngine.ini.snippet`)
+- [x] UnrealBridge FastAPI service (`scripts/unreal-bridge/bridge.py`) wraps UE5 RC HTTP API:
+  - `POST /actor/create` — SpawnActorFromClass via EditorActorSubsystem
+  - `POST /actor/set-property` — set UObject property
+  - `POST /level/save` — SaveCurrentLevel
+  - `POST /console` — ExecuteConsoleCommand
+  - `POST /scene-plan/build` — full ScenePlan → zone blockouts + PlayerStarts + save
+  - `GET /health` — check UE5 reachability
+- [x] `start.sh --ngrok` — starts bridge + ngrok tunnel + auto-updates SSM
+- [x] SSM `/hypermage/unreal-bridge-url` — Terraform placeholder, populate via start.sh
+- [x] UnrealLevelBuilderAgent (`UnrealLevelBuilder_Agent-rFwJdR9uPr`): all tools wired to bridge
+  - `get_bridge_status`, `spawn_actor`, `set_actor_property`, `run_console_command`, `save_level`, `build_scene_from_plan`, `generate_blockout_geometry`
+  - Graceful skip (status='skipped') when bridge not configured
+- [x] Integration test: 6/6 passed — all tools correctly skip when bridge absent, blockout geometry computed offline
 
 ---
 

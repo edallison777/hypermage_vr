@@ -258,6 +258,24 @@ output "audio_assets_table_name" {
   value       = module.audio_pipeline.audio_assets_table_name
 }
 
+# UnrealBridge Module (Phase 9)
+# SSM placeholder for the bridge URL — populated by start.sh --ngrok on dev PC.
+# No cloud compute. Zero idle cost.
+module "unreal_bridge" {
+  source = "../../modules/unreal-bridge"
+
+  project_name = var.project_name
+  environment  = "dev"
+  aws_region   = var.aws_region
+
+  tags = { CostCenter = "Development", Owner = "DevOps Team" }
+}
+
+output "unreal_bridge_ssm_path" {
+  description = "SSM path for UnrealBridge URL (set via start.sh --ngrok)"
+  value       = module.unreal_bridge.bridge_url_ssm_path
+}
+
 # Outputs
 
 output "build_s3_bucket" {
