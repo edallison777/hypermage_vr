@@ -240,6 +240,24 @@ output "blender_ecs_cluster_arn" {
   value       = module.asset_pipeline.blender_ecs_cluster_arn
 }
 
+# Audio Pipeline Module (Phase 8)
+# DynamoDB audio-assets table + SSM key placeholders for ElevenLabs/Stability AI.
+# Zero idle cost — audio generation happens inside the agent container on-demand.
+module "audio_pipeline" {
+  source = "../../modules/audio-pipeline"
+
+  project_name = var.project_name
+  environment  = "dev"
+  aws_region   = var.aws_region
+
+  tags = { CostCenter = "Development", Owner = "DevOps Team" }
+}
+
+output "audio_assets_table_name" {
+  description = "DynamoDB audio assets table (Phase 8)"
+  value       = module.audio_pipeline.audio_assets_table_name
+}
+
 # Outputs
 
 output "build_s3_bucket" {

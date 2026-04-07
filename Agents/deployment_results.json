@@ -24,12 +24,6 @@
     "status": "READY"
   },
   {
-    "agent": "TechArtVFXAudio_Agent",
-    "agent_id": "TechArtVFXAudio_Agent-08HN169vef",
-    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/TechArtVFXAudio_Agent-08HN169vef",
-    "status": "READY"
-  },
-  {
     "agent": "UnrealLevelBuilder_Agent",
     "agent_id": "UnrealLevelBuilder_Agent-rFwJdR9uPr",
     "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/UnrealLevelBuilder_Agent-rFwJdR9uPr",
@@ -63,6 +57,12 @@
     "agent": "ConversationLevelDesigner_Agent",
     "agent_id": "ConversationLevelDesigner_Agent-1ZShl1E6H5",
     "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/ConversationLevelDesigner_Agent-1ZShl1E6H5",
+    "status": "READY"
+  },
+  {
+    "agent": "TechArtVFXAudio_Agent",
+    "agent_id": "TechArtVFXAudio_Agent-08HN169vef",
+    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/TechArtVFXAudio_Agent-08HN169vef",
     "status": "READY"
   }
 ]

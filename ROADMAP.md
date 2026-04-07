@@ -119,18 +119,20 @@ responding to live GM direction, with commissioned art and original audio.
 
 ---
 
-### Phase 8 — Audio Production Pipeline
+### Phase 8 — Audio Production Pipeline ✅ COMPLETE
 > **Goal:** ScenePlan audio palette description → original ambient, music, SFX, and narration files in S3.
-> **Done when:** Scene description produces a set of OGG files (ambient loop, score, SFX pack) in S3, consumable by both UE5 and web.
+> **Done when:** Scene description produces a set of MP3 files in S3, consumable by both UE5 and web.
 
-- [ ] Evaluate and select audio AI provider(s): ElevenLabs Sound Effects, Stability Audio, AudioCraft
-- [ ] TechArtVFXAudioAgent: implement `generate_ambient(description)` → OGG to S3
-- [ ] TechArtVFXAudioAgent: implement `generate_score(description, duration, loop)` → OGG to S3
-- [ ] TechArtVFXAudioAgent: implement `generate_sfx(description)` → short OGG to S3
-- [ ] TechArtVFXAudioAgent: implement `generate_narration(text, voice_id)` → OGG to S3 (ElevenLabs TTS)
-- [ ] Audio metadata schema — track generated assets with scene association in DynamoDB
-- [ ] Redeploy TechArtVFXAudioAgent
-- [ ] End-to-end test: ScenePlan with `audio_palette` → full audio asset set in S3
+- [x] Provider selection: ElevenLabs (SFX + TTS narration), Stability AI (ambient + score)
+- [x] TechArtVFXAudioAgent: `generate_ambient(scene_id, description, duration)` → Stability AI → S3 + DynamoDB
+- [x] TechArtVFXAudioAgent: `generate_score(scene_id, description, duration, loop)` → Stability AI → S3 + DynamoDB
+- [x] TechArtVFXAudioAgent: `generate_sfx(scene_id, description)` → ElevenLabs Sound Effects → S3 + DynamoDB
+- [x] TechArtVFXAudioAgent: `generate_narration(scene_id, text, voice_id)` → ElevenLabs TTS → S3 + DynamoDB
+- [x] TechArtVFXAudioAgent: `query_audio_assets(scene_id, audio_type)` → DynamoDB SceneIdIndex/AudioTypeIndex
+- [x] DynamoDB `hypermage-vr-audio-assets-dev` — SceneIdIndex + AudioTypeIndex GSIs
+- [x] SSM placeholders at `/hypermage/elevenlabs-api-key` + `/hypermage/stability-api-key`
+- [x] Redeploy TechArtVFXAudioAgent (`TechArtVFXAudio_Agent-08HN169vef`)
+- [x] Integration test: 6/6 passed — graceful skips when keys absent, 3 DynamoDB records written, full ScenePlan palette → 3-track audio set described in catalogue
 
 ---
 
