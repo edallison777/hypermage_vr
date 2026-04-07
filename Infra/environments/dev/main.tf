@@ -209,6 +209,37 @@ resource "aws_api_gateway_account" "main" {
   depends_on          = [aws_iam_role_policy_attachment.api_gateway_cloudwatch]
 }
 
+# Asset Pipeline Module (Phase 7)
+# S3 incoming/ trigger + format converters + asset catalogue DynamoDB table.
+# All resources are serverless/on-demand — zero idle cost.
+module "asset_pipeline" {
+  source = "../../modules/asset-pipeline"
+
+  project_name         = var.project_name
+  environment          = "dev"
+  aws_region           = var.aws_region
+  build_s3_bucket_name = module.unreal_build.s3_bucket_name
+  build_s3_bucket_arn  = module.unreal_build.s3_bucket_arn
+  log_retention_days   = 14
+
+  tags = { CostCenter = "Development", Owner = "DevOps Team" }
+}
+
+output "asset_catalogue_table_name" {
+  description = "DynamoDB asset catalogue table (Phase 7)"
+  value       = module.asset_pipeline.asset_catalogue_table_name
+}
+
+output "asset_pipeline_ingest_lambda" {
+  description = "Asset ingest trigger Lambda ARN"
+  value       = module.asset_pipeline.ingest_trigger_lambda_arn
+}
+
+output "blender_ecs_cluster_arn" {
+  description = "Blender ECS cluster ARN (Fargate, tasks auto-terminate)"
+  value       = module.asset_pipeline.blender_ecs_cluster_arn
+}
+
 # Outputs
 
 output "build_s3_bucket" {

@@ -1,29 +1,5 @@
 [
   {
-    "agent": "AssetPipeline_Agent",
-    "agent_id": "AssetPipeline_Agent-siqbOWHci2",
-    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/AssetPipeline_Agent-siqbOWHci2",
-    "status": "READY"
-  },
-  {
-    "agent": "ConversationLevelDesigner_Agent",
-    "agent_id": "ConversationLevelDesigner_Agent-1ZShl1E6H5",
-    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/ConversationLevelDesigner_Agent-1ZShl1E6H5",
-    "status": "READY"
-  },
-  {
-    "agent": "CostMonitorFinOps_Agent",
-    "agent_id": "CostMonitorFinOps_Agent-gI5m1PA2US",
-    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/CostMonitorFinOps_Agent-gI5m1PA2US",
-    "status": "READY"
-  },
-  {
-    "agent": "DevOpsAWS_Agent",
-    "agent_id": "DevOpsAWS_Agent-tjiWN5GCZV",
-    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/DevOpsAWS_Agent-tjiWN5GCZV",
-    "status": "READY"
-  },
-  {
     "agent": "GameplaySystems_Agent",
     "agent_id": "GameplaySystems_Agent-iBQ0EF4DP6",
     "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/GameplaySystems_Agent-iBQ0EF4DP6",
@@ -63,6 +39,30 @@
     "agent": "VoiceComms_Agent",
     "agent_id": "VoiceComms_Agent-QOXHOyDNVk",
     "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/VoiceComms_Agent-QOXHOyDNVk",
+    "status": "READY"
+  },
+  {
+    "agent": "CostMonitorFinOps_Agent",
+    "agent_id": "CostMonitorFinOps_Agent-gI5m1PA2US",
+    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/CostMonitorFinOps_Agent-gI5m1PA2US",
+    "status": "READY"
+  },
+  {
+    "agent": "DevOpsAWS_Agent",
+    "agent_id": "DevOpsAWS_Agent-tjiWN5GCZV",
+    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/DevOpsAWS_Agent-tjiWN5GCZV",
+    "status": "READY"
+  },
+  {
+    "agent": "AssetPipeline_Agent",
+    "agent_id": "AssetPipeline_Agent-siqbOWHci2",
+    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/AssetPipeline_Agent-siqbOWHci2",
+    "status": "READY"
+  },
+  {
+    "agent": "ConversationLevelDesigner_Agent",
+    "agent_id": "ConversationLevelDesigner_Agent-1ZShl1E6H5",
+    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/ConversationLevelDesigner_Agent-1ZShl1E6H5",
     "status": "READY"
   }
 ]

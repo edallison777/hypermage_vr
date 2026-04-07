@@ -2,6 +2,9 @@
 
 Supports LARP scenes, cyberspace nodes, ritual spaces, and any experiential environment.
 Outputs validated ScenePlan.json saved to S3, usable by both UE5 (VR) and Babylon.js (web).
+
+Phase 7: Added get_available_assets() tool — queries DynamoDB asset catalogue so the
+EnvironmentDesigner can reference commissioned/uploaded assets in ScenePlan asset_sources[].
 """
 
 import json
@@ -18,19 +21,21 @@ from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
 app = BedrockAgentCoreApp()
 
-MODEL_ID = "eu.anthropic.claude-sonnet-4-20250514-v1:0"
-S3_BUCKET = os.environ.get("BUILD_S3_BUCKET", "hypermage-vr-unreal-build-artifacts-dev")
-S3_PREFIX = "scene-plans"
+MODEL_ID              = "eu.anthropic.claude-sonnet-4-20250514-v1:0"
+S3_BUCKET             = os.environ.get("BUILD_S3_BUCKET", "hypermage-vr-unreal-build-artifacts-dev")
+S3_PREFIX             = "scene-plans"
+ASSET_CATALOGUE_TABLE = os.environ.get("ASSET_CATALOGUE_TABLE", "hypermage-vr-asset-catalogue-dev")
+AWS_REGION            = os.environ.get("AWS_DEFAULT_REGION", "eu-west-1")
 
 # Load schema and rewards catalog at startup (bundled alongside main.py in container)
-_schema_path = Path(__file__).parent / "ScenePlan.schema.json"
+_schema_path  = Path(__file__).parent / "ScenePlan.schema.json"
 _catalog_path = Path(__file__).parent / "rewards_catalog.json"
 
 with open(_schema_path) as f:
     SCENE_PLAN_SCHEMA = json.load(f)
 
 with open(_catalog_path) as f:
-    _catalog_data = json.load(f)
+    _catalog_data   = json.load(f)
     VALID_REWARD_IDS = {r["id"] for r in _catalog_data.get("rewards", [])}
 
 SYSTEM_PROMPT = """You are the EnvironmentDesigner for Hypermage — a creative AI that designs
@@ -59,38 +64,106 @@ Design principles:
 - Always include at least 2 narrative_states (an initial state and at least one transition target)
 - GM hooks must match transition trigger_hook_ids exactly
 - reward_id values MUST come from the valid rewards catalog (use get_available_rewards() first)
+- If the user mentions commissioned artwork or uploaded assets, call get_available_assets() and
+  reference matching assets in asset_sources[] and zone asset_references[]
 
 When given a description:
 1. Call get_available_rewards() to know which reward IDs are valid
-2. Reason through the scene design — zones, atmosphere, narrative arc, GM hooks
-3. Generate the complete ScenePlan JSON
-4. Call validate_scene_plan(scene_plan_json) to check it
-5. Fix any validation errors and re-validate
-6. Call save_scene_plan(scene_plan_json) to persist to S3
-7. Return the final ScenePlan JSON with the S3 URI"""
+2. Call get_available_assets() to see commissioned/uploaded assets in the catalogue
+3. Reason through the scene design — zones, atmosphere, narrative arc, GM hooks
+4. Generate the complete ScenePlan JSON
+   - If catalogue assets match the scene theme, include them in asset_sources[]
+   - Reference their S3 URI in zone asset_references[] for the zone they belong in
+5. Call validate_scene_plan(scene_plan_json) to check it
+6. Fix any validation errors and re-validate
+7. Call save_scene_plan(scene_plan_json) to persist to S3
+8. Return the final ScenePlan JSON with the S3 URI"""
 
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
 
 @tool
 def get_available_rewards() -> str:
-    """Return all valid reward IDs from the rewards catalog. Always call this before assigning reward_id values to objectives."""
+    """Return all valid reward IDs from the rewards catalog.
+    Always call this before assigning reward_id values to objectives."""
     rewards = [
         {"id": r["id"], "name": r["name"], "description": r["description"], "category": r["category"]}
         for r in _catalog_data.get("rewards", [])
     ]
     return json.dumps({
         "status": "ok",
-        "count": len(rewards),
+        "count":  len(rewards),
         "rewards": rewards,
-        "note": "Only use reward IDs from this list in ScenePlan objectives."
+        "note":   "Only use reward IDs from this list in ScenePlan objectives.",
     })
 
 
 @tool
+def get_available_assets(asset_type: str = "", tag: str = "") -> str:
+    """Query the DynamoDB asset catalogue for ready assets.
+    Optional filters:
+      asset_type: mesh | texture | audio | concept_art | animation | material
+      tag:        free-text tag for partial name/tag match
+    Returns ready assets with their S3 URIs for use in ScenePlan asset_sources[].
+    Call this before designing zones so you know what commissioned assets are available."""
+    try:
+        dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
+        table    = dynamodb.Table(ASSET_CATALOGUE_TABLE)
+
+        if asset_type:
+            resp = table.query(
+                IndexName="AssetTypeIndex",
+                KeyConditionExpression=boto3.dynamodb.conditions.Key("assetType").eq(asset_type),
+            )
+        else:
+            resp = table.scan()
+
+        items = [i for i in resp.get("Items", []) if i.get("status") == "ready"]
+
+        if tag:
+            tag_lower = tag.lower()
+            items = [
+                i for i in items
+                if any(tag_lower in t.lower() for t in i.get("tags", []))
+                or tag_lower in i.get("assetName", "").lower()
+            ]
+
+        # Return a clean summary suitable for prompt context
+        assets = []
+        for item in items:
+            outputs = item.get("outputs", {})
+            assets.append({
+                "assetId":   item.get("assetId"),
+                "assetName": item.get("assetName", item.get("filename", "unnamed")),
+                "assetType": item.get("assetType"),
+                "tier":      item.get("tier"),
+                "tags":      item.get("tags", []),
+                "s3Uri":     item.get("s3Uri") or outputs.get("glb") or outputs.get("webp") or "",
+                "outputs":   outputs,
+                "provenance": {
+                    "origin":  item.get("provenance", {}).get("origin"),
+                    "license": item.get("provenance", {}).get("license"),
+                },
+            })
+
+        return json.dumps({
+            "status": "ok",
+            "count":  len(assets),
+            "assets": assets,
+            "note":   (
+                "Use s3Uri in asset_sources[].s3_uri. "
+                "Reference assetId in zone asset_references[] to place in specific zones."
+            ),
+        }, default=str)
+
+    except Exception as exc:
+        return json.dumps({"status": "error", "error": str(exc), "assets": []})
+
+
+@tool
 def validate_scene_plan(scene_plan_json: str) -> str:
-    """Validate a ScenePlan JSON string against the ScenePlan schema. Returns validation errors or confirms validity.
-    Fix all errors before calling save_scene_plan."""
+    """Validate a ScenePlan JSON string against the ScenePlan schema.
+    Returns validation errors or confirms validity. Fix all errors before calling save_scene_plan."""
     try:
         plan = json.loads(scene_plan_json)
     except json.JSONDecodeError as e:
@@ -106,48 +179,54 @@ def validate_scene_plan(scene_plan_json: str) -> str:
         return json.dumps({"valid": False, "error_count": len(errors), "errors": errors})
 
     # Cross-reference checks beyond JSON schema
-    warnings = []
-    state_ids = {s["id"] for s in plan.get("narrative_states", [])}
-    hook_ids = {h["id"] for h in plan.get("gm_hooks", [])}
-    zone_ids = {z["id"] for z in plan.get("zones", [])}
+    warnings   = []
+    state_ids  = {s["id"] for s in plan.get("narrative_states", [])}
+    hook_ids   = {h["id"] for h in plan.get("gm_hooks", [])}
+    zone_ids   = {z["id"] for z in plan.get("zones", [])}
     initial_states = [s for s in plan.get("narrative_states", []) if s.get("is_initial")]
 
     if len(initial_states) != 1:
-        errors.append({"path": "narrative_states", "message": f"Exactly one narrative state must have is_initial=true, found {len(initial_states)}"})
+        errors.append({"path": "narrative_states",
+                       "message": f"Exactly one narrative state must have is_initial=true, found {len(initial_states)}"})
 
     initial_state_ref = plan.get("narrative_context", {}).get("initial_state")
     if initial_state_ref and initial_state_ref not in state_ids:
-        errors.append({"path": "narrative_context.initial_state", "message": f"'{initial_state_ref}' not found in narrative_states"})
+        errors.append({"path": "narrative_context.initial_state",
+                       "message": f"'{initial_state_ref}' not found in narrative_states"})
 
     for state in plan.get("narrative_states", []):
         for t in state.get("transitions", []):
             if t.get("trigger_hook_id") not in hook_ids:
-                errors.append({"path": f"narrative_states[{state['id']}].transitions", "message": f"hook '{t.get('trigger_hook_id')}' not found in gm_hooks"})
+                errors.append({"path": f"narrative_states[{state['id']}].transitions",
+                               "message": f"hook '{t.get('trigger_hook_id')}' not found in gm_hooks"})
             if t.get("next_state_id") not in state_ids:
-                errors.append({"path": f"narrative_states[{state['id']}].transitions", "message": f"next_state '{t.get('next_state_id')}' not found in narrative_states"})
+                errors.append({"path": f"narrative_states[{state['id']}].transitions",
+                               "message": f"next_state '{t.get('next_state_id')}' not found in narrative_states"})
 
     for obj in plan.get("objectives", []):
         if "reward_id" in obj and obj["reward_id"] not in VALID_REWARD_IDS:
-            warnings.append(f"objective '{obj['id']}' uses reward_id '{obj['reward_id']}' which is not in the catalog")
+            warnings.append(f"objective '{obj['id']}' uses reward_id '{obj['reward_id']}' not in catalog")
         if "zone_id" in obj and obj["zone_id"] not in zone_ids:
             warnings.append(f"objective '{obj['id']}' references zone '{obj['zone_id']}' which doesn't exist")
         if "triggers_hook" in obj and obj["triggers_hook"] not in hook_ids:
-            errors.append({"path": f"objectives[{obj['id']}]", "message": f"triggers_hook '{obj['triggers_hook']}' not found in gm_hooks"})
+            errors.append({"path": f"objectives[{obj['id']}]",
+                           "message": f"triggers_hook '{obj['triggers_hook']}' not found in gm_hooks"})
 
     if errors:
         return json.dumps({"valid": False, "error_count": len(errors), "errors": errors, "warnings": warnings})
 
     return json.dumps({
-        "valid": True,
-        "scene_id": plan.get("id"),
-        "scene_name": plan.get("name"),
-        "zone_count": len(plan.get("zones", [])),
+        "valid":           True,
+        "scene_id":        plan.get("id"),
+        "scene_name":      plan.get("name"),
+        "zone_count":      len(plan.get("zones", [])),
         "objective_count": len(plan.get("objectives", [])),
-        "state_count": len(plan.get("narrative_states", [])),
-        "hook_count": len(plan.get("gm_hooks", [])),
-        "platforms": plan.get("platforms", []),
-        "warnings": warnings,
-        "message": "ScenePlan is valid and ready to save."
+        "state_count":     len(plan.get("narrative_states", [])),
+        "hook_count":      len(plan.get("gm_hooks", [])),
+        "asset_sources":   len(plan.get("asset_sources", [])),
+        "platforms":       plan.get("platforms", []),
+        "warnings":        warnings,
+        "message":         "ScenePlan is valid and ready to save.",
     })
 
 
@@ -160,94 +239,86 @@ def save_scene_plan(scene_plan_json: str) -> str:
     except json.JSONDecodeError as e:
         return json.dumps({"status": "error", "message": f"Invalid JSON: {e}"})
 
-    scene_id = plan.get("id") or str(uuid.uuid4())
+    scene_id   = plan.get("id") or str(uuid.uuid4())
     plan["id"] = scene_id
-
-    s3_key = f"{S3_PREFIX}/{scene_id}/scene_plan.json"
-    s3_uri = f"s3://{S3_BUCKET}/{s3_key}"
+    s3_key     = f"{S3_PREFIX}/{scene_id}/scene_plan.json"
+    s3_uri     = f"s3://{S3_BUCKET}/{s3_key}"
 
     try:
-        s3 = boto3.client("s3", region_name="eu-west-1")
+        s3 = boto3.client("s3", region_name=AWS_REGION)
         s3.put_object(
             Bucket=S3_BUCKET,
             Key=s3_key,
             Body=json.dumps(plan, indent=2).encode("utf-8"),
             ContentType="application/json",
             Metadata={
-                "scene-name": plan.get("name", "unnamed")[:255],
-                "scene-type": plan.get("scene_type", "unknown"),
-                "platforms": ",".join(plan.get("platforms", [])),
-                "created-at": datetime.now(timezone.utc).isoformat(),
+                "scene-name":    plan.get("name", "unnamed")[:255],
+                "scene-type":    plan.get("scene_type", "unknown"),
+                "platforms":     ",".join(plan.get("platforms", [])),
+                "created-at":    datetime.now(timezone.utc).isoformat(),
+                "asset-sources": str(len(plan.get("asset_sources", []))),
             }
         )
     except Exception as e:
         return json.dumps({"status": "error", "message": f"S3 save failed: {e}"})
 
     return json.dumps({
-        "status": "saved",
-        "scene_id": scene_id,
-        "scene_name": plan.get("name"),
-        "s3_uri": s3_uri,
-        "s3_key": s3_key,
-        "platforms": plan.get("platforms", []),
-        "zones": len(plan.get("zones", [])),
-        "gm_hooks": [h["id"] for h in plan.get("gm_hooks", [])],
+        "status":           "saved",
+        "scene_id":         scene_id,
+        "scene_name":       plan.get("name"),
+        "s3_uri":           s3_uri,
+        "s3_key":           s3_key,
+        "platforms":        plan.get("platforms", []),
+        "zones":            len(plan.get("zones", [])),
+        "asset_sources":    len(plan.get("asset_sources", [])),
+        "gm_hooks":         [h["id"] for h in plan.get("gm_hooks", [])],
         "narrative_states": [s["id"] for s in plan.get("narrative_states", [])],
-        "message": f"ScenePlan saved. Ready for UnrealLevelBuilder (VR) and/or WebPlatformAgent (web)."
+        "message":          "ScenePlan saved. Ready for UnrealLevelBuilder (VR) and/or WebPlatformAgent (web).",
     })
 
 
 @tool
 def place_narrative_hooks(scene_plan_json: str) -> str:
     """Review a ScenePlan and enrich its GM hooks with suggested effects based on zones, objectives,
-    and narrative states. Returns an enriched scene plan JSON with more detailed hook effects.
+    and narrative states. Returns hook analysis with suggestions.
     Use this to improve a draft plan before validating and saving."""
     try:
         plan = json.loads(scene_plan_json)
     except json.JSONDecodeError as e:
         return json.dumps({"status": "error", "message": f"Invalid JSON: {e}"})
 
-    scene_type = plan.get("scene_type", "exploration")
-    zones = plan.get("zones", [])
-    states = plan.get("narrative_states", [])
-    hooks = plan.get("gm_hooks", [])
+    hooks      = plan.get("gm_hooks", [])
+    states     = plan.get("narrative_states", [])
     objectives = plan.get("objectives", [])
-
     suggestions = []
 
     for hook in hooks:
-        existing_effects = hook.get("effects", [])
         hook_id = hook["id"]
-
-        # Find objectives that trigger this hook
-        triggering_objectives = [o["description"] for o in objectives if o.get("triggers_hook") == hook_id]
-
-        # Find state transitions that use this hook
-        triggering_transitions = []
-        for state in states:
-            for t in state.get("transitions", []):
-                if t.get("trigger_hook_id") == hook_id:
-                    triggering_transitions.append(f"{state['id']} → {t['next_state_id']}")
-
+        triggering_objectives  = [o["description"] for o in objectives if o.get("triggers_hook") == hook_id]
+        triggering_transitions = [
+            f"{s['id']} → {t['next_state_id']}"
+            for s in states for t in s.get("transitions", [])
+            if t.get("trigger_hook_id") == hook_id
+        ]
         suggestions.append({
-            "hook_id": hook_id,
-            "hook_name": hook.get("name"),
-            "current_effects": existing_effects,
-            "triggered_by_objectives": triggering_objectives,
+            "hook_id":                   hook_id,
+            "hook_name":                 hook.get("name"),
+            "current_effects":           hook.get("effects", []),
+            "triggered_by_objectives":   triggering_objectives,
             "triggers_state_transitions": triggering_transitions,
             "suggestion": (
                 f"Hook '{hook['name']}' fires when: {', '.join(triggering_objectives) or 'GM manual trigger'}. "
-                f"{'Causes state transition: ' + ', '.join(triggering_transitions) + '. ' if triggering_transitions else ''}"
-                f"Consider adding effects: atmosphere change, audio cue, VFX change, door/barrier state, participant notification."
-            )
+                + (f"Causes state transition: {', '.join(triggering_transitions)}. " if triggering_transitions else "")
+                + "Consider adding effects: atmosphere change, audio cue, VFX change, door/barrier state, participant notification."
+            ),
         })
 
     return json.dumps({
-        "status": "ok",
-        "scene_type": scene_type,
-        "hook_count": len(hooks),
+        "status":      "ok",
+        "scene_type":  plan.get("scene_type", "exploration"),
+        "hook_count":  len(hooks),
         "hook_analysis": suggestions,
-        "note": "Review suggestions and update gm_hooks[].effects in your ScenePlan before saving."
+        "note":        "Review suggestions and update gm_hooks[].effects in your ScenePlan before saving.",
     })
 
 
@@ -259,7 +330,8 @@ async def invoke(payload, context):
     model = BedrockModel(model_id=MODEL_ID)
     agent = Agent(
         model=model,
-        tools=[get_available_rewards, validate_scene_plan, save_scene_plan, place_narrative_hooks],
+        tools=[get_available_rewards, get_available_assets,
+               validate_scene_plan, save_scene_plan, place_narrative_hooks],
         system_prompt=SYSTEM_PROMPT,
     )
     prompt = payload.get("prompt", "")
