@@ -177,10 +177,28 @@ responding to live GM direction, with commissioned art and original audio.
 
 ---
 
-### Phase 11 — LARP Integration Layer
-> **Goal:** GM fires an event on their phone, all participants (VR + web) see the scene change within 2 seconds.
-> **Done when:** Full GM → digital world event loop demonstrated live.
+### Phase 11 — LARP Integration Layer + Web/Phone Playable
+> **Goal:** GM fires an event on their phone, all participants (VR + web + phone) see and hear the scene change within 2 seconds.
+> **Done when:** Full GM → digital world event loop demonstrated live; web scene is playable on a phone browser with audio and commissioned assets visible.
 
+#### 11a — Web/Phone Playable (WebPlatformAgent upgrade)
+- [ ] Audio wired into Babylon.js HTML
+  - [ ] Load ambient + score MP3 from Phase 8 S3 URIs via Web Audio API
+  - [ ] Autoplay policy handled (resume AudioContext on first user gesture)
+  - [ ] Spatial SFX at zone positions using Babylon.js `Sound` with spatial attenuation
+- [ ] glTF assets loaded from Phase 7 asset catalogue
+  - [ ] `WebPlatformAgent.generate_web_scene` queries `AssetPipelineAgent.query_asset_catalogue` for scene assets
+  - [ ] `SceneLoader.ImportMesh` for each `asset_sources[]` glTF entry, placed at zone bounds centre
+  - [ ] Fallback to primitive blockout if glTF unavailable
+- [ ] Mobile / phone playability
+  - [ ] Virtual joystick overlay (left thumb: move, right thumb: look) using Babylon.js `VirtualJoystick`
+  - [ ] Tap-to-interact: raycast on tap → triggers `narrative_event` WebSocket message for tappable zone objects
+  - [ ] PWA manifest (`manifest.json` + service worker stub) so scene URL is installable on phone home screen
+- [ ] Cognito-gated access (optional per scene)
+  - [ ] Scene HTML checks for `?token=` query param; validates against Cognito JWKS before rendering
+  - [ ] Unauthenticated scenes render normally (public LARP events)
+
+#### 11b — LARP Integration Layer (NarrativeAgent + GM panel)
 - [ ] NarrativeAgent: narrative state machine implementation
   - [ ] Scene states and transitions defined in ScenePlan
   - [ ] `advance_scene(hook_name)` — fires transition, updates DynamoDB state
@@ -188,12 +206,12 @@ responding to live GM direction, with commissioned art and original audio.
 - [ ] GM control panel (S3-hosted web page, Cognito-gated)
   - [ ] Current narrative state display
   - [ ] Hook buttons (fire any defined `gm_hook`)
-  - [ ] Connected participant count (VR + web)
+  - [ ] Connected participant count (VR + web + phone)
 - [ ] LARPIntegrationAgent: external event API
   - [ ] `POST /gm/event` endpoint (API Gateway) — accepts signed events from physical props, external LARP software, or GM app
   - [ ] WebSocket push to all connected clients on event
 - [ ] Deploy NarrativeAgent and LARPIntegrationAgent to AgentCore
-- [ ] End-to-end test: GM fires hook → web client receives narrative state change in <2s
+- [ ] End-to-end test: GM fires hook → web/phone client receives narrative state change + audio cue in <2s
 
 ---
 
