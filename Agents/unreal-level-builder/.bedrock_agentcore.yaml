@@ -30,8 +30,8 @@ agents:
         idle_runtime_session_timeout: null
         max_lifetime: null
     bedrock_agentcore:
-      agent_id: null
-      agent_arn: null
+      agent_id: UnrealLevelBuilder_Agent-rFwJdR9uPr
+      agent_arn: arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/UnrealLevelBuilder_Agent-rFwJdR9uPr
       agent_session_id: null
     codebuild:
       project_name: bedrock-agentcore-unreallevelbuilder_agent-builder

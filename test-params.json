@@ -1,0 +1,1 @@
+{"commands":["git clone --depth 1 https://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@github.com/edallison777/hypermage_vr.git /tmp/test-clone 2>&1; echo EXIT:$?"]}

@@ -1,0 +1,1 @@
+{"commands":["aws s3 cp /opt/GameLiftSDK/GameLiftServerSDK/Source/GameLiftServerSDK/Public/GameLiftServerSDK.h s3://hypermage-vr-unreal-build-artifacts-dev/builds/latest/GameLiftServerSDK.h --region eu-west-1 && echo DONE"], "executionTimeout":["30"]}

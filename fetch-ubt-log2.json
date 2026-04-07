@@ -1,0 +1,1 @@
+{"commands":["aws s3 cp \"/home/ec2-user/Library/Logs/Unreal Engine/LocalBuildLogs/UBT-.txt\" s3://hypermage-vr-unreal-build-artifacts-dev/builds/latest/UBT-log.txt --region eu-west-1 && echo UPLOADED"], "executionTimeout":["60"]}

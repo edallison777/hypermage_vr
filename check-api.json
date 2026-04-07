@@ -1,0 +1,1 @@
+{"commands":["grep -A 30 'struct FProcessParameters' /opt/GameLiftSDK/GameLiftServerSDK/Source/GameLiftServerSDK/Public/GameLiftServerSDK.h 2>/dev/null | head -35; echo ---FGAMELIFT_ERROR---; grep -B2 -A5 'class FGameLiftError' /opt/GameLiftSDK/GameLiftServerSDK/Source/GameLiftServerSDK/Public/GameLiftServerSDK.h 2>/dev/null | head -20"], "executionTimeout":["30"]}

@@ -276,6 +276,36 @@ output "unreal_bridge_ssm_path" {
   value       = module.unreal_bridge.bridge_url_ssm_path
 }
 
+# Web Platform Module (Phase 10)
+# S3 static site + CloudFront + DynamoDB scene catalogue
+# + API Gateway WebSocket API for participant presence.
+# All serverless — zero idle compute cost.
+module "web_platform" {
+  source = "../../modules/web-platform"
+
+  project_name       = var.project_name
+  environment        = "dev"
+  aws_region         = var.aws_region
+  log_retention_days = 14
+
+  tags = { CostCenter = "Development", Owner = "DevOps Team" }
+}
+
+output "web_platform_cloudfront_domain" {
+  description = "CloudFront domain for web scenes (Phase 10)"
+  value       = module.web_platform.cloudfront_domain
+}
+
+output "web_platform_ws_url" {
+  description = "WebSocket API URL for participant presence (Phase 10)"
+  value       = module.web_platform.ws_invoke_url
+}
+
+output "web_platform_bucket" {
+  description = "S3 bucket name for web scene HTML files (Phase 10)"
+  value       = module.web_platform.web_scenes_bucket_name
+}
+
 # Outputs
 
 output "build_s3_bucket" {

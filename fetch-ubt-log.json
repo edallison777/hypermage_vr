@@ -1,0 +1,1 @@
+{"commands":["find /home/ec2-user -name 'UBT-*.txt' 2>/dev/null | head -5; find /root -name 'UBT-*.txt' 2>/dev/null | head -5; ls /home/ec2-user/Library/Logs/UnrealEngine/LocalBuildLogs/ 2>/dev/null | head -10"], "executionTimeout":["30"]}
