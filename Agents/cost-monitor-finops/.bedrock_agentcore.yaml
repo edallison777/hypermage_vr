@@ -30,8 +30,8 @@ agents:
         idle_runtime_session_timeout: null
         max_lifetime: null
     bedrock_agentcore:
-      agent_id: null
-      agent_arn: null
+      agent_id: CostMonitorFinOps_Agent-gI5m1PA2US
+      agent_arn: arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/CostMonitorFinOps_Agent-gI5m1PA2US
       agent_session_id: null
     codebuild:
       project_name: bedrock-agentcore-costmonitorfinops_agent-builder

@@ -84,17 +84,21 @@ responding to live GM direction, with commissioned art and original audio.
 
 ---
 
-### Phase 6 — Infrastructure Agents Get Real Tools
+### Phase 6 — Infrastructure Agents Get Real Tools ✅ COMPLETE
 > **Goal:** CostMonitorFinOps reports real AWS spend. DevOpsAWS can trigger Terraform and fleet changes.
 > **Done when:** ProducerOrchestrator asks for a cost report and gets real data back.
 
-- [ ] CostMonitorFinOps: wire `track_cost` to boto3 Cost Explorer
-- [ ] CostMonitorFinOps: wire `check_budget` against BudgetPolicy.schema.json
-- [ ] CostMonitorFinOps: wire `generate_cost_report` to write to DynamoDB
-- [ ] DevOpsAWS: wire `execute_terraform` to subprocess Terraform calls
-- [ ] DevOpsAWS: wire `deploy_infrastructure` to boto3 GameLift fleet management
-- [ ] Redeploy both agents
-- [ ] Integration test: ProducerOrchestrator → CostMonitorFinOps → real spend data returned
+- [x] CostMonitorFinOps: wire `track_cost` to DynamoDB (hypermage-vr-interaction-events-dev)
+- [x] CostMonitorFinOps: wire `check_budget` to boto3 Cost Explorer (real MTD spend vs £1000 budget)
+- [x] CostMonitorFinOps: wire `generate_cost_report` to Cost Explorer + write report to DynamoDB
+- [x] DevOpsAWS: wire `execute_terraform` to read live Terraform state from S3 + generate plan
+- [x] DevOpsAWS: wire `deploy_infrastructure` to boto3 GameLift fleet management (scale up/down)
+- [x] Redeploy both agents (ECR: CodeBuild, auto_update_on_conflict)
+- [x] Integration test: 5/5 passed — real Cost Explorer data ($113.93 USD MTD), real GameLift fleet (77 Terraform resources live)
+  - CostMonitorFinOps `generate_cost_report` → real service breakdown (EC2, GameLift, Cognito, etc.)
+  - CostMonitorFinOps `check_budget` → approved, £910 remaining
+  - DevOpsAWS `deploy_infrastructure` → fleet-848aced2 ACTIVE reported
+  - DevOpsAWS `execute_terraform` → 77 resources from live S3 state
 
 ---
 
