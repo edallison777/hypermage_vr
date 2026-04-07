@@ -61,7 +61,7 @@ responding to live GM direction, with commissioned art and original audio.
 
 ## Active & Upcoming Phases
 
-### Phase 5 — First Real Pipeline: Text → ScenePlan
+### Phase 5 — First Real Pipeline: Text → ScenePlan ✅ COMPLETE
 > **Goal:** Type a description, get a valid ScenePlan.json in S3.
 > **Done when:** `python invoke.py "a neon-lit cyberspace node for a cyberpunk LARP"` → valid ScenePlan.json saved to S3.
 
@@ -76,13 +76,11 @@ responding to live GM direction, with commissioned art and original audio.
 - [x] Update ProducerOrchestrator decompose_specification to request ScenePlan (not LevelPlan)
 - [x] Redeploy ProducerOrchestrator (ECR: 20260406-211729-331)
 - [x] Build CLI entry point (`scripts/invoke.py`) — calls EnvironmentDesigner directly, extracts + displays ScenePlan
-- [-] End-to-end test: description in → ScenePlan.json out ← **IN PROGRESS / RESUME HERE**
-
-**Notes for resume:**
-- Run: `PYTHONIOENCODING=utf-8 /c/Python312/python.exe scripts/invoke.py "description" --type cyberspace --platforms vr web`
-- Python to use: `/c/Python312/python.exe` (has bedrock-agentcore-starter-toolkit in user site-packages at AppData\Roaming\Python\Python312)
-- boto3 response key is `response` (not `body`) — already fixed in both invoke.py and producer-orchestrator/src/main.py
-- Read timeout must be 300s — already set in invoke.py
+- [x] End-to-end test: description in → ScenePlan.json out ✅
+  - `python invoke.py "a neon-lit cyberspace node for a cyberpunk LARP" --type cyberspace --platforms vr web`
+  - Produced "DataVault Node Alpha": 4 zones, 4 GM hooks, 3 narrative states, vr + web
+  - Saved to `s3://hypermage-vr-unreal-build-artifacts-dev/scene-plans/cyberspace_node_alpha/scene_plan.json`
+  - Fix applied: added `S3ScenePlanWritePolicy` to AgentCore runtime role `AmazonBedrockAgentCoreSDKRuntime-eu-west-1-81c578ca1b`
 
 ---
 
