@@ -4,6 +4,11 @@
 #include "Misc/DateTime.h"
 
 // OpenSSL — linked via AddEngineThirdPartyPrivateStaticDependencies(Target, "OpenSSL")
+// UE5 forward-declares 'UI' as a class; OpenSSL's ossl_typ.h redefines it as a struct.
+// Undefine before including OpenSSL headers to avoid the redefinition error.
+#ifdef UI
+#undef UI
+#endif
 THIRD_PARTY_INCLUDES_START
 #include <openssl/hmac.h>
 #include <openssl/sha.h>
@@ -89,7 +94,7 @@ bool FAwsSigV4::SignRequest(
 	{
 		// Strip scheme
 		int32 SchemeEnd = INDEX_NONE;
-		Url.FindString(TEXT("://"), &SchemeEnd);
+		Url.Find(TEXT("://"), ESearchCase::CaseSensitive, ESearchDir::FromStart, SchemeEnd);
 		FString AfterScheme = (SchemeEnd != INDEX_NONE) ? Url.Mid(SchemeEnd + 3) : Url;
 		int32 SlashPos = AfterScheme.Find(TEXT("/"));
 		Host         = (SlashPos != INDEX_NONE) ? AfterScheme.Left(SlashPos) : AfterScheme;
