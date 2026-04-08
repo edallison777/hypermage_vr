@@ -142,6 +142,12 @@ variable "tags" {
   default     = {}
 }
 
+variable "session_api_execution_arn" {
+  description = "API Gateway execution ARN for the Session API (grants fleet role execute-api:Invoke)"
+  type        = string
+  default     = ""
+}
+
 # Auto-scaling variables
 variable "enable_auto_scaling" {
   description = "Enable auto-scaling for the fleet"

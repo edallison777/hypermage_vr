@@ -7,6 +7,14 @@
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
 #include "GameLiftServerSDK.h"
+#include "HttpModule.h"
+#include "Interfaces/IHttpRequest.h"
+#include "Interfaces/IHttpResponse.h"
+#include "Dom/JsonObject.h"
+#include "Dom/JsonValue.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonWriter.h"
 
 void UHMVRGameInstance::Init()
 {
@@ -144,23 +152,171 @@ void UHMVRGameInstance::StartMatchmaking()
 		return;
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Starting matchmaking"));
+	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Starting matchmaking via Session API"));
 
-	// TODO: Call Session API to start matchmaking
-	// POST /matchmaking/start with JWT token
-	// Store matchmaking ticket ID
-	// Poll for matchmaking status
+	FString RequestPlayerId = PlayerId.IsEmpty() ? FGuid::NewGuid().ToString() : PlayerId;
 
-	// Mock matchmaking for development
-	MatchmakingTicketId = FGuid::NewGuid().ToString();
-	
-	// Simulate matchmaking success after delay
-	FTimerHandle MatchmakingTimerHandle;
-	GetWorld()->GetTimerManager().SetTimer(MatchmakingTimerHandle, [this]()
+	// Build JSON body: { "playerId": "...", "playerAttributes": { "skill": 10, "region": "eu-west-1" } }
+	TSharedRef<FJsonObject> RequestBody = MakeShared<FJsonObject>();
+	RequestBody->SetStringField(TEXT("playerId"), RequestPlayerId);
+
+	TSharedRef<FJsonObject> Attributes = MakeShared<FJsonObject>();
+	Attributes->SetNumberField(TEXT("skill"), 10.0);
+	Attributes->SetStringField(TEXT("region"), TEXT("eu-west-1"));
+	RequestBody->SetObjectField(TEXT("playerAttributes"), Attributes);
+
+	FString BodyString;
+	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&BodyString);
+	FJsonSerializer::Serialize(RequestBody, Writer);
+
+	// POST /matchmaking/start with Cognito JWT as Authorization header
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = FHttpModule::Get().CreateRequest();
+	HttpRequest->SetURL(SessionApiBaseUrl + TEXT("/matchmaking/start"));
+	HttpRequest->SetVerb(TEXT("POST"));
+	HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
+	HttpRequest->SetHeader(TEXT("Authorization"), JWTToken);
+	HttpRequest->SetContentAsString(BodyString);
+	HttpRequest->OnProcessRequestComplete().BindUObject(this, &UHMVRGameInstance::OnStartMatchmakingResponse);
+	HttpRequest->ProcessRequest();
+}
+
+void UHMVRGameInstance::OnStartMatchmakingResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully)
+{
+	if (!bConnectedSuccessfully || !Response.IsValid())
 	{
-		// Mock server connection details
-		OnMatchmakingSuccess(TEXT("127.0.0.1"), 7777, FGuid::NewGuid().ToString());
-	}, 3.0f, false);
+		OnMatchmakingFailure(TEXT("Session API unreachable"));
+		return;
+	}
+
+	if (Response->GetResponseCode() != 200)
+	{
+		OnMatchmakingFailure(FString::Printf(TEXT("Matchmaking start failed: HTTP %d — %s"),
+			Response->GetResponseCode(), *Response->GetContentAsString()));
+		return;
+	}
+
+	TSharedPtr<FJsonObject> JsonObject;
+	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Response->GetContentAsString());
+	if (!FJsonSerializer::Deserialize(Reader, JsonObject) || !JsonObject.IsValid())
+	{
+		OnMatchmakingFailure(TEXT("Failed to parse matchmaking start response"));
+		return;
+	}
+
+	MatchmakingTicketId = JsonObject->GetStringField(TEXT("ticketId"));
+	MatchmakingPollAttempt = 0;
+	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Matchmaking started, ticket: %s"), *MatchmakingTicketId);
+
+	// Begin polling every 3 seconds for match completion
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			MatchmakingPollTimerHandle,
+			this,
+			&UHMVRGameInstance::PollMatchmakingStatus,
+			3.0f,
+			true,
+			3.0f
+		);
+	}
+}
+
+void UHMVRGameInstance::PollMatchmakingStatus()
+{
+	if (MatchmakingTicketId.IsEmpty())
+	{
+		return;
+	}
+
+	if (MatchmakingPollAttempt >= MaxMatchmakingPollAttempts)
+	{
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(MatchmakingPollTimerHandle);
+		}
+		OnMatchmakingFailure(TEXT("Matchmaking timed out after 2 minutes"));
+		return;
+	}
+
+	++MatchmakingPollAttempt;
+
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = FHttpModule::Get().CreateRequest();
+	HttpRequest->SetURL(FString::Printf(TEXT("%s/matchmaking/status/%s"), *SessionApiBaseUrl, *MatchmakingTicketId));
+	HttpRequest->SetVerb(TEXT("GET"));
+	HttpRequest->SetHeader(TEXT("Authorization"), JWTToken);
+	HttpRequest->OnProcessRequestComplete().BindUObject(this, &UHMVRGameInstance::OnMatchmakingStatusResponse);
+	HttpRequest->ProcessRequest();
+}
+
+void UHMVRGameInstance::OnMatchmakingStatusResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully)
+{
+	// Non-200 responses are non-fatal — keep polling on next timer tick
+	if (!bConnectedSuccessfully || !Response.IsValid() || Response->GetResponseCode() != 200)
+	{
+		return;
+	}
+
+	TSharedPtr<FJsonObject> JsonObject;
+	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Response->GetContentAsString());
+	if (!FJsonSerializer::Deserialize(Reader, JsonObject) || !JsonObject.IsValid())
+	{
+		return;
+	}
+
+	FString Status = JsonObject->GetStringField(TEXT("status"));
+	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Matchmaking status: %s (attempt %d/%d)"),
+		*Status, MatchmakingPollAttempt, MaxMatchmakingPollAttempts);
+
+	if (Status == TEXT("COMPLETED"))
+	{
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(MatchmakingPollTimerHandle);
+		}
+
+		const TSharedPtr<FJsonObject>* ConnectionInfoObj;
+		if (!JsonObject->TryGetObjectField(TEXT("gameSessionConnectionInfo"), ConnectionInfoObj))
+		{
+			OnMatchmakingFailure(TEXT("COMPLETED but no gameSessionConnectionInfo in response"));
+			return;
+		}
+
+		FString ServerAddress;
+		double PortDouble = 7777.0;
+		(*ConnectionInfoObj)->TryGetStringField(TEXT("ipAddress"), ServerAddress);
+		(*ConnectionInfoObj)->TryGetNumberField(TEXT("port"), PortDouble);
+		int32 Port = static_cast<int32>(PortDouble);
+
+		// Extract the player session ID assigned by FlexMatch for this player
+		const TArray<TSharedPtr<FJsonValue>>* PlayerSessionsArray;
+		if ((*ConnectionInfoObj)->TryGetArrayField(TEXT("matchedPlayerSessions"), PlayerSessionsArray)
+			&& PlayerSessionsArray->Num() > 0)
+		{
+			const TSharedPtr<FJsonObject>* FirstSession;
+			if ((*PlayerSessionsArray)[0]->TryGetObject(FirstSession))
+			{
+				FString NewPlayerSessionId;
+				(*FirstSession)->TryGetStringField(TEXT("playerSessionId"), NewPlayerSessionId);
+				if (!NewPlayerSessionId.IsEmpty())
+				{
+					SetPlayerSessionId(NewPlayerSessionId);
+				}
+			}
+		}
+
+		OnMatchmakingSuccess(ServerAddress, Port, PlayerSessionId);
+	}
+	else if (Status == TEXT("FAILED") || Status == TEXT("TIMED_OUT") || Status == TEXT("CANCELLED"))
+	{
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(MatchmakingPollTimerHandle);
+		}
+		FString Reason;
+		JsonObject->TryGetStringField(TEXT("statusReason"), Reason);
+		OnMatchmakingFailure(FString::Printf(TEXT("Matchmaking %s: %s"), *Status, *Reason));
+	}
+	// SEARCHING / PLACING / REQUIRES_ACCEPTANCE — keep polling via timer
 }
 
 void UHMVRGameInstance::CancelMatchmaking()
@@ -195,7 +351,7 @@ void UHMVRGameInstance::ConnectToGameServer(const FString& ServerAddress, int32 
 	
 	if (!PlayerSessionId.IsEmpty())
 	{
-		TravelURL += FString::Printf(TEXT("?PlayerSessionId=%s"), *PlayerSessionId);
+		TravelURL += FString::Printf(TEXT("&PlayerSessionId=%s"), *PlayerSessionId);
 	}
 
 	// Connect to server

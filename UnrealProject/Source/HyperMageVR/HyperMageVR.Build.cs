@@ -8,17 +8,18 @@ public class HyperMageVR : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
-		PublicDependencyModuleNames.AddRange(new string[] 
-		{ 
-			"Core", 
-			"CoreUObject", 
-			"Engine", 
+		PublicDependencyModuleNames.AddRange(new string[]
+		{
+			"Core",
+			"CoreUObject",
+			"Engine",
 			"InputCore",
 			"EnhancedInput",
 			"HeadMountedDisplay",
 			"OnlineSubsystem",
 			"OnlineSubsystemUtils",
-			"GameLiftServerSDK"
+			"GameLiftServerSDK",
+			"HTTP"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]
@@ -28,6 +29,9 @@ public class HyperMageVR : ModuleRules
 			"Json",
 			"JsonUtilities"
 		});
+
+		// OpenSSL — required by AwsSigV4 for HMAC-SHA256 signing of session-summary requests
+		AddEngineThirdPartyPrivateStaticDependencies(Target, "OpenSSL");
 
 		// VR-specific modules
 		if (Target.Platform == UnrealTargetPlatform.Android)

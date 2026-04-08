@@ -5,6 +5,7 @@
 #include "SessionManager.h"
 #include "RewardSystem.h"
 #include "SessionAPIClient.h"
+#include "HMVRPlayerState.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "Kismet/GameplayStatics.h"
@@ -18,6 +19,9 @@ AHMVRGameMode::AHMVRGameMode()
 {
 	// Set default pawn class
 	DefaultPawnClass = AVRPawn::StaticClass();
+
+	// Use our player state so PlayerId survives the full join/leave cycle
+	PlayerStateClass = AHMVRPlayerState::StaticClass();
 
 	// Server-only game mode
 	bUseSeamlessTravel = false;
@@ -41,6 +45,13 @@ void AHMVRGameMode::InitGame(const FString& MapName, const FString& Options, FSt
 	Super::InitGame(MapName, Options, ErrorMessage);
 
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Initializing game on map %s"), *MapName);
+
+	// Configure Session API client endpoint (hardcoded to live Session API)
+	if (SessionAPIClient)
+	{
+		SessionAPIClient->SetEndpointURL(TEXT("https://fhjoxyk9x5.execute-api.eu-west-1.amazonaws.com/dev"));
+		SessionAPIClient->SetAwsRegion(TEXT("eu-west-1"));
+	}
 
 	// Initialize reward system
 	if (RewardSystem && !RewardSystem->Initialize())
@@ -125,7 +136,22 @@ APlayerController* AHMVRGameMode::Login(UPlayer* NewPlayer, ENetRole InRemoteRol
 
 	if (NewPlayerController)
 	{
-		UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Player logged in successfully"));
+		// Extract PlayerId from JWT (already validated in PreLogin) and store on PlayerState
+		// so OnPlayerJoined/Left can retrieve it without re-parsing the token.
+		FString JWTToken = UGameplayStatics::ParseOption(Options, TEXT("Token"));
+		FJWTClaims Claims;
+		if (!JWTToken.IsEmpty() && UJWTValidator::DecodeToken(JWTToken, Claims) && !Claims.Subject.IsEmpty())
+		{
+			if (AHMVRPlayerState* PS = NewPlayerController->GetPlayerState<AHMVRPlayerState>())
+			{
+				PS->PlayerId = Claims.Subject;
+				UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Login — PlayerId set to %s"), *Claims.Subject);
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("HMVRGameMode: Login — could not decode PlayerId from JWT"));
+		}
 	}
 
 	return NewPlayerController;
@@ -363,8 +389,17 @@ void AHMVRGameMode::OnPlayerJoined(APlayerController* NewPlayer)
 		return;
 	}
 
-	// Extract player ID from JWT token (already validated in PreLogin)
-	FString PlayerId = FGuid::NewGuid().ToString(); // TODO: Extract from validated JWT
+	// Read PlayerId set in Login() from the JWT sub claim
+	FString PlayerId;
+	if (const AHMVRPlayerState* PS = NewPlayer->GetPlayerState<AHMVRPlayerState>())
+	{
+		PlayerId = PS->PlayerId;
+	}
+	if (PlayerId.IsEmpty())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("HMVRGameMode: OnPlayerJoined — PlayerId not on PlayerState, using fallback GUID"));
+		PlayerId = FGuid::NewGuid().ToString();
+	}
 
 	// Create player session (state: CREATED)
 	FPlayerSession PlayerSession = SessionManager->CreateSession(PlayerId, CurrentSessionId);
@@ -393,8 +428,21 @@ void AHMVRGameMode::OnPlayerLeft(AController* ExitingPlayer)
 		return;
 	}
 
-	// Find player session
-	FString PlayerId = FGuid::NewGuid().ToString(); // TODO: Extract from player state
+	// Read PlayerId from the PlayerState (set during Login from JWT sub claim)
+	FString PlayerId;
+	if (const APlayerController* PC = Cast<APlayerController>(ExitingPlayer))
+	{
+		if (const AHMVRPlayerState* PS = PC->GetPlayerState<AHMVRPlayerState>())
+		{
+			PlayerId = PS->PlayerId;
+		}
+	}
+	if (PlayerId.IsEmpty())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("HMVRGameMode: OnPlayerLeft — PlayerId not on PlayerState, cannot persist session"));
+		return;
+	}
+
 	FString* SessionIdPtr = PlayerToSessionMap.Find(PlayerId);
 	
 	if (SessionIdPtr)

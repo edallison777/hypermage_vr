@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Engine/GameInstance.h"
 #include "VoiceChatInterface.h"
+#include "Http.h"
 #include "HMVRGameInstance.generated.h"
 
 class FGameLiftServerSDKModule;
@@ -65,6 +66,11 @@ protected:
 	void OnMatchmakingSuccess(const FString& ServerAddress, int32 Port, const FString& SessionId);
 	void OnMatchmakingFailure(const FString& ErrorMessage);
 
+	// Matchmaking HTTP polling
+	void PollMatchmakingStatus();
+	void OnStartMatchmakingResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
+	void OnMatchmakingStatusResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
+
 	// Connection callbacks
 	void OnConnectionSuccess();
 	void OnConnectionFailure(const FString& ErrorMessage);
@@ -89,4 +95,12 @@ private:
 	FGameLiftServerSDKModule* GameLiftSdkModule = nullptr;
 	bool bGameLiftInitialized = false;
 	FString GameLiftSessionId;
+
+	// Matchmaking HTTP polling state
+	FTimerHandle MatchmakingPollTimerHandle;
+	int32 MatchmakingPollAttempt = 0;
+	static constexpr int32 MaxMatchmakingPollAttempts = 40; // 2 min at 3s intervals
+
+	// Session API base URL (POST /matchmaking/start, GET /matchmaking/status/{id})
+	const FString SessionApiBaseUrl = TEXT("https://fhjoxyk9x5.execute-api.eu-west-1.amazonaws.com/dev");
 };

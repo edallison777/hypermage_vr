@@ -15,6 +15,11 @@ output "api_arn" {
   value       = aws_api_gateway_rest_api.session_api.arn
 }
 
+output "api_execution_arn" {
+  description = "API Gateway execution ARN (used for IAM execute-api:Invoke policies)"
+  value       = aws_api_gateway_rest_api.session_api.execution_arn
+}
+
 output "start_matchmaking_function_name" {
   description = "Start matchmaking Lambda function name"
   value       = aws_lambda_function.start_matchmaking.function_name

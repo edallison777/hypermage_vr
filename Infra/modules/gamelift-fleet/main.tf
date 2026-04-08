@@ -86,6 +86,29 @@ resource "aws_iam_role_policy" "fleet_s3" {
   })
 }
 
+# IAM policy: allow fleet instances to invoke the Session API /session-summary endpoint
+resource "aws_iam_role_policy" "fleet_session_api" {
+  count = var.session_api_execution_arn != "" ? 1 : 0
+  name  = "session-api-invoke"
+  role  = aws_iam_role.fleet.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "execute-api:Invoke"
+        Resource = "${var.session_api_execution_arn}/${var.environment}/POST/session-summary"
+      },
+      {
+        Effect   = "Allow"
+        Action   = "execute-api:Invoke"
+        Resource = "${var.session_api_execution_arn}/${var.environment}/POST/interaction-events"
+      }
+    ]
+  })
+}
+
 # GameLift build resource is created by 03-deploy-gamelift.sh via AWS CLI
 # (aws gamelift create-build --server-sdk-version 5.4.0) because the Terraform
 # AWS provider does not yet support the server_sdk_version argument.

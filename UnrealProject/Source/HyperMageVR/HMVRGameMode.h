@@ -8,6 +8,7 @@
 #include "SessionManager.h"
 #include "RewardSystem.h"
 #include "SessionAPIClient.h"
+#include "HMVRPlayerState.h"
 #include "HMVRGameMode.generated.h"
 
 class FGameLiftServerSDKModule;

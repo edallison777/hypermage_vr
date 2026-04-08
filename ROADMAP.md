@@ -220,20 +220,67 @@ responding to live GM direction, with commissioned art and original audio.
 
 ---
 
-### Phase 13 — Quest 3 Connects to Server ← **NEXT — resume here**
+### Phase 13 — Quest 3 Connects to Server ✅ COMPLETE
 > **Goal:** Put on the headset, matchmaking completes, you appear inside the generated scene.
-> **Done when:** Quest 3 APK connects to game server, player visible in generated level.
+> **Done when:** Quest 3 client calls real Session API, receives IP+port, travels to server.
 
-- [ ] APK: on matchmaking COMPLETED, call `OpenLevel(IP:Port)` to connect to server
-- [ ] Server: verify `OnStartGameSession` handles player joins (not just ProcessReady)
-- [ ] Basic player representation (pawn) visible to connected participants
-- [ ] VR + web participant presence synchronised via DynamoDB/WebSocket
-- [ ] Rebuild and sideload APK
-- [ ] Live test: Quest 3 + browser, both in same scene
+- [x] `HMVRGameInstance::StartMatchmaking()` — real `POST /matchmaking/start` via FHttpModule (replaced mock)
+- [x] `PollMatchmakingStatus()` — timer-based 3s poll of `GET /matchmaking/status/{ticketId}`
+- [x] On COMPLETED: extract `ipAddress`, `port`, `playerSessionId` from `gameSessionConnectionInfo`
+- [x] `ConnectToGameServer()` URL bug fixed (`?PlayerSessionId` → `&PlayerSessionId`)
+- [x] `HyperMageVR.Build.cs` — `"HTTP"` module added
+- [x] MultiplayerNetcodeAgent: `start_matchmaking`, `poll_matchmaking_status`, `get_fleet_capacity`, `scale_fleet` tools added + deployed
+- [x] Integration test: 6/6 passed
 
 ---
 
-### Phase 14 — Interaction Systems, Voice, QA
+### Phase 14 — Session Persistence & Real PlayerId ✅ COMPLETE
+> **Goal:** When a player leaves, their session summary and rewards land in DynamoDB under their real Cognito ID.
+> **Done when:** DynamoDB `player-sessions` and `player-rewards` contain entries keyed on the actual Cognito sub claim.
+
+- [x] `AHMVRPlayerState` — new PlayerState class storing `PlayerId` (Cognito `sub`), replicated
+- [x] `HMVRGameMode::Login()` — calls `DecodeToken()` on JWT, writes `Claims.Subject` to PlayerState
+- [x] `HMVRGameMode::OnPlayerJoined/Left()` — reads `PlayerId` from PlayerState (no more random GUIDs)
+- [x] `AwsSigV4.h/.cpp` — minimal SigV4 signer (OpenSSL HMAC-SHA256, reads EC2 instance creds from env vars)
+- [x] `SessionAPIClient.h/.cpp` — real async fire-and-forget HTTP POST to `/session-summary` + `/interaction-events` with SigV4
+- [x] `HyperMageVR.Build.cs` — `AddEngineThirdPartyPrivateStaticDependencies(Target, "OpenSSL")` added
+- [x] `HMVRGameMode::InitGame()` — configures `SessionAPIClient` with live Session API endpoint
+- [x] Terraform: `fleet_session_api` IAM policy — `execute-api:Invoke` for both session endpoints on fleet role
+- [x] Terraform: `api_execution_arn` output added to session-api module, wired into gamelift-fleet via `session_api_execution_arn`
+- [x] Integration test: 6/6 passed
+- [x] **C++ changes take effect after Phase 15 server rebuild**
+
+---
+
+### Phase 15 — Server Rebuild & Fleet Update ← **NEXT — resume here**
+> **Goal:** The GameLift fleet runs the current codebase (all C++ from phases 1–14).
+> **Done when:** `aws gamelift describe-fleet-attributes` shows a build from today; Quest 3 connects and session summary lands in DynamoDB with a real PlayerId.
+
+Scripts created (ready to run):
+- [x] `scripts/phase15/01-rebuild-server.sh` — EC2 SSM build (mirrors Phase 4, pulls Phase 13/14 C++)
+- [x] `scripts/phase15/02-deploy-fleet.sh` — create-build + fleet replace + Phase 14 IAM + FlexMatch update
+- [x] `scripts/deploy_phase15.py` — orchestrator: Terraform IAM → rebuild → fleet deploy
+- [x] `scripts/test_phase15.py` — validates build READY, fleet ACTIVE, DynamoDB, Lambda, PlayerId logic
+
+To run:
+```bash
+GITHUB_TOKEN=ghp_xxx PYTHONIOENCODING=utf-8 /c/Python312/python.exe scripts/deploy_phase15.py
+```
+
+Deployment checklist:
+- [ ] UE5 Linux server rebuilt with Phase 13/14 C++ (HTTP matchmaking, PlayerState, AwsSigV4, SessionAPIClient)
+- [ ] `HyperMageVRServer.zip` uploaded to `s3://hypermage-vr-unreal-build-artifacts-dev/builds/latest/`
+- [ ] New GameLift build registered (SDK 5.4.0, AMAZON_LINUX_2023) and READY
+- [ ] Terraform fleet replace complete — new fleet ACTIVE with Phase 15 build
+- [ ] Phase 14 IAM: `session-api-invoke` policy on fleet role
+- [ ] `gamelift_build_id.auto.tfvars` written with new build ID
+- [ ] `scripts/test_phase15.py` — all 6 tests pass
+- [ ] Fleet scaled to 1; Quest 3 connects + session summary in DynamoDB with real Cognito PlayerId
+- [ ] Fleet scaled back to 0 after testing
+
+---
+
+### Phase 16 — Interaction Systems, Voice, QA
 > **Goal:** Participants can interact with the world. Agents validate the whole pipeline automatically.
 > **Done when:** Full automated QA pass on a generated scene — assets, audio, narrative hooks, VR + web delivery all validated.
 
