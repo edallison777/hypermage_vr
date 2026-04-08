@@ -2,26 +2,23 @@
 
 #include "AwsSigV4.h"
 #include "Misc/DateTime.h"
+#include "Misc/SecureHash.h"   // FSHA256Hasher — no OpenSSL header conflict
 
-// OpenSSL — linked via AddEngineThirdPartyPrivateStaticDependencies(Target, "OpenSSL")
-// UE5 forward-declares 'UI' as a class; OpenSSL's ossl_typ.h redefines it as a struct.
-// Undefine before including OpenSSL headers to avoid the redefinition error.
-#ifdef UI
-#undef UI
-#endif
-THIRD_PARTY_INCLUDES_START
-#include <openssl/hmac.h>
-#include <openssl/sha.h>
-THIRD_PARTY_INCLUDES_END
-
-// ── Crypto primitives ────────────────────────────────────────────────────────
+// ── Crypto primitives (pure UE5, no direct OpenSSL includes) ─────────────────
+//
+// HMAC-SHA256 is implemented here using FSHA256Hasher so we never need to
+// include ossl_typ.h, which redefines 'UI' and conflicts with UE5 Slate.
+// Algorithm: https://www.rfc-editor.org/rfc/rfc2104
 
 TArray<uint8> FAwsSigV4::Sha256Bytes(const TArray<uint8>& Data)
 {
-	TArray<uint8> Hash;
-	Hash.SetNumUninitialized(SHA256_DIGEST_LENGTH);
-	SHA256(Data.GetData(), static_cast<size_t>(Data.Num()), Hash.GetData());
-	return Hash;
+	FSHA256Hasher Hasher;
+	Hasher.Update(Data.GetData(), static_cast<uint64>(Data.Num()));
+	Hasher.Final();
+	TArray<uint8> Out;
+	Out.SetNumUninitialized(32);
+	Hasher.GetHash(Out.GetData());
+	return Out;
 }
 
 FString FAwsSigV4::Sha256Hex(const TArray<uint8>& Data)
@@ -31,14 +28,47 @@ FString FAwsSigV4::Sha256Hex(const TArray<uint8>& Data)
 
 TArray<uint8> FAwsSigV4::HmacSha256(const TArray<uint8>& Key, const TArray<uint8>& Message)
 {
+	constexpr int32 BlockSize = 64; // SHA-256 block size in bytes
+
+	// Normalize key: hash it if longer than block size, then zero-pad to block size
+	TArray<uint8> K;
+	if (Key.Num() > BlockSize)
+	{
+		K = Sha256Bytes(Key);
+	}
+	else
+	{
+		K = Key;
+	}
+	K.SetNumZeroed(BlockSize); // pad to exactly 64 bytes
+
+	// ipad / opad
+	TArray<uint8> IKeyPad, OKeyPad;
+	IKeyPad.SetNumUninitialized(BlockSize);
+	OKeyPad.SetNumUninitialized(BlockSize);
+	for (int32 i = 0; i < BlockSize; ++i)
+	{
+		IKeyPad[i] = K[i] ^ 0x36u;
+		OKeyPad[i] = K[i] ^ 0x5Cu;
+	}
+
+	// Inner hash: SHA256(iKeyPad || Message)
+	FSHA256Hasher InnerHasher;
+	InnerHasher.Update(IKeyPad.GetData(), BlockSize);
+	InnerHasher.Update(Message.GetData(), static_cast<uint64>(Message.Num()));
+	InnerHasher.Final();
+	TArray<uint8> InnerDigest;
+	InnerDigest.SetNumUninitialized(32);
+	InnerHasher.GetHash(InnerDigest.GetData());
+
+	// Outer hash: SHA256(oKeyPad || InnerDigest)
+	FSHA256Hasher OuterHasher;
+	OuterHasher.Update(OKeyPad.GetData(), BlockSize);
+	OuterHasher.Update(InnerDigest.GetData(), 32);
+	OuterHasher.Final();
 	TArray<uint8> Result;
-	Result.SetNumUninitialized(EVP_MAX_MD_SIZE);
-	unsigned int OutLen = 0;
-	HMAC(EVP_sha256(),
-		Key.GetData(),     static_cast<int>(Key.Num()),
-		Message.GetData(), static_cast<int>(Message.Num()),
-		Result.GetData(), &OutLen);
-	Result.SetNum(static_cast<int32>(OutLen));
+	Result.SetNumUninitialized(32);
+	OuterHasher.GetHash(Result.GetData());
 	return Result;
 }
 
@@ -87,14 +117,12 @@ bool FAwsSigV4::SignRequest(
 		UtcNow.GetHour(), UtcNow.GetMinute(), UtcNow.GetSecond());
 	FString DateStr = DateTimeStr.Left(8); // "YYYYMMDD"
 
-	// Extract host from URL
-	FString Url  = Request->GetURL();
+	// Extract host and path from URL
+	FString Url = Request->GetURL();
 	FString Host;
 	FString PathAndQuery;
 	{
-		// Strip scheme
-		int32 SchemeEnd = INDEX_NONE;
-		Url.Find(TEXT("://"), ESearchCase::CaseSensitive, ESearchDir::FromStart, SchemeEnd);
+		int32 SchemeEnd = Url.Find(TEXT("://"), ESearchCase::CaseSensitive, ESearchDir::FromStart);
 		FString AfterScheme = (SchemeEnd != INDEX_NONE) ? Url.Mid(SchemeEnd + 3) : Url;
 		int32 SlashPos = AfterScheme.Find(TEXT("/"));
 		Host         = (SlashPos != INDEX_NONE) ? AfterScheme.Left(SlashPos) : AfterScheme;
@@ -104,14 +132,14 @@ bool FAwsSigV4::SignRequest(
 	FString CanonicalQueryString;
 	{
 		int32 QPos = PathAndQuery.Find(TEXT("?"));
-		CanonicalUri         = (QPos != INDEX_NONE) ? PathAndQuery.Left(QPos)  : PathAndQuery;
+		CanonicalUri         = (QPos != INDEX_NONE) ? PathAndQuery.Left(QPos)    : PathAndQuery;
 		CanonicalQueryString = (QPos != INDEX_NONE) ? PathAndQuery.Mid(QPos + 1) : TEXT("");
 	}
 
 	// Payload hash
 	FString PayloadHash = Sha256Hex(BodyBytes);
 
-	// Signed headers (must be sorted alphabetically)
+	// Signed headers (sorted alphabetically)
 	FString SignedHeaders;
 	FString CanonicalHeaders;
 	if (!SessionToken.IsEmpty())
@@ -159,7 +187,7 @@ bool FAwsSigV4::SignRequest(
 		TEXT("AWS4-HMAC-SHA256 Credential=%s/%s, SignedHeaders=%s, Signature=%s"),
 		*AccessKeyId, *CredentialScope, *SignedHeaders, *Signature);
 
-	// Apply headers to request
+	// Apply headers
 	Request->SetHeader(TEXT("x-amz-date"), DateTimeStr);
 	Request->SetHeader(TEXT("Authorization"), Authorization);
 	if (!SessionToken.IsEmpty())

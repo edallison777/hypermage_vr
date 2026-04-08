@@ -30,9 +30,6 @@ public class HyperMageVR : ModuleRules
 			"JsonUtilities"
 		});
 
-		// OpenSSL — required by AwsSigV4 for HMAC-SHA256 signing of session-summary requests
-		AddEngineThirdPartyPrivateStaticDependencies(Target, "OpenSSL");
-
 		// VR-specific modules
 		if (Target.Platform == UnrealTargetPlatform.Android)
 		{

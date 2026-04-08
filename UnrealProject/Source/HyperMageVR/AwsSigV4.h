@@ -38,13 +38,12 @@ public:
 	);
 
 private:
-	// Low-level crypto primitives (OpenSSL)
+	// Crypto primitives — implemented via FSHA256Hasher (no OpenSSL headers needed)
 	static TArray<uint8> Sha256Bytes(const TArray<uint8>& Data);
 	static FString       Sha256Hex(const TArray<uint8>& Data);
 	static TArray<uint8> HmacSha256(const TArray<uint8>& Key, const TArray<uint8>& Message);
 
 	// SigV4 helpers
-	static FString ToHex(const TArray<uint8>& Bytes);
+	static FString       ToHex(const TArray<uint8>& Bytes);
 	static TArray<uint8> ToBytes(const FString& Str);   // UTF-8
-	static TArray<uint8> ToBytes(const TArray<uint8>& Key, bool /*overload tag*/);
 };
