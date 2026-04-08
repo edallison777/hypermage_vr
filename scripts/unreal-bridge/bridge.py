@@ -73,6 +73,11 @@ class ScenePlanRequest(BaseModel):
     map_name:        str = "NewMap"
 
 
+class ScenePlanFullRequest(BaseModel):
+    scene_plan_json: str
+    map_name:        str = "GeneratedMap"
+
+
 # ── UE5 Remote Control helpers ────────────────────────────────────────────────
 
 async def rc_call(object_path: str, function_name: str,
@@ -319,6 +324,238 @@ async def build_scene_from_plan(req: ScenePlanRequest):
         "actors_spawned": len(spawned),
         "actors":        spawned,
         "errors":        errors,
+    }
+
+
+@app.post("/scene-plan/build-full")
+async def build_scene_full(req: ScenePlanFullRequest):
+    """Full ScenePlan → UE5 map: zones + spawns + atmosphere + asset_sources + gm_hook TriggerVolumes.
+    Superset of /scene-plan/build."""
+    log.info(f"build_scene_full map={req.map_name}")
+
+    try:
+        plan = json.loads(req.scene_plan_json)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(400, f"Invalid ScenePlan JSON: {exc}")
+
+    ZONE_TYPE_SUFFIX = {
+        "exploration": "EX", "ritual": "RT", "social": "SO",
+        "sanctuary": "SA", "cyberspace": "CS", "narrative": "NA",
+        "combat": "CB", "objective": "OB", "spawn": "SP", "transition": "TR",
+    }
+
+    spawned           = []
+    errors            = []
+    assets_placed     = 0
+    hooks_wired       = 0
+    atmosphere_cmds   = []
+
+    # ── 1. Zone blockouts ───────────────────────────────────────────────────────
+    for zone in plan.get("zones", []):
+        bounds  = zone.get("bounds", {})
+        center  = bounds.get("center", {})
+        extents = bounds.get("extents", {})
+        suffix  = ZONE_TYPE_SUFFIX.get(zone.get("type", ""), "ZN")
+        label   = f"{suffix}_{zone.get('name', zone.get('id', 'Zone'))[:24]}"
+        try:
+            result = await rc_call(
+                "/Script/EditorScriptingUtilities.Default__EditorActorSubsystem",
+                "SpawnActorFromClass",
+                {
+                    "ActorClass": "/Script/Engine.StaticMeshActor",
+                    "SpawnTransform": {
+                        "Rotation":    {"X": 0, "Y": 0, "Z": 0, "W": 1},
+                        "Translation": {
+                            "X": float(center.get("x", 0)),
+                            "Y": float(center.get("y", 0)),
+                            "Z": float(center.get("z", 0)),
+                        },
+                        "Scale3D": {
+                            "X": max(float(extents.get("x", 100)) / 50.0, 0.1),
+                            "Y": max(float(extents.get("y", 100)) / 50.0, 0.1),
+                            "Z": max(float(extents.get("z", 100)) / 50.0, 0.1),
+                        },
+                    },
+                },
+            )
+            actor_path = result.get("ActorObject", {}).get("ObjectPath", "")
+            if actor_path:
+                try:
+                    await rc_set_property(actor_path, "StaticMesh",
+                                          "/Engine/BasicShapes/Cube.Cube")
+                    await rc_call(actor_path, "SetActorLabel",
+                                   {"NewActorLabel": label})
+                except Exception:
+                    pass
+            spawned.append({"type": "zone", "label": label, "actor_path": actor_path})
+        except Exception as exc:
+            errors.append({"type": "zone", "label": label, "error": str(exc)})
+
+    # ── 2. PlayerStarts ────────────────────────────────────────────────────────
+    for i, spawn in enumerate(plan.get("participant_spawns", [])):
+        pos   = spawn.get("position", {})
+        rot   = spawn.get("rotation", {})
+        label = f"PlayerStart_{i + 1}_{spawn.get('role', 'player')}"
+        try:
+            result = await rc_call(
+                "/Script/EditorScriptingUtilities.Default__EditorActorSubsystem",
+                "SpawnActorFromClass",
+                {
+                    "ActorClass": "/Script/Engine.PlayerStart",
+                    "SpawnTransform": {
+                        "Rotation":    {"X": float(rot.get("pitch", 0)),
+                                        "Y": float(rot.get("yaw", 0)),
+                                        "Z": float(rot.get("roll", 0)), "W": 1},
+                        "Translation": {"X": float(pos.get("x", 0)),
+                                        "Y": float(pos.get("y", 0)),
+                                        "Z": float(pos.get("z", 100))},
+                        "Scale3D":     {"X": 1, "Y": 1, "Z": 1},
+                    },
+                },
+            )
+            actor_path = result.get("ActorObject", {}).get("ObjectPath", "")
+            if actor_path:
+                try:
+                    await rc_call(actor_path, "SetActorLabel",
+                                   {"NewActorLabel": label})
+                except Exception:
+                    pass
+            spawned.append({"type": "player_start", "label": label, "actor_path": actor_path})
+        except Exception as exc:
+            errors.append({"type": "player_start", "label": label, "error": str(exc)})
+
+    # ── 3. Atmosphere console commands ─────────────────────────────────────────
+    atmosphere    = plan.get("atmosphere", {})
+    lighting_mood = atmosphere.get("lighting_mood", "").lower()
+    if lighting_mood:
+        if "neon" in lighting_mood or "cyber" in lighting_mood:
+            atm_cmds = [
+                "r.Atmosphere 0", "r.SkySphere.Intensity 0", "r.Fog 0",
+                "r.AmbientOcclusion.Intensity 1.5", "r.BloomIntensity 2.0", "r.VignetteIntensity 0.8",
+            ]
+        elif "dark" in lighting_mood or "dramatic" in lighting_mood:
+            atm_cmds = [
+                "r.Atmosphere 1", "r.Fog 1",
+                "r.BloomIntensity 1.5", "r.VignetteIntensity 1.0",
+            ]
+        elif "golden" in lighting_mood or "warm" in lighting_mood:
+            atm_cmds = [
+                "r.Atmosphere 1", "r.Fog 1",
+                "r.BloomIntensity 1.2", "r.VignetteIntensity 0.3",
+            ]
+        else:
+            atm_cmds = ["r.Atmosphere 1", "r.BloomIntensity 1.0", "r.VignetteIntensity 0.3"]
+
+        for cmd in atm_cmds:
+            try:
+                await rc_call(
+                    "/Script/UnrealEd.Default__EditorLevelLibrary",
+                    "ExecuteConsoleCommand",
+                    {"Command": cmd},
+                    generate_transaction=False,
+                )
+                atmosphere_cmds.append(cmd)
+            except Exception as exc:
+                errors.append({"type": "atmosphere_cmd", "cmd": cmd, "error": str(exc)})
+
+    # ── 4. Asset sources (StaticMeshActor per asset) ───────────────────────────
+    for asset in plan.get("asset_sources", []):
+        asset_id = asset.get("asset_id", "")
+        pos      = asset.get("position", {"x": 0, "y": 0, "z": 0})
+        if not asset_id:
+            continue
+        label = f"Asset_{asset_id[:24]}"
+        try:
+            result = await rc_call(
+                "/Script/EditorScriptingUtilities.Default__EditorActorSubsystem",
+                "SpawnActorFromClass",
+                {
+                    "ActorClass": "/Script/Engine.StaticMeshActor",
+                    "SpawnTransform": {
+                        "Rotation":    {"X": 0, "Y": 0, "Z": 0, "W": 1},
+                        "Translation": {
+                            "X": float(pos.get("x", 0)),
+                            "Y": float(pos.get("y", 0)),
+                            "Z": float(pos.get("z", 0)),
+                        },
+                        "Scale3D": {"X": 1, "Y": 1, "Z": 1},
+                    },
+                },
+            )
+            actor_path = result.get("ActorObject", {}).get("ObjectPath", "")
+            if actor_path:
+                try:
+                    await rc_set_property(
+                        actor_path, "StaticMesh",
+                        f"/Game/Assets/{asset_id}.{asset_id}"
+                    )
+                    await rc_call(actor_path, "SetActorLabel", {"NewActorLabel": label})
+                except Exception:
+                    pass
+            assets_placed += 1
+            spawned.append({"type": "asset", "label": label, "actor_path": actor_path})
+        except Exception as exc:
+            errors.append({"type": "asset", "asset_id": asset_id, "error": str(exc)})
+
+    # ── 5. GM hook TriggerVolumes ──────────────────────────────────────────────
+    zones       = plan.get("zones", [])
+    first_zone_center = {"x": 0, "y": 0, "z": 100}
+    if zones:
+        b = zones[0].get("bounds", {})
+        first_zone_center = b.get("center", first_zone_center)
+
+    for hook in plan.get("gm_hooks", []):
+        hook_id = hook.get("id", "")
+        if not hook_id:
+            continue
+        label = f"Hook_{hook_id[:28]}"
+        try:
+            result = await rc_call(
+                "/Script/EditorScriptingUtilities.Default__EditorActorSubsystem",
+                "SpawnActorFromClass",
+                {
+                    "ActorClass": "/Script/Engine.TriggerVolume",
+                    "SpawnTransform": {
+                        "Rotation":    {"X": 0, "Y": 0, "Z": 0, "W": 1},
+                        "Translation": {
+                            "X": float(first_zone_center.get("x", 0)),
+                            "Y": float(first_zone_center.get("y", 0)),
+                            "Z": float(first_zone_center.get("z", 100)),
+                        },
+                        "Scale3D": {"X": 2, "Y": 2, "Z": 2},
+                    },
+                },
+            )
+            actor_path = result.get("ActorObject", {}).get("ObjectPath", "")
+            if actor_path:
+                try:
+                    await rc_call(actor_path, "SetActorLabel", {"NewActorLabel": label})
+                    await rc_set_property(actor_path, "Tags", [hook_id])
+                except Exception:
+                    pass
+            hooks_wired += 1
+            spawned.append({"type": "hook_trigger", "label": label, "actor_path": actor_path})
+        except Exception as exc:
+            errors.append({"type": "hook_trigger", "hook_id": hook_id, "error": str(exc)})
+
+    # ── 6. Save level ──────────────────────────────────────────────────────────
+    try:
+        await rc_call("/Script/UnrealEd.Default__EditorLevelLibrary",
+                      "SaveCurrentLevel", generate_transaction=False)
+    except Exception as exc:
+        errors.append({"type": "save", "error": str(exc)})
+
+    return {
+        "status":             "ok" if not errors else "partial",
+        "scene_name":         plan.get("name", ""),
+        "map_name":           req.map_name,
+        "actors_spawned":     len([s for s in spawned if s["type"] in ("zone", "player_start")]),
+        "assets_placed":      assets_placed,
+        "hooks_wired":        hooks_wired,
+        "atmosphere_applied": len(atmosphere_cmds) > 0,
+        "atmosphere_mood":    lighting_mood,
+        "actors":             spawned,
+        "errors":             errors,
     }
 
 

@@ -85,10 +85,13 @@ Your responsibilities:
 1. Check bridge availability with get_bridge_status() before doing work
 2. Build full scenes from ScenePlan JSON using build_scene_from_plan()
    — this spawns colour-coded zone blockouts + PlayerStart actors
-3. Spawn individual actors for prototyping with spawn_actor()
-4. Set mesh/material properties on actors with set_actor_property()
-5. Run UE5 console commands with run_console_command()
-6. Save the level after changes with save_level()
+3. Full ScenePlan → UE5 map conversion using convert_sceneplan_to_map()
+   — zones + spawns + atmosphere + asset_sources + gm_hook TriggerVolumes
+4. Apply atmosphere/lighting standalone using apply_atmosphere(lighting_mood)
+5. Spawn individual actors for prototyping with spawn_actor()
+6. Set mesh/material properties on actors with set_actor_property()
+7. Run UE5 console commands with run_console_command()
+8. Save the level after changes with save_level()
 
 If the bridge is not configured (UE5 not running / ngrok not set):
   — report the status='skipped' response and advise the user to start the bridge
@@ -289,6 +292,213 @@ def convert_levelplan_to_map(level_plan: str, map_name: str) -> str:
     })
 
 
+@tool
+def apply_atmosphere(lighting_mood: str) -> str:
+    """Apply atmosphere/lighting commands to the currently open UE5 level.
+    Standalone tool — applies atmosphere without rebuilding geometry.
+
+    lighting_mood examples: 'neon cyber', 'dark dramatic', 'golden warm', 'cool moonlit'
+
+    Returns {status, lighting_mood, commands_run} JSON."""
+    url = _get_bridge_url()
+    if not url:
+        return _skip("Bridge not configured. Run scripts/unreal-bridge/start.sh --ngrok.")
+
+    mood   = lighting_mood.lower()
+    errors = []
+    ran    = []
+
+    def _run(cmd: str) -> None:
+        try:
+            _bridge_post("/console", {"command": cmd})
+            ran.append(cmd)
+        except Exception as exc:
+            errors.append({"cmd": cmd, "error": str(exc)})
+
+    # Ambient occlusion — always
+    _run("r.AmbientOcclusion.Intensity 1")
+
+    if "neon" in mood or "cyber" in mood:
+        _run("r.Atmosphere 0")
+        _run("r.SkySphere.Intensity 0")
+        _run("r.Fog 0")
+        _run("r.AmbientOcclusion.Intensity 1.5")
+        _run("r.BloomIntensity 2.0")
+        _run("r.VignetteIntensity 0.8")
+    elif "dark" in mood or "dramatic" in mood:
+        _run("r.Atmosphere 1")
+        _run("r.Fog 1")
+        _run("r.VignetteIntensity 1.0")
+        _run("r.BloomIntensity 1.5")
+    elif "golden" in mood or "warm" in mood:
+        _run("r.Atmosphere 1")
+        _run("r.Fog 1")
+        _run("r.BloomIntensity 1.2")
+        _run("r.VignetteIntensity 0.3")
+    elif "moonlit" in mood or "cool" in mood:
+        _run("r.Atmosphere 1")
+        _run("r.Fog 1")
+        _run("r.BloomIntensity 0.8")
+        _run("r.VignetteIntensity 0.5")
+    elif "foggy" in mood or "grey" in mood:
+        _run("r.Fog 1")
+        _run("r.FogDensity 0.05")
+        _run("r.BloomIntensity 0.5")
+    else:
+        # Default
+        _run("r.Atmosphere 1")
+        _run("r.BloomIntensity 1.0")
+        _run("r.VignetteIntensity 0.3")
+
+    return json.dumps({
+        "status":        "ok" if not errors else "partial",
+        "lighting_mood": lighting_mood,
+        "commands_run":  len(ran),
+        "commands":      ran,
+        "errors":        errors,
+    })
+
+
+@tool
+def convert_sceneplan_to_map(scene_plan_json: str, map_name: str = "GeneratedMap") -> str:
+    """Full ScenePlan → UE5 map conversion.
+
+    Beyond build_scene_from_plan (zones + spawns), this also:
+    - Sets sky/atmosphere from ScenePlan atmosphere.lighting_mood
+    - Places glTF/StaticMesh actors from asset_sources[]
+    - Creates TriggerBox volumes for each gm_hook (with event tag = hook id)
+    - Applies post-process console commands for atmosphere effects
+
+    All steps skip gracefully if bridge not reachable.
+
+    Returns {status, actors_spawned, atmosphere_applied, assets_placed, hooks_wired, errors} JSON.
+    """
+    url = _get_bridge_url()
+    if not url:
+        return _skip("Bridge not configured. Run scripts/unreal-bridge/start.sh --ngrok.")
+
+    try:
+        plan = json.loads(scene_plan_json)
+    except json.JSONDecodeError as exc:
+        return json.dumps({"status": "error", "error": f"Invalid ScenePlan JSON: {exc}"})
+
+    errors            = []
+    actors_spawned    = 0
+    assets_placed     = 0
+    hooks_wired       = 0
+    atmosphere_applied = False
+
+    # ── Step 1: Zones + PlayerStarts (reuse /scene-plan/build) ────────────────
+    try:
+        result = _bridge_post("/scene-plan/build", {
+            "scene_plan_json": scene_plan_json,
+            "map_name":        map_name,
+        })
+        actors_spawned = result.get("actors_spawned", 0)
+        if result.get("errors"):
+            errors.extend(result["errors"])
+    except Exception as exc:
+        errors.append({"step": "zones_spawns", "error": str(exc)})
+
+    # ── Step 2: Atmosphere ─────────────────────────────────────────────────────
+    atmosphere    = plan.get("atmosphere", {})
+    lighting_mood = atmosphere.get("lighting_mood", "")
+    if lighting_mood:
+        try:
+            atm_result = json.loads(apply_atmosphere(lighting_mood))
+            atmosphere_applied = atm_result.get("status") in ("ok", "partial")
+            if atm_result.get("errors"):
+                errors.extend(atm_result["errors"])
+        except Exception as exc:
+            errors.append({"step": "atmosphere", "error": str(exc)})
+
+    # ── Step 3: Asset sources ──────────────────────────────────────────────────
+    asset_sources = plan.get("asset_sources", [])
+    for asset in asset_sources:
+        asset_id = asset.get("asset_id", "")
+        pos      = asset.get("position", {"x": 0, "y": 0, "z": 0})
+        if not asset_id:
+            continue
+        label = f"Asset_{asset_id[:24]}"
+        try:
+            result = _bridge_post("/actor/create", {
+                "actor_class": "/Script/Engine.StaticMeshActor",
+                "label": label,
+                "x": float(pos.get("x", 0)),
+                "y": float(pos.get("y", 0)),
+                "z": float(pos.get("z", 0)),
+                "yaw": 0.0, "scale_x": 1.0, "scale_y": 1.0, "scale_z": 1.0,
+            })
+            actor_path = result.get("actor_path", "")
+            # Attempt to set static mesh — conventional path /Game/Assets/{id}.{id}
+            if actor_path:
+                try:
+                    _bridge_post("/actor/set-property", {
+                        "actor_path":    actor_path,
+                        "property_name": "StaticMesh",
+                        "value":         f"/Game/Assets/{asset_id}.{asset_id}",
+                    })
+                except Exception:
+                    pass  # mesh assignment is best-effort
+            assets_placed += 1
+        except Exception as exc:
+            errors.append({"step": "asset_source", "asset_id": asset_id, "error": str(exc)})
+
+    # ── Step 4: GM hook TriggerVolumes ─────────────────────────────────────────
+    # Place TriggerVolume at center of first zone (or origin)
+    zones        = plan.get("zones", [])
+    first_center = {"x": 0, "y": 0, "z": 0}
+    if zones:
+        b = zones[0].get("bounds", {})
+        first_center = b.get("center", first_center)
+
+    for hook in plan.get("gm_hooks", []):
+        hook_id   = hook.get("id", "")
+        hook_name = hook.get("name", hook_id)
+        if not hook_id:
+            continue
+        label = f"Hook_{hook_id[:28]}"
+        try:
+            result = _bridge_post("/actor/create", {
+                "actor_class": "/Script/Engine.TriggerVolume",
+                "label": label,
+                "x": float(first_center.get("x", 0)),
+                "y": float(first_center.get("y", 0)),
+                "z": float(first_center.get("z", 100)),
+                "yaw": 0.0, "scale_x": 2.0, "scale_y": 2.0, "scale_z": 2.0,
+            })
+            actor_path = result.get("actor_path", "")
+            if actor_path:
+                try:
+                    _bridge_post("/actor/set-property", {
+                        "actor_path":    actor_path,
+                        "property_name": "Tags",
+                        "value":         [hook_id],
+                    })
+                except Exception:
+                    pass
+            hooks_wired += 1
+        except Exception as exc:
+            errors.append({"step": "gm_hook", "hook_id": hook_id, "error": str(exc)})
+
+    # ── Step 5: Save level ─────────────────────────────────────────────────────
+    try:
+        _bridge_post("/level/save", {})
+    except Exception as exc:
+        errors.append({"step": "save", "error": str(exc)})
+
+    return json.dumps({
+        "status":             "ok" if not errors else "partial",
+        "map_name":           map_name,
+        "scene_name":         plan.get("name", ""),
+        "actors_spawned":     actors_spawned,
+        "atmosphere_applied": atmosphere_applied,
+        "assets_placed":      assets_placed,
+        "hooks_wired":        hooks_wired,
+        "errors":             errors,
+    })
+
+
 # ── Entrypoint ────────────────────────────────────────────────────────────────
 
 @app.entrypoint
@@ -301,6 +511,7 @@ async def invoke(payload, context):
             get_bridge_status, spawn_actor, set_actor_property,
             run_console_command, save_level, build_scene_from_plan,
             generate_blockout_geometry, convert_levelplan_to_map,
+            convert_sceneplan_to_map, apply_atmosphere,
         ],
         system_prompt=SYSTEM_PROMPT,
     )

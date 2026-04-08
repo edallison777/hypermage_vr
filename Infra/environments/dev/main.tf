@@ -306,6 +306,28 @@ output "web_platform_bucket" {
   value       = module.web_platform.web_scenes_bucket_name
 }
 
+# LARP Integration Module (Phase 11b)
+# GM Event HTTP API + Lambda — real-time narrative state broadcast to all participants.
+# All serverless — zero idle compute cost.
+module "larp_integration" {
+  source = "../../modules/larp-integration"
+
+  project_name              = var.project_name
+  environment               = "dev"
+  aws_region                = var.aws_region
+  web_scenes_table_name     = "hypermage-vr-web-scenes-dev"
+  ws_connections_table_name = "hypermage-vr-ws-connections-dev"
+  ws_invoke_url             = module.web_platform.ws_invoke_url
+  build_s3_bucket           = module.unreal_build.s3_bucket_name
+  log_retention_days        = 14
+  tags                      = { CostCenter = "Development", Owner = "DevOps Team" }
+}
+
+output "larp_gm_event_url" {
+  description = "HTTP endpoint for GM events (Phase 11b)"
+  value       = module.larp_integration.gm_event_url
+}
+
 # Outputs
 
 output "build_s3_bucket" {
