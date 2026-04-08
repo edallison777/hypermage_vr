@@ -38,7 +38,7 @@ public:
 	);
 
 private:
-	// Crypto primitives — implemented via FSHA256Hasher (no OpenSSL headers needed)
+	// Crypto primitives — self-contained SHA-256 (no OpenSSL or external headers)
 	static TArray<uint8> Sha256Bytes(const TArray<uint8>& Data);
 	static FString       Sha256Hex(const TArray<uint8>& Data);
 	static TArray<uint8> HmacSha256(const TArray<uint8>& Key, const TArray<uint8>& Message);
