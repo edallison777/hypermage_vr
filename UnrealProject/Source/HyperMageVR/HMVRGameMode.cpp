@@ -144,8 +144,8 @@ APlayerController* AHMVRGameMode::Login(UPlayer* NewPlayer, ENetRole InRemoteRol
 		{
 			if (AHMVRPlayerState* PS = NewPlayerController->GetPlayerState<AHMVRPlayerState>())
 			{
-				PS->PlayerId = Claims.Subject;
-				UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Login — PlayerId set to %s"), *Claims.Subject);
+				PS->CognitoPlayerId = Claims.Subject;
+				UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Login — CognitoPlayerId set to %s"), *Claims.Subject);
 			}
 		}
 		else
@@ -393,7 +393,7 @@ void AHMVRGameMode::OnPlayerJoined(APlayerController* NewPlayer)
 	FString PlayerId;
 	if (const AHMVRPlayerState* PS = NewPlayer->GetPlayerState<AHMVRPlayerState>())
 	{
-		PlayerId = PS->PlayerId;
+		PlayerId = PS->CognitoPlayerId;
 	}
 	if (PlayerId.IsEmpty())
 	{
@@ -434,7 +434,7 @@ void AHMVRGameMode::OnPlayerLeft(AController* ExitingPlayer)
 	{
 		if (const AHMVRPlayerState* PS = PC->GetPlayerState<AHMVRPlayerState>())
 		{
-			PlayerId = PS->PlayerId;
+			PlayerId = PS->CognitoPlayerId;
 		}
 	}
 	if (PlayerId.IsEmpty())

@@ -17,8 +17,9 @@ class HYPERMAGEVR_API AHMVRPlayerState : public APlayerState
 
 public:
 	// Cognito sub claim — set from JWT in HMVRGameMode::Login()
+	// Named CognitoPlayerId to avoid shadowing APlayerState::PlayerId (int32)
 	UPROPERTY(BlueprintReadOnly, Replicated, Category = "Authentication")
-	FString PlayerId;
+	FString CognitoPlayerId;
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 };

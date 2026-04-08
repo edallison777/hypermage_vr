@@ -6,5 +6,5 @@
 void AHMVRPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-	DOREPLIFETIME(AHMVRPlayerState, PlayerId);
+	DOREPLIFETIME(AHMVRPlayerState, CognitoPlayerId);
 }
