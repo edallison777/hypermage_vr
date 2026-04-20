@@ -8,6 +8,7 @@
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonWriter.h"
 #include "Serialization/JsonSerializer.h"
+#include "Misc/TSTicker.h"
 
 // ── Public interface ─────────────────────────────────────────────────────────
 
@@ -18,11 +19,9 @@ bool USessionAPIClient::SendSessionSummary(const FPlayerSessionSummary& Summary)
 		UE_LOG(LogTemp, Log,
 			TEXT("SessionAPIClient (no endpoint): session %s player %s rewards %d — not sent"),
 			*Summary.SessionId, *Summary.PlayerId, Summary.Rewards.Num());
-		return true; // Treat as ok for local dev — caller should not retry
+		return true;
 	}
 
-	// Build JSON body matching the post-session-summary Lambda schema:
-	// { "playerId", "sessionId", "rewards": [...], "endTime" }
 	TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
 	Body->SetStringField(TEXT("playerId"),  Summary.PlayerId);
 	Body->SetStringField(TEXT("sessionId"), Summary.SessionId);
@@ -33,10 +32,7 @@ bool USessionAPIClient::SendSessionSummary(const FPlayerSessionSummary& Summary)
 		RewardsArray.Add(MakeShared<FJsonValueString>(RewardId));
 	}
 	Body->SetArrayField(TEXT("rewards"), RewardsArray);
-
-	// ISO-8601 end time
-	FString EndTime = Summary.SessionEndTime.ToIso8601();
-	Body->SetStringField(TEXT("endTime"), EndTime);
+	Body->SetStringField(TEXT("endTime"), Summary.SessionEndTime.ToIso8601());
 
 	FString BodyString;
 	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&BodyString);
@@ -55,7 +51,6 @@ bool USessionAPIClient::SendInteractionEvent(const FInteractionEvent& Event)
 		return true;
 	}
 
-	// Build JSON body matching the interaction-events table schema
 	TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
 	Body->SetStringField(TEXT("eventId"),   Event.EventId);
 	Body->SetStringField(TEXT("playerId"),  Event.PlayerId);
@@ -85,52 +80,93 @@ void USessionAPIClient::SetEndpointURL(const FString& URL)
 
 // ── Private helpers ──────────────────────────────────────────────────────────
 
-bool USessionAPIClient::PostSigned(const FString& Path, const FString& JsonBody)
+bool USessionAPIClient::PostSigned(const FString& Path, const FString& JsonBody, int32 Attempt)
 {
 	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = FHttpModule::Get().CreateRequest();
 	HttpRequest->SetURL(EndpointURL + Path);
 	HttpRequest->SetVerb(TEXT("POST"));
 	HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
-	HttpRequest->SetHeader(TEXT("host"),          FString(TEXT("")) + /* extracted by signer */ TEXT(""));
 
-	// Convert body to bytes for signing
 	FTCHARToUTF8 Conv(*JsonBody);
 	TArray<uint8> BodyBytes;
 	BodyBytes.Append(reinterpret_cast<const uint8*>(Conv.Get()), Conv.Length());
 	HttpRequest->SetContent(BodyBytes);
 
-	// Sign with SigV4 using instance IAM role credentials
 	if (!FAwsSigV4::SignRequest(HttpRequest, BodyBytes, AwsRegion, TEXT("execute-api")))
 	{
 		UE_LOG(LogTemp, Warning,
 			TEXT("SessionAPIClient: SigV4 signing failed for %s — sending unsigned (will likely get 403)"), *Path);
 	}
 
-	// Capture Path by value for the lambda
 	FString CapturedPath = Path;
-	HttpRequest->OnProcessRequestComplete().BindUObject(this, &USessionAPIClient::OnPostComplete, CapturedPath);
+	FString CapturedBody = JsonBody;
+	HttpRequest->OnProcessRequestComplete().BindUObject(
+		this, &USessionAPIClient::OnPostComplete, CapturedPath, CapturedBody, Attempt);
 	HttpRequest->ProcessRequest();
 
-	UE_LOG(LogTemp, Log, TEXT("SessionAPIClient: POST %s dispatched (fire-and-forget)"), *Path);
-	return true;
-}
-
-void USessionAPIClient::OnPostComplete(FHttpRequestPtr /*Request*/, FHttpResponsePtr Response, bool bSuccess, FString Path)
-{
-	if (!bSuccess || !Response.IsValid())
+	if (Attempt == 0)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("SessionAPIClient: POST %s — network error"), *Path);
-		return;
-	}
-
-	int32 Code = Response->GetResponseCode();
-	if (Code == 200 || Code == 201)
-	{
-		UE_LOG(LogTemp, Log, TEXT("SessionAPIClient: POST %s — success (%d)"), *Path, Code);
+		UE_LOG(LogTemp, Log, TEXT("SessionAPIClient: POST %s dispatched"), *Path);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("SessionAPIClient: POST %s — HTTP %d: %s"),
-			*Path, Code, *Response->GetContentAsString());
+		UE_LOG(LogTemp, Log, TEXT("SessionAPIClient: POST %s retry attempt %d/%d"), *Path, Attempt, MaxRetries);
+	}
+	return true;
+}
+
+void USessionAPIClient::OnPostComplete(FHttpRequestPtr /*Request*/, FHttpResponsePtr Response,
+                                        bool bSuccess, FString Path, FString Body, int32 Attempt)
+{
+	bool bShouldRetry = false;
+
+	if (!bSuccess || !Response.IsValid())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SessionAPIClient: POST %s — network error (attempt %d)"), *Path, Attempt + 1);
+		bShouldRetry = true;
+	}
+	else
+	{
+		int32 Code = Response->GetResponseCode();
+		if (Code == 200 || Code == 201)
+		{
+			UE_LOG(LogTemp, Log, TEXT("SessionAPIClient: POST %s — success (%d)"), *Path, Code);
+			return;
+		}
+		else if (Code >= 500)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("SessionAPIClient: POST %s — server error %d (attempt %d)"),
+				*Path, Code, Attempt + 1);
+			bShouldRetry = true;
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("SessionAPIClient: POST %s — HTTP %d: %s"),
+				*Path, Code, *Response->GetContentAsString());
+		}
+	}
+
+	if (bShouldRetry && Attempt < MaxRetries)
+	{
+		const float Delay = static_cast<float>(1 << Attempt); // 1 s, 2 s, 4 s
+		UE_LOG(LogTemp, Log, TEXT("SessionAPIClient: Retrying POST %s in %.0fs (%d/%d)"),
+			*Path, Delay, Attempt + 1, MaxRetries);
+
+		FString CapturedPath = Path;
+		FString CapturedBody = Body;
+		const int32 NextAttempt = Attempt + 1;
+
+		FTSTicker::GetCoreTicker().AddTicker(
+			FTickerDelegate::CreateWeakLambda(this, [this, CapturedPath, CapturedBody, NextAttempt](float) -> bool
+			{
+				PostSigned(CapturedPath, CapturedBody, NextAttempt);
+				return false; // fire once then remove
+			}),
+			Delay
+		);
+	}
+	else if (bShouldRetry)
+	{
+		UE_LOG(LogTemp, Error, TEXT("SessionAPIClient: POST %s — giving up after %d retries"), *Path, MaxRetries);
 	}
 }

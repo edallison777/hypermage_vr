@@ -15,6 +15,9 @@
  * When EndpointURL is empty the client logs but does not transmit (safe for local testing).
  * When EndpointURL is set, requests are signed with SigV4 using instance credentials
  * (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN env vars set by GameLift).
+ *
+ * Failed requests (5xx or network error) are retried up to MaxRetries times with
+ * exponential back-off (1 s, 2 s, 4 s). Client errors (4xx) are not retried.
  */
 UCLASS()
 class HYPERMAGEVR_API USessionAPIClient : public UObject
@@ -47,6 +50,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Session API")
 	void SetAwsRegion(const FString& Region) { AwsRegion = Region; }
 
+	/** Maximum number of retry attempts on 5xx / network error (1 s → 2 s → 4 s back-off). */
+	static constexpr int32 MaxRetries = 3;
+
 protected:
 	UPROPERTY()
 	FString EndpointURL;
@@ -55,8 +61,9 @@ protected:
 	FString AwsRegion = TEXT("eu-west-1");
 
 private:
-	/** Dispatch a signed POST and log on completion. Returns true if sent. */
-	bool PostSigned(const FString& Path, const FString& JsonBody);
+	/** Dispatch a signed POST; retries on transient failure up to MaxRetries. */
+	bool PostSigned(const FString& Path, const FString& JsonBody, int32 Attempt = 0);
 
-	void OnPostComplete(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bSuccess, FString Path);
+	void OnPostComplete(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bSuccess,
+	                    FString Path, FString Body, int32 Attempt);
 };

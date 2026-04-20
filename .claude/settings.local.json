@@ -122,7 +122,11 @@
       "Bash(npm:*)",
       "Bash(npx:*)",
       "Write",
-      "Edit"
+      "Edit",
+      "Bash(echo \"PID: $!\")",
+      "Bash(python3 -c \"import sys,json,urllib.parse; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(json.loads\\(urllib.parse.unquote\\(d['PolicyDocument']\\)\\), indent=2\\)\\)\")",
+      "Bash(mkdir -p C:/Users/j_e_a/OneDrive/Projects/Hypermage/Hypermage_VR/Agents/narrative/.bedrock_agentcore/Narrative_Agent)",
+      "Bash(mkdir -p C:/Users/j_e_a/OneDrive/Projects/Hypermage/Hypermage_VR/Agents/larp-integration/.bedrock_agentcore/LARPIntegration_Agent)"
     ]
   }
 }

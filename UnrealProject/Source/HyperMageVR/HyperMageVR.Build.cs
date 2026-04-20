@@ -19,7 +19,8 @@ public class HyperMageVR : ModuleRules
 			"OnlineSubsystem",
 			"OnlineSubsystemUtils",
 			"GameLiftServerSDK",
-			"HTTP"
+			"HTTP",
+			"UMG"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]

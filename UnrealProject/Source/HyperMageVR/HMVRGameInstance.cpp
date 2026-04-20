@@ -29,7 +29,6 @@ void UHMVRGameInstance::Init()
 	VoiceChatManager = NewObject<UVoiceChatManager>(this);
 	if (VoiceChatManager)
 	{
-		// Create mock voice provider for development/testing
 		UMockVoiceProvider* MockProvider = NewObject<UMockVoiceProvider>(this);
 		TScriptInterface<IVoiceChatProvider> ProviderInterface;
 		ProviderInterface.SetObject(MockProvider);
@@ -52,7 +51,6 @@ void UHMVRGameInstance::Shutdown()
 {
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Shutting down"));
 
-	// Shutdown voice chat
 	if (VoiceChatManager)
 	{
 		VoiceChatManager->Shutdown();
@@ -68,8 +66,6 @@ void UHMVRGameInstance::InitializeGameLift()
 
 	GameLiftSdkModule = &FModuleManager::LoadModuleChecked<FGameLiftServerSDKModule>(FName("GameLiftServerSDK"));
 
-	// On AMAZON_LINUX_2023 fleets, the GameLift agent sets GAMELIFT_SDK_WEBSOCKET_URL
-	// and GAMELIFT_SDK_AUTH_TOKEN env vars. Parameterless InitSDK() reads them automatically.
 	auto InitSDKOutcome = GameLiftSdkModule->InitSDK();
 	if (!InitSDKOutcome.IsSuccess())
 	{
@@ -124,7 +120,6 @@ void UHMVRGameInstance::SetJWTToken(const FString& Token)
 	JWTToken = Token;
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: JWT token set"));
 
-	// Decode token to extract PlayerId
 	FJWTClaims Claims;
 	if (UJWTValidator::DecodeToken(Token, Claims))
 	{
@@ -154,9 +149,14 @@ void UHMVRGameInstance::StartMatchmaking()
 
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Starting matchmaking via Session API"));
 
+	if (UHMVRStatusWidget* Widget = EnsureStatusWidget())
+	{
+		Widget->ShowSearching();
+	}
+	OnMatchmakingStatusChanged.Broadcast(TEXT("SEARCHING"));
+
 	FString RequestPlayerId = PlayerId.IsEmpty() ? FGuid::NewGuid().ToString() : PlayerId;
 
-	// Build JSON body: { "playerId": "...", "playerAttributes": { "skill": 10, "region": "eu-west-1" } }
 	TSharedRef<FJsonObject> RequestBody = MakeShared<FJsonObject>();
 	RequestBody->SetStringField(TEXT("playerId"), RequestPlayerId);
 
@@ -169,7 +169,6 @@ void UHMVRGameInstance::StartMatchmaking()
 	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&BodyString);
 	FJsonSerializer::Serialize(RequestBody, Writer);
 
-	// POST /matchmaking/start with Cognito JWT as Authorization header
 	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = FHttpModule::Get().CreateRequest();
 	HttpRequest->SetURL(SessionApiBaseUrl + TEXT("/matchmaking/start"));
 	HttpRequest->SetVerb(TEXT("POST"));
@@ -184,7 +183,7 @@ void UHMVRGameInstance::OnStartMatchmakingResponse(FHttpRequestPtr Request, FHtt
 {
 	if (!bConnectedSuccessfully || !Response.IsValid())
 	{
-		OnMatchmakingFailure(TEXT("Session API unreachable"));
+		OnMatchmakingFailure(TEXT("No internet connection — check your network and try again"));
 		return;
 	}
 
@@ -207,7 +206,6 @@ void UHMVRGameInstance::OnStartMatchmakingResponse(FHttpRequestPtr Request, FHtt
 	MatchmakingPollAttempt = 0;
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Matchmaking started, ticket: %s"), *MatchmakingTicketId);
 
-	// Begin polling every 3 seconds for match completion
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().SetTimer(
@@ -287,7 +285,6 @@ void UHMVRGameInstance::OnMatchmakingStatusResponse(FHttpRequestPtr Request, FHt
 		(*ConnectionInfoObj)->TryGetNumberField(TEXT("port"), PortDouble);
 		int32 Port = static_cast<int32>(PortDouble);
 
-		// Extract the player session ID assigned by FlexMatch for this player
 		const TArray<TSharedPtr<FJsonValue>>* PlayerSessionsArray;
 		if ((*ConnectionInfoObj)->TryGetArrayField(TEXT("matchedPlayerSessions"), PlayerSessionsArray)
 			&& PlayerSessionsArray->Num() > 0)
@@ -327,12 +324,38 @@ void UHMVRGameInstance::CancelMatchmaking()
 		return;
 	}
 
+	// Stop polling before sending cancel so we don't act on stale status responses
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(MatchmakingPollTimerHandle);
+	}
+
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Cancelling matchmaking: %s"), *MatchmakingTicketId);
 
-	// TODO: Call Session API to cancel matchmaking
-	// DELETE /matchmaking/{ticketId}
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = FHttpModule::Get().CreateRequest();
+	HttpRequest->SetURL(FString::Printf(TEXT("%s/matchmaking/cancel/%s"), *SessionApiBaseUrl, *MatchmakingTicketId));
+	HttpRequest->SetVerb(TEXT("DELETE"));
+	HttpRequest->SetHeader(TEXT("Authorization"), JWTToken);
+	HttpRequest->OnProcessRequestComplete().BindUObject(this, &UHMVRGameInstance::OnCancelMatchmakingResponse);
+	HttpRequest->ProcessRequest();
 
 	MatchmakingTicketId.Empty();
+
+	OnMatchmakingStatusChanged.Broadcast(TEXT("CANCELLED"));
+	if (ActiveStatusWidget && IsValid(ActiveStatusWidget))
+	{
+		ActiveStatusWidget->HideWidget();
+	}
+}
+
+void UHMVRGameInstance::OnCancelMatchmakingResponse(FHttpRequestPtr /*Request*/, FHttpResponsePtr Response, bool bConnectedSuccessfully)
+{
+	if (!bConnectedSuccessfully || !Response.IsValid())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("HMVRGameInstance: Cancel matchmaking — network error (non-fatal)"));
+		return;
+	}
+	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Cancel matchmaking — HTTP %d"), Response->GetResponseCode());
 }
 
 void UHMVRGameInstance::ConnectToGameServer(const FString& ServerAddress, int32 Port)
@@ -346,22 +369,32 @@ void UHMVRGameInstance::ConnectToGameServer(const FString& ServerAddress, int32 
 
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Connecting to %s:%d"), *ServerAddress, Port);
 
-	// Build connection URL with JWT token and player session ID
 	FString TravelURL = FString::Printf(TEXT("%s:%d?Token=%s"), *ServerAddress, Port, *JWTToken);
-	
 	if (!PlayerSessionId.IsEmpty())
 	{
 		TravelURL += FString::Printf(TEXT("&PlayerSessionId=%s"), *PlayerSessionId);
 	}
 
-	// Connect to server
 	UGameplayStatics::OpenLevel(this, FName(*TravelURL), true);
+}
+
+void UHMVRGameInstance::ReturnToMainMenu()
+{
+	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Returning to main menu: %s"), *MainMenuLevelName.ToString());
+	UGameplayStatics::OpenLevel(this, MainMenuLevelName, true);
 }
 
 void UHMVRGameInstance::OnMatchmakingSuccess(const FString& ServerAddress, int32 Port, const FString& SessionId)
 {
-	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Matchmaking successful - Server: %s:%d, Session: %s"), 
+	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Matchmaking successful - Server: %s:%d, Session: %s"),
 		*ServerAddress, Port, *SessionId);
+
+	OnMatchmakingStatusChanged.Broadcast(TEXT("COMPLETED"));
+
+	if (UHMVRStatusWidget* Widget = EnsureStatusWidget())
+	{
+		Widget->ShowConnecting();
+	}
 
 	SetPlayerSessionId(SessionId);
 	ConnectToGameServer(ServerAddress, Port);
@@ -373,20 +406,66 @@ void UHMVRGameInstance::OnMatchmakingFailure(const FString& ErrorMessage)
 
 	MatchmakingTicketId.Empty();
 
-	// TODO: Notify UI of matchmaking failure
+	OnMatchmakingError.Broadcast(ErrorMessage);
+
+	if (UHMVRStatusWidget* Widget = EnsureStatusWidget())
+	{
+		Widget->ShowError(ErrorMessage);
+	}
 }
 
 void UHMVRGameInstance::OnConnectionSuccess()
 {
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Connected to game server successfully"));
 
-	// TODO: Notify UI of successful connection
+	OnConnectionEstablished.Broadcast();
+
+	if (ActiveStatusWidget && IsValid(ActiveStatusWidget))
+	{
+		ActiveStatusWidget->ShowSuccess();
+	}
 }
 
 void UHMVRGameInstance::OnConnectionFailure(const FString& ErrorMessage)
 {
 	UE_LOG(LogTemp, Error, TEXT("HMVRGameInstance: Connection failed - %s"), *ErrorMessage);
 
-	// TODO: Notify UI of connection failure
-	// TODO: Return to main menu
+	OnConnectionError.Broadcast(ErrorMessage);
+
+	if (UHMVRStatusWidget* Widget = EnsureStatusWidget())
+	{
+		Widget->ShowError(FString::Printf(TEXT("Connection failed: %s"), *ErrorMessage));
+	}
+
+	ReturnToMainMenu();
+}
+
+UHMVRStatusWidget* UHMVRGameInstance::EnsureStatusWidget()
+{
+	if (ActiveStatusWidget && IsValid(ActiveStatusWidget))
+	{
+		return ActiveStatusWidget;
+	}
+
+	if (!StatusWidgetClass)
+	{
+		UE_LOG(LogTemp, Verbose, TEXT("HMVRGameInstance: StatusWidgetClass not set — no UI shown"));
+		return nullptr;
+	}
+
+	APlayerController* PC = GetFirstLocalPlayerController(GetWorld());
+	if (!PC)
+	{
+		return nullptr;
+	}
+
+	ActiveStatusWidget = CreateWidget<UHMVRStatusWidget>(PC, StatusWidgetClass);
+	if (ActiveStatusWidget)
+	{
+		ActiveStatusWidget->AddToViewport();
+		ActiveStatusWidget->OnRetryRequested.AddDynamic(this, &UHMVRGameInstance::StartMatchmaking);
+		ActiveStatusWidget->OnCancelRequested.AddDynamic(this, &UHMVRGameInstance::CancelMatchmaking);
+	}
+
+	return ActiveStatusWidget;
 }

@@ -5,13 +5,22 @@
 #include "CoreMinimal.h"
 #include "Engine/GameInstance.h"
 #include "VoiceChatInterface.h"
+#include "HMVRStatusWidget.h"
 #include "Http.h"
 #include "HMVRGameInstance.generated.h"
 
 class FGameLiftServerSDKModule;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMatchmakingStatusChanged, const FString&, Status);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMatchmakingError,         const FString&, ErrorMessage);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnConnectionEstablished);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnConnectionError, const FString&, ErrorMessage);
+
 /**
- * Game Instance for managing session state and authentication
+ * Game Instance for managing session state and authentication.
+ *
+ * Broadcasts Blueprint-assignable delegates on all matchmaking / connection state
+ * changes so UI widgets can react without polling.
  */
 UCLASS()
 class HYPERMAGEVR_API UHMVRGameInstance : public UGameInstance
@@ -47,6 +56,45 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Connection")
 	void ConnectToGameServer(const FString& ServerAddress, int32 Port);
 
+	// Navigation
+	UFUNCTION(BlueprintCallable, Category = "Navigation")
+	void ReturnToMainMenu();
+
+	// ── Delegates (bind in Blueprint or C++) ────────────────────────────────
+
+	/** Fired when matchmaking status changes (e.g. "SEARCHING", "COMPLETED", "CANCELLED"). */
+	UPROPERTY(BlueprintAssignable, Category = "Matchmaking")
+	FOnMatchmakingStatusChanged OnMatchmakingStatusChanged;
+
+	/** Fired when matchmaking fails — carries the human-readable error message. */
+	UPROPERTY(BlueprintAssignable, Category = "Matchmaking")
+	FOnMatchmakingError OnMatchmakingError;
+
+	/** Fired when the game server connection is successfully established. */
+	UPROPERTY(BlueprintAssignable, Category = "Connection")
+	FOnConnectionEstablished OnConnectionEstablished;
+
+	/** Fired when the game server connection fails — carries the error message. */
+	UPROPERTY(BlueprintAssignable, Category = "Connection")
+	FOnConnectionError OnConnectionError;
+
+	// ── Status Widget ────────────────────────────────────────────────────────
+
+	/**
+	 * Blueprint subclass of UHMVRStatusWidget to instantiate for in-game status UI.
+	 * Set this on the GameInstance Blueprint defaults.
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UHMVRStatusWidget> StatusWidgetClass;
+
+	/** Currently active status widget instance (nullptr if not yet created). */
+	UPROPERTY(BlueprintReadOnly, Category = "UI")
+	UHMVRStatusWidget* ActiveStatusWidget = nullptr;
+
+	/** Level name to travel to when returning to the main menu. */
+	UPROPERTY(EditDefaultsOnly, Category = "Navigation")
+	FName MainMenuLevelName = FName(TEXT("MainMenu"));
+
 protected:
 	// Authentication state
 	UPROPERTY(BlueprintReadOnly, Category = "Authentication")
@@ -70,10 +118,14 @@ protected:
 	void PollMatchmakingStatus();
 	void OnStartMatchmakingResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
 	void OnMatchmakingStatusResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
+	void OnCancelMatchmakingResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
 
 	// Connection callbacks
 	void OnConnectionSuccess();
 	void OnConnectionFailure(const FString& ErrorMessage);
+
+	// UI helpers
+	UHMVRStatusWidget* EnsureStatusWidget();
 
 	// Voice chat manager
 	UPROPERTY()
@@ -101,6 +153,6 @@ private:
 	int32 MatchmakingPollAttempt = 0;
 	static constexpr int32 MaxMatchmakingPollAttempts = 40; // 2 min at 3s intervals
 
-	// Session API base URL (POST /matchmaking/start, GET /matchmaking/status/{id})
+	// Session API base URL (POST /matchmaking/start, GET /matchmaking/status/{id}, DELETE /matchmaking/cancel/{id})
 	const FString SessionApiBaseUrl = TEXT("https://fhjoxyk9x5.execute-api.eu-west-1.amazonaws.com/dev");
 };

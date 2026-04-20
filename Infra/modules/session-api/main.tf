@@ -146,6 +146,9 @@ resource "aws_api_gateway_deployment" "session_api" {
       aws_api_gateway_resource.session_summary.id,
       aws_api_gateway_method.post_session_summary.id,
       aws_api_gateway_integration.post_session_summary.id,
+      aws_api_gateway_resource.matchmaking_cancel_ticket.id,
+      aws_api_gateway_method.cancel_matchmaking.id,
+      aws_api_gateway_integration.cancel_matchmaking.id,
     ]))
   }
 
@@ -444,6 +447,98 @@ resource "aws_lambda_permission" "post_session_summary" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.post_session_summary.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.session_api.execution_arn}/*/*"
+}
+
+# /matchmaking/cancel/{ticketId} resource
+resource "aws_api_gateway_resource" "matchmaking_cancel" {
+  rest_api_id = aws_api_gateway_rest_api.session_api.id
+  parent_id   = aws_api_gateway_resource.matchmaking.id
+  path_part   = "cancel"
+}
+
+resource "aws_api_gateway_resource" "matchmaking_cancel_ticket" {
+  rest_api_id = aws_api_gateway_rest_api.session_api.id
+  parent_id   = aws_api_gateway_resource.matchmaking_cancel.id
+  path_part   = "{ticketId}"
+}
+
+# DELETE /matchmaking/cancel/{ticketId}
+resource "aws_api_gateway_method" "cancel_matchmaking" {
+  rest_api_id   = aws_api_gateway_rest_api.session_api.id
+  resource_id   = aws_api_gateway_resource.matchmaking_cancel_ticket.id
+  http_method   = "DELETE"
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = aws_api_gateway_authorizer.cognito.id
+
+  request_parameters = {
+    "method.request.path.ticketId" = true
+  }
+}
+
+resource "aws_api_gateway_integration" "cancel_matchmaking" {
+  rest_api_id             = aws_api_gateway_rest_api.session_api.id
+  resource_id             = aws_api_gateway_resource.matchmaking_cancel_ticket.id
+  http_method             = aws_api_gateway_method.cancel_matchmaking.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.cancel_matchmaking.invoke_arn
+}
+
+# CloudWatch Log Group for cancel Lambda
+resource "aws_cloudwatch_log_group" "lambda_cancel_matchmaking" {
+  name              = "/aws/lambda/${var.project_name}-cancel-matchmaking-${var.environment}"
+  retention_in_days = var.log_retention_days
+
+  tags = merge(var.tags, {
+    Name        = "${var.project_name}-cancel-matchmaking-logs"
+    Environment = var.environment
+  })
+}
+
+# Lambda deployment package: Cancel Matchmaking
+data "archive_file" "cancel_matchmaking" {
+  type        = "zip"
+  source_dir  = "${path.module}/lambda/cancel-matchmaking"
+  output_path = "${path.module}/lambda/dist/cancel-matchmaking.zip"
+}
+
+# Lambda function: Cancel Matchmaking
+resource "aws_lambda_function" "cancel_matchmaking" {
+  filename         = data.archive_file.cancel_matchmaking.output_path
+  function_name    = "${var.project_name}-cancel-matchmaking-${var.environment}"
+  role             = aws_iam_role.lambda.arn
+  handler          = "index.handler"
+  source_code_hash = data.archive_file.cancel_matchmaking.output_base64sha256
+  runtime          = "nodejs20.x"
+  timeout          = 30
+  memory_size      = 256
+
+  environment {
+    variables = {
+      ENVIRONMENT = var.environment
+      LOG_LEVEL   = var.lambda_log_level
+    }
+  }
+
+  tags = merge(var.tags, {
+    Name        = "${var.project_name}-cancel-matchmaking"
+    Environment = var.environment
+  })
+
+  depends_on = [
+    aws_cloudwatch_log_group.lambda_cancel_matchmaking,
+    aws_iam_role_policy.lambda_logs,
+    aws_iam_role_policy.lambda_gamelift
+  ]
+}
+
+# Lambda permission: Cancel Matchmaking
+resource "aws_lambda_permission" "cancel_matchmaking" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.cancel_matchmaking.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.session_api.execution_arn}/*/*"
 }

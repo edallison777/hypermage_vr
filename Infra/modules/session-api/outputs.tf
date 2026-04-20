@@ -59,3 +59,13 @@ output "api_gateway_log_group" {
   description = "CloudWatch log group for API Gateway"
   value       = aws_cloudwatch_log_group.api_gateway.name
 }
+
+output "cancel_matchmaking_function_name" {
+  description = "Cancel matchmaking Lambda function name"
+  value       = aws_lambda_function.cancel_matchmaking.function_name
+}
+
+output "cancel_matchmaking_function_arn" {
+  description = "Cancel matchmaking Lambda function ARN"
+  value       = aws_lambda_function.cancel_matchmaking.arn
+}
