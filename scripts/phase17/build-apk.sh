@@ -78,21 +78,26 @@ if [[ "$DO_BUILD" == true ]]; then
   # Convert paths to Windows format for RunUAT
   UPROJECT_WIN=$(cygpath -w "$UPROJECT")
   OUTPUT_WIN=$(cygpath -w "$OUTPUT_DIR")
+  RUNUAT_WIN=$(cygpath -w "$RUNUAT")
 
   mkdir -p "$OUTPUT_DIR"
 
-  # RunUAT.bat must be called via cmd.exe from Git Bash
-  cmd.exe /c "\"$RUNUAT\" BuildCookRun \
-    -project=\"$UPROJECT_WIN\" \
-    -noP4 \
-    -platform=Android \
-    -clientconfig=Development \
-    -cook -build -stage -pak \
-    -cookflavor=ASTC \
-    -archive \
-    -archivedirectory=\"$OUTPUT_WIN\" \
-    -nocompileeditor \
-    -log"
+  # Write a temp .bat file — most reliable way to invoke RunUAT with spaces in paths
+  BAT_FILE="$REPO_ROOT/.run-uat-apk.bat"
+  BAT_WIN=$(cygpath -w "$BAT_FILE")
+
+  printf '@echo off\r\n' > "$BAT_FILE"
+  printf '"%s" BuildCookRun -project="%s" -noP4 -platform=Android -clientconfig=Development -cook -build -stage -pak -cookflavor=ASTC -archive -archivedirectory="%s" -nocompileeditor -log\r\n' \
+    "$RUNUAT_WIN" "$UPROJECT_WIN" "$OUTPUT_WIN" >> "$BAT_FILE"
+
+  cmd.exe /c "$BAT_WIN"
+  EXIT_CODE=$?
+  rm -f "$BAT_FILE"
+
+  if [[ $EXIT_CODE -ne 0 ]]; then
+    echo "ERROR: RunUAT exited with code $EXIT_CODE" >&2
+    exit $EXIT_CODE
+  fi
 
   echo ""
   if [[ -f "$APK_PATH" ]]; then
@@ -131,8 +136,6 @@ if [[ "$DO_INSTALL" == true ]]; then
       exit 1
     fi
   fi
-
-  ADB_WIN=$(cygpath -w "$APK_PATH")
 
   echo "Connected devices:"
   "$ADB" devices
