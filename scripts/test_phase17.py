@@ -159,6 +159,29 @@ def test_main_menu_level_name(verbose):
     return ok, "ReturnToMainMenu wired" if ok else f"Missing: {missing}"
 
 
+def test_auto_login_implemented(verbose):
+    """Persistent refresh token: HMVRSaveGame exists, auto-login flow wired in GameInstance."""
+    save_h  = SOURCE_DIR / "HMVRSaveGame.h"
+    gi_h    = SOURCE_DIR / "HMVRGameInstance.h"
+    gi_cpp  = SOURCE_DIR / "HMVRGameInstance.cpp"
+
+    checks = {
+        "HMVRSaveGame.h exists":       save_h.exists(),
+        "RefreshToken field":          save_h.exists() and "RefreshToken" in save_h.read_text(encoding="utf-8"),
+        "SetRefreshToken declared":    "SetRefreshToken" in gi_h.read_text(encoding="utf-8"),
+        "OnAutoLoginComplete delegate":"OnAutoLoginComplete" in gi_h.read_text(encoding="utf-8"),
+        "TryAutoLogin impl":           "TryAutoLogin" in gi_cpp.read_text(encoding="utf-8"),
+        "REFRESH_TOKEN_AUTH":          "REFRESH_TOKEN_AUTH" in gi_cpp.read_text(encoding="utf-8"),
+        "ClearSavedCredentials impl":  "ClearSavedCredentials" in gi_cpp.read_text(encoding="utf-8"),
+    }
+    if verbose:
+        for k, v in checks.items():
+            print(f"  {k}: {'ok' if v else 'MISSING'}")
+    missing = [k for k, v in checks.items() if not v]
+    ok = len(missing) == 0
+    return ok, "Auto-login flow complete" if ok else f"Missing: {missing}"
+
+
 # ── E2E checks (post live-test) ────────────────────────────────────────────────
 
 def test_no_guid_playerids_in_dynamo(verbose):
@@ -222,11 +245,12 @@ def main():
     print("=" * 70)
 
     tests = [
-        ("GameLift — fleet ACTIVE with Phase 15 build",               test_fleet_active),
-        ("GameLift — alias points to current fleet",                   test_alias_points_to_fleet),
-        ("Source — HMVRStatusWidget has all 5 event handlers",         test_status_widget_complete),
-        ("Source — HMVRGameInstance delegates + StatusWidgetClass",    test_game_instance_delegates),
-        ("Source — MainMenuLevelName declared + ReturnToMainMenu impl", test_main_menu_level_name),
+        ("GameLift — fleet ACTIVE with Phase 15 build",                test_fleet_active),
+        ("GameLift — alias points to current fleet",                    test_alias_points_to_fleet),
+        ("Source — HMVRStatusWidget has all 5 event handlers",          test_status_widget_complete),
+        ("Source — HMVRGameInstance delegates + StatusWidgetClass",     test_game_instance_delegates),
+        ("Source — MainMenuLevelName declared + ReturnToMainMenu impl",  test_main_menu_level_name),
+        ("Source — Auto-login: SaveGame + refresh token flow wired",    test_auto_login_implemented),
     ]
 
     if args.check_e2e:

@@ -1,6 +1,7 @@
 // Copyright 2026 HyperMage. All Rights Reserved.
 
 #include "HMVRGameInstance.h"
+#include "HMVRSaveGame.h"
 #include "JWTValidator.h"
 #include "VoiceChatInterface.h"
 #include "MockVoiceProvider.h"
@@ -16,6 +17,8 @@
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
 
+const FString UHMVRGameInstance::CredentialsSaveSlot = TEXT("HyperMageVR_Credentials");
+
 void UHMVRGameInstance::Init()
 {
 	Super::Init();
@@ -23,7 +26,10 @@ void UHMVRGameInstance::Init()
 	if (IsRunningDedicatedServer())
 	{
 		InitializeGameLift();
+		return;
 	}
+
+	TryAutoLogin();
 
 	// Initialize voice chat manager with mock provider
 	VoiceChatManager = NewObject<UVoiceChatManager>(this);
@@ -114,6 +120,133 @@ void UHMVRGameInstance::InitializeGameLift()
 	bGameLiftInitialized = true;
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: GameLift SDK initialized and ProcessReady called"));
 }
+
+// ── Auto-login (refresh token persistence) ────────────────────────────────────
+
+void UHMVRGameInstance::TryAutoLogin()
+{
+	UHMVRSaveGame* Save = Cast<UHMVRSaveGame>(
+		UGameplayStatics::LoadGameFromSlot(CredentialsSaveSlot, 0));
+
+	if (!Save || Save->RefreshToken.IsEmpty())
+	{
+		UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: No saved credentials — showing login UI"));
+		OnAutoLoginComplete.Broadcast(false, TEXT(""));
+		return;
+	}
+
+	CachedUsername = Save->CachedUsername;
+	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Saved credentials found for '%s' — refreshing token"),
+		*CachedUsername);
+
+	// POST to Cognito REFRESH_TOKEN_AUTH
+	TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
+	Body->SetStringField(TEXT("AuthFlow"), TEXT("REFRESH_TOKEN_AUTH"));
+	Body->SetStringField(TEXT("ClientId"), TEXT("2iinqhoja78kj1et6rcv28bjvf"));
+
+	TSharedRef<FJsonObject> Params = MakeShared<FJsonObject>();
+	Params->SetStringField(TEXT("REFRESH_TOKEN"), Save->RefreshToken);
+	Body->SetObjectField(TEXT("AuthParameters"), Params);
+
+	FString BodyString;
+	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&BodyString);
+	FJsonSerializer::Serialize(Body, Writer);
+
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Req = FHttpModule::Get().CreateRequest();
+	Req->SetURL(TEXT("https://cognito-idp.eu-west-1.amazonaws.com/"));
+	Req->SetVerb(TEXT("POST"));
+	Req->SetHeader(TEXT("Content-Type"), TEXT("application/x-amz-json-1.1"));
+	Req->SetHeader(TEXT("X-Amz-Target"), TEXT("AWSCognitoIdentityProviderService.InitiateAuth"));
+	Req->SetContentAsString(BodyString);
+	Req->OnProcessRequestComplete().BindUObject(this, &UHMVRGameInstance::OnTokenRefreshResponse);
+	Req->ProcessRequest();
+}
+
+void UHMVRGameInstance::OnTokenRefreshResponse(FHttpRequestPtr /*Request*/, FHttpResponsePtr Response, bool bConnectedSuccessfully)
+{
+	if (!bConnectedSuccessfully || !Response.IsValid())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("HMVRGameInstance: Auto-login — network error, showing login UI"));
+		OnAutoLoginComplete.Broadcast(false, TEXT("No internet connection"));
+		return;
+	}
+
+	TSharedPtr<FJsonObject> Json;
+	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Response->GetContentAsString());
+
+	if (Response->GetResponseCode() != 200 || !FJsonSerializer::Deserialize(Reader, Json) || !Json.IsValid())
+	{
+		// Token expired or revoked — clear it so we don't retry next launch
+		UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Refresh token invalid (HTTP %d) — clearing credentials"),
+			Response->GetResponseCode());
+		ClearSavedCredentials();
+		OnAutoLoginComplete.Broadcast(false, TEXT("Session expired — please log in again"));
+		return;
+	}
+
+	const TSharedPtr<FJsonObject>* AuthResult;
+	if (!Json->TryGetObjectField(TEXT("AuthenticationResult"), AuthResult))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("HMVRGameInstance: Auto-login — unexpected Cognito response"));
+		ClearSavedCredentials();
+		OnAutoLoginComplete.Broadcast(false, TEXT("Unexpected authentication response"));
+		return;
+	}
+
+	FString IdToken;
+	(*AuthResult)->TryGetStringField(TEXT("IdToken"), IdToken);
+
+	if (IdToken.IsEmpty())
+	{
+		ClearSavedCredentials();
+		OnAutoLoginComplete.Broadcast(false, TEXT("Empty token in response"));
+		return;
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Auto-login succeeded for '%s'"), *CachedUsername);
+	SetJWTToken(IdToken);
+	OnAutoLoginComplete.Broadcast(true, TEXT(""));
+}
+
+void UHMVRGameInstance::SetRefreshToken(const FString& Token, const FString& Username)
+{
+	if (Token.IsEmpty())
+	{
+		return;
+	}
+	SaveCredentials(Token, Username);
+}
+
+void UHMVRGameInstance::SaveCredentials(const FString& RefreshToken, const FString& Username)
+{
+	UHMVRSaveGame* Save = Cast<UHMVRSaveGame>(
+		UGameplayStatics::CreateSaveGameObject(UHMVRSaveGame::StaticClass()));
+	Save->RefreshToken = RefreshToken;
+	Save->CachedUsername = Username;
+	Save->SavedAt = FDateTime::UtcNow().ToUnixTimestamp();
+	UGameplayStatics::SaveGameToSlot(Save, CredentialsSaveSlot, 0);
+	CachedUsername = Username;
+	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Credentials saved for '%s'"), *Username);
+}
+
+void UHMVRGameInstance::ClearSavedCredentials()
+{
+	UGameplayStatics::DeleteGameInSlot(CredentialsSaveSlot, 0);
+	CachedUsername.Empty();
+	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Saved credentials cleared"));
+}
+
+bool UHMVRGameInstance::HasSavedCredentials() const
+{
+	return UGameplayStatics::DoesSaveGameExist(CredentialsSaveSlot, 0);
+}
+
+FString UHMVRGameInstance::GetCachedUsername() const
+{
+	return CachedUsername;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 void UHMVRGameInstance::SetJWTToken(const FString& Token)
 {

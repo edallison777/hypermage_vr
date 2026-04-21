@@ -301,7 +301,11 @@ aws gamelift update-fleet-capacity --fleet-id fleet-bdae1b71-b2c1-42cf-b242-6322
   - `BlueprintImplementableEvent` → `BlueprintNativeEvent` with C++ default implementations
   - Full layout: full-screen overlay, status text, Retry + Cancel buttons (shown only on error)
   - `EnsureStatusWidget()` falls back to `UHMVRStatusWidget::StaticClass()` when `StatusWidgetClass` unset
-- [x] Pre-live checks: 5/5 passed (2026-04-21) — fleet ACTIVE, alias correct, C++ source complete
+- [x] Persistent refresh token auto-login (`HMVRSaveGame`, `TryAutoLogin`, `SetRefreshToken`, `OnAutoLoginComplete`)
+  - First launch: Blueprint calls `SetRefreshToken(token, username)` after manual login → saved to disk
+  - Subsequent launches: `TryAutoLogin()` exchanges saved token via Cognito `REFRESH_TOKEN_AUTH` → skips login UI
+  - Expired/revoked token: credentials cleared automatically → login UI shown with "Session expired" message
+- [x] Pre-live checks: 6/6 passed (2026-04-21) — fleet ACTIVE, alias correct, C++ source complete
 - [ ] Rebuild APK with updated C++ and sideload to Quest 3:
   - Build + install: `./scripts/phase17/build-apk.sh --install`
   - Build only: `./scripts/phase17/build-apk.sh`

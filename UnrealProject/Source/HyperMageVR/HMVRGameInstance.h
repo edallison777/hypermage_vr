@@ -6,11 +6,13 @@
 #include "Engine/GameInstance.h"
 #include "VoiceChatInterface.h"
 #include "HMVRStatusWidget.h"
+#include "HMVRSaveGame.h"
 #include "Http.h"
 #include "HMVRGameInstance.generated.h"
 
 class FGameLiftServerSDKModule;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnAutoLoginComplete, bool, bSuccess, const FString&, ErrorMessage);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMatchmakingStatusChanged, const FString&, Status);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMatchmakingError,         const FString&, ErrorMessage);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnConnectionEstablished);
@@ -38,6 +40,25 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Authentication")
 	FString GetJWTToken() const { return JWTToken; }
 
+	/**
+	 * Call this from Blueprint immediately after a successful manual login.
+	 * Persists the refresh token so the next launch skips the login screen.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Authentication")
+	void SetRefreshToken(const FString& Token, const FString& Username = TEXT(""));
+
+	/** Remove saved credentials (logout or token revocation). */
+	UFUNCTION(BlueprintCallable, Category = "Authentication")
+	void ClearSavedCredentials();
+
+	/** True if a saved refresh token exists on disk (before auto-login resolves). */
+	UFUNCTION(BlueprintCallable, Category = "Authentication")
+	bool HasSavedCredentials() const;
+
+	/** Username cached from last login — useful for "Welcome back" UI. */
+	UFUNCTION(BlueprintCallable, Category = "Authentication")
+	FString GetCachedUsername() const;
+
 	// Session management
 	UFUNCTION(BlueprintCallable, Category = "Session")
 	void SetPlayerSessionId(const FString& SessionId);
@@ -61,6 +82,14 @@ public:
 	void ReturnToMainMenu();
 
 	// ── Delegates (bind in Blueprint or C++) ────────────────────────────────
+
+	/**
+	 * Fired once on launch after the auto-login attempt completes.
+	 * bSuccess=true  → JWTToken is set, proceed directly to matchmaking.
+	 * bSuccess=false → no saved credentials or token expired, show login UI.
+	 */
+	UPROPERTY(BlueprintAssignable, Category = "Authentication")
+	FOnAutoLoginComplete OnAutoLoginComplete;
 
 	/** Fired when matchmaking status changes (e.g. "SEARCHING", "COMPLETED", "CANCELLED"). */
 	UPROPERTY(BlueprintAssignable, Category = "Matchmaking")
@@ -110,6 +139,11 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Session")
 	FString MatchmakingTicketId;
 
+	// Auto-login
+	void TryAutoLogin();
+	void OnTokenRefreshResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
+	void SaveCredentials(const FString& RefreshToken, const FString& Username);
+
 	// Matchmaking callbacks
 	void OnMatchmakingSuccess(const FString& ServerAddress, int32 Port, const FString& SessionId);
 	void OnMatchmakingFailure(const FString& ErrorMessage);
@@ -147,6 +181,10 @@ private:
 	FGameLiftServerSDKModule* GameLiftSdkModule = nullptr;
 	bool bGameLiftInitialized = false;
 	FString GameLiftSessionId;
+
+	// Credential persistence
+	static const FString CredentialsSaveSlot;
+	FString CachedUsername;
 
 	// Matchmaking HTTP polling state
 	FTimerHandle MatchmakingPollTimerHandle;
