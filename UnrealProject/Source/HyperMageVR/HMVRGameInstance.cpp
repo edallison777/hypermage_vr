@@ -447,19 +447,17 @@ UHMVRStatusWidget* UHMVRGameInstance::EnsureStatusWidget()
 		return ActiveStatusWidget;
 	}
 
-	if (!StatusWidgetClass)
-	{
-		UE_LOG(LogTemp, Verbose, TEXT("HMVRGameInstance: StatusWidgetClass not set — no UI shown"));
-		return nullptr;
-	}
-
 	APlayerController* PC = GetFirstLocalPlayerController(GetWorld());
 	if (!PC)
 	{
 		return nullptr;
 	}
 
-	ActiveStatusWidget = CreateWidget<UHMVRStatusWidget>(PC, StatusWidgetClass);
+	TSubclassOf<UHMVRStatusWidget> WidgetClass = StatusWidgetClass
+		? StatusWidgetClass
+		: UHMVRStatusWidget::StaticClass();
+
+	ActiveStatusWidget = CreateWidget<UHMVRStatusWidget>(PC, WidgetClass);
 	if (ActiveStatusWidget)
 	{
 		ActiveStatusWidget->AddToViewport();

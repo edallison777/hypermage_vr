@@ -175,7 +175,7 @@ def test_status_widget_declared(verbose):
     checks = {
         "UUserWidget base": "UUserWidget" in content,
         "ShowError":        "ShowError" in content,
-        "BlueprintImplementableEvent": "BlueprintImplementableEvent" in content,
+        "BlueprintNativeEvent": "BlueprintNativeEvent" in content or "BlueprintImplementableEvent" in content,
         "OnRetryRequested": "OnRetryRequested" in content,
         "OnCancelRequested": "OnCancelRequested" in content,
     }

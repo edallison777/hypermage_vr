@@ -248,39 +248,72 @@ responding to live GM direction, with commissioned art and original audio.
 - [x] Terraform: `fleet_session_api` IAM policy — `execute-api:Invoke` for both session endpoints on fleet role
 - [x] Terraform: `api_execution_arn` output added to session-api module, wired into gamelift-fleet via `session_api_execution_arn`
 - [x] Integration test: 6/6 passed
-- [x] **C++ changes take effect after Phase 15 server rebuild**
 
 ---
 
-### Phase 15 — Server Rebuild & Fleet Update ← **NEXT — resume here**
+### Phase 15 — Server Rebuild & Fleet Update ✅ COMPLETE
 > **Goal:** The GameLift fleet runs the current codebase (all C++ from phases 1–14).
 > **Done when:** `aws gamelift describe-fleet-attributes` shows a build from today; Quest 3 connects and session summary lands in DynamoDB with a real PlayerId.
 
-Scripts created (ready to run):
-- [x] `scripts/phase15/01-rebuild-server.sh` — EC2 SSM build (mirrors Phase 4, pulls Phase 13/14 C++)
-- [x] `scripts/phase15/02-deploy-fleet.sh` — create-build + fleet replace + Phase 14 IAM + FlexMatch update
-- [x] `scripts/deploy_phase15.py` — orchestrator: Terraform IAM → rebuild → fleet deploy
-- [x] `scripts/test_phase15.py` — validates build READY, fleet ACTIVE, DynamoDB, Lambda, PlayerId logic
+- [x] UE5 Linux server rebuilt with Phase 13/14 C++ (HTTP matchmaking, PlayerState, AwsSigV4, SessionAPIClient)
+- [x] `HyperMageVRServer.zip` uploaded to `s3://hypermage-vr-unreal-build-artifacts-dev/builds/latest/`
+- [x] New GameLift build registered — `build-33d794db-c275-4fb6-9ca9-3a14836eb8c1` READY
+- [x] Terraform fleet replace — `fleet-bdae1b71-b2c1-42cf-b242-6322be08d5a9` ACTIVE with Phase 15 build
+- [x] Phase 14 IAM: `session-api-invoke` policy on fleet role `hypermage-vr-gamelift-fleet-dev`
+- [x] Alias `alias-e67abbec-14ba-4e6d-8e95-6b0edfaad18e` unchanged — client code unaffected
+- [x] Integration test: 6/6 passed (`scripts/test_phase15.py`)
 
-To run:
+**Scale up before live E2E:**
 ```bash
-GITHUB_TOKEN=ghp_xxx PYTHONIOENCODING=utf-8 /c/Python312/python.exe scripts/deploy_phase15.py
+aws gamelift update-fleet-capacity --fleet-id fleet-bdae1b71-b2c1-42cf-b242-6322be08d5a9 --desired-instances 1 --region eu-west-1
 ```
-
-Deployment checklist:
-- [ ] UE5 Linux server rebuilt with Phase 13/14 C++ (HTTP matchmaking, PlayerState, AwsSigV4, SessionAPIClient)
-- [ ] `HyperMageVRServer.zip` uploaded to `s3://hypermage-vr-unreal-build-artifacts-dev/builds/latest/`
-- [ ] New GameLift build registered (SDK 5.4.0, AMAZON_LINUX_2023) and READY
-- [ ] Terraform fleet replace complete — new fleet ACTIVE with Phase 15 build
-- [ ] Phase 14 IAM: `session-api-invoke` policy on fleet role
-- [ ] `gamelift_build_id.auto.tfvars` written with new build ID
-- [ ] `scripts/test_phase15.py` — all 6 tests pass
-- [ ] Fleet scaled to 1; Quest 3 connects + session summary in DynamoDB with real Cognito PlayerId
-- [ ] Fleet scaled back to 0 after testing
 
 ---
 
-### Phase 16 — Interaction Systems, Voice, QA
+### Phase 16 — APK Hardening: Offline Resilience + Error UX ✅ COMPLETE
+> **Goal:** The Quest 3 client handles network failures gracefully and shows clear error states to the player.
+> **Done when:** Matchmaking failure shows an error widget with Retry/Cancel; session API retries on transient failure; CancelMatchmaking sends a real DELETE request.
+
+- [x] `HMVRStatusWidget` (C++): `UUserWidget` base with `BlueprintImplementableEvent` Show*/HideWidget
+  - `ShowSearching()`, `ShowConnecting()`, `ShowError(Message)`, `ShowSuccess()`, `HideWidget()`
+  - `BlueprintAssignable` delegates: `OnRetryRequested`, `OnCancelRequested`
+- [x] `UHMVRGameInstance` upgrades:
+  - `EnsureStatusWidget()` — creates widget from `StatusWidgetClass`, adds to viewport, wires delegates
+  - `ReturnToMainMenu()` — `OpenLevel` to `MainMenuLevelName`
+  - 4 `BlueprintAssignable` delegates: `OnMatchmakingStatusChanged`, `OnMatchmakingError`, `OnConnectionEstablished`, `OnConnectionError`
+  - All 4 dangling `// TODO: Notify UI` comments replaced with real delegate broadcasts + widget calls
+- [x] `CancelMatchmaking()` — sends `DELETE /matchmaking/cancel/{ticketId}` (was a TODO stub)
+- [x] `SessionAPIClient` — exponential-backoff retry (MaxRetries=3, delays 1s/2s/4s via FTSTicker) on 5xx/network error
+- [x] Lambda `hypermage-vr-cancel-matchmaking-dev` — `DELETE /matchmaking/cancel/{ticketId}`, Cognito auth, idempotent
+- [x] Terraform: cancel Lambda + `/matchmaking/cancel/{ticketId}` API GW route deployed (8 new resources)
+- [x] `HyperMageVR.Build.cs` — `UMG` module added
+- [x] Integration test: 7/7 passed (`scripts/test_phase16.py`)
+
+**Next step:** Create Blueprint subclass of `UHMVRStatusWidget` in UE5 editor for actual in-headset error UI, then live E2E on Quest 3.
+
+---
+
+### Phase 17 — Live E2E on Quest 3 + Error UX Blueprint [-]
+> **Goal:** Full live end-to-end test on the headset with the Phase 16 error UX visible: matchmaking shows "Searching…", failure shows error widget with working Retry/Cancel buttons.
+> **Done when:** Quest 3 connects successfully to the new fleet with real session persistence, AND deliberately-triggered failure shows the error widget.
+
+- [ ] Create `BP_StatusWidget` Blueprint subclass of `UHMVRStatusWidget` in UE5 editor
+  - Implement `ShowSearching`, `ShowConnecting`, `ShowError`, `ShowSuccess`, `HideWidget` events with UMG visuals
+  - Wire `OnRetryRequested` and `OnCancelRequested` button clicks
+- [ ] Set `StatusWidgetClass = BP_StatusWidget` on `BP_HMVRGameInstance` defaults
+- [ ] Set `MainMenuLevelName` on `BP_HMVRGameInstance` defaults
+- [ ] Scale fleet to 1: `aws gamelift update-fleet-capacity --fleet-id fleet-bdae1b71-b2c1-42cf-b242-6322be08d5a9 --desired-instances 1 --region eu-west-1`
+- [ ] Live Quest 3 test — happy path: login → matchmaking → "Searching…" widget → COMPLETED → connected
+- [ ] Live Quest 3 test — failure path: disable network mid-search → error widget visible → Retry works
+- [ ] Verify DynamoDB `player-sessions` entry contains real Cognito sub (not a GUID)
+- [ ] Run `python scripts/test_phase17.py --check-e2e` to confirm no GUID playerIds + fleet scaled down
+- [ ] Scale fleet back to 0 after testing
+
+**Pre-live checks:** 5/5 passed (2026-04-21) — fleet ACTIVE, alias correct, C++ source complete
+
+---
+
+### Phase 18 — Interaction Systems, Voice, QA
 > **Goal:** Participants can interact with the world. Agents validate the whole pipeline automatically.
 > **Done when:** Full automated QA pass on a generated scene — assets, audio, narrative hooks, VR + web delivery all validated.
 
@@ -320,7 +353,7 @@ Deployment checklist:
 
 **Scale fleet up for testing:**
 ```bash
-aws gamelift update-fleet-capacity --fleet-id fleet-848aced2-ac8f-405a-b120-43f4f3904983 --desired-instances 1 --region eu-west-1
+aws gamelift update-fleet-capacity --fleet-id fleet-bdae1b71-b2c1-42cf-b242-6322be08d5a9 --desired-instances 1 --region eu-west-1
 ```
 
 ---
@@ -333,7 +366,8 @@ aws gamelift update-fleet-capacity --fleet-id fleet-848aced2-ac8f-405a-b120-43f4
 | Session API | `https://fhjoxyk9x5.execute-api.eu-west-1.amazonaws.com/dev` |
 | Cognito User Pool | `eu-west-1_q2rAaummA` |
 | Cognito Game Client | `2iinqhoja78kj1et6rcv28bjvf` |
-| GameLift Fleet | `fleet-848aced2-ac8f-405a-b120-43f4f3904983` |
+| GameLift Fleet | `fleet-bdae1b71-b2c1-42cf-b242-6322be08d5a9` |
+| GameLift Alias | `alias-e67abbec-14ba-4e6d-8e95-6b0edfaad18e` |
 | FlexMatch Config | `hypermage-vr-dev` |
 | S3 Build Bucket | `hypermage-vr-unreal-build-artifacts-dev` |
 | Terraform State | S3 `hypermage-vr-terraform-state` / `dev/terraform.tfstate` |
