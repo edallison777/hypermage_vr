@@ -28,11 +28,16 @@ ADB="C:/Users/j_e_a/AppData/Local/Android/Sdk/platform-tools/adb.exe"
 # ── Detect UE5 install ────────────────────────────────────────────────────────
 UE5_ROOT="${UE5_ROOT:-}"
 if [[ -z "$UE5_ROOT" ]]; then
+  # Prefer newest installed version
   for candidate in \
-    "C:/Program Files/Epic Games/UE_5.3" \
+    "C:/Program Files/Epic Games/UE_5.6" \
+    "C:/Program Files/Epic Games/UE_5.5" \
     "C:/Program Files/Epic Games/UE_5.4" \
-    "D:/Epic Games/UE_5.3" \
-    "D:/Epic Games/UE_5.4"; do
+    "C:/Program Files/Epic Games/UE_5.3" \
+    "D:/Epic Games/UE_5.6" \
+    "D:/Epic Games/UE_5.5" \
+    "D:/Epic Games/UE_5.4" \
+    "D:/Epic Games/UE_5.3"; do
     if [[ -f "$candidate/Engine/Build/BatchFiles/RunUAT.bat" ]]; then
       UE5_ROOT="$candidate"
       break
