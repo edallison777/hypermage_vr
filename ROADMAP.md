@@ -302,7 +302,10 @@ aws gamelift update-fleet-capacity --fleet-id fleet-bdae1b71-b2c1-42cf-b242-6322
   - Full layout: full-screen overlay, status text, Retry + Cancel buttons (shown only on error)
   - `EnsureStatusWidget()` falls back to `UHMVRStatusWidget::StaticClass()` when `StatusWidgetClass` unset
 - [x] Pre-live checks: 5/5 passed (2026-04-21) — fleet ACTIVE, alias correct, C++ source complete
-- [ ] Rebuild APK with updated C++ and sideload to Quest 3
+- [ ] Rebuild APK with updated C++ and sideload to Quest 3:
+  - Build + install: `./scripts/phase17/build-apk.sh --install`
+  - Build only: `./scripts/phase17/build-apk.sh`
+  - Override UE5 path if needed: `UE5_ROOT="D:/Epic Games/UE_5.3" ./scripts/phase17/build-apk.sh --install`
 - [ ] Scale fleet to 1: `aws gamelift update-fleet-capacity --fleet-id fleet-bdae1b71-b2c1-42cf-b242-6322be08d5a9 --desired-instances 1 --region eu-west-1`
 - [ ] Live Quest 3 test — happy path: login → matchmaking → "Searching..." widget → COMPLETED → connected
 - [ ] Live Quest 3 test — failure path: disable network mid-search → error widget visible → Retry works

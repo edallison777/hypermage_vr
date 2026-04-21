@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# build-apk.sh — Build the HyperMage VR Android APK (Quest 3) from the UE5 project
+#               and optionally sideload it via ADB.
+#
+# This is a local Windows build — it calls RunUAT.bat using the UE5 install on this PC.
+# No EC2 instance is involved (client-only changes: no server rebuild needed).
+#
+# Prerequisites:
+#   - UE5.3 installed with Android platform support + Android SDK/NDK configured
+#   - Quest 3 connected via ADB (wireless or USB) if using --install
+#   - Run wireless-adb.bat first for wireless install
+#
+# Usage:
+#   ./scripts/phase17/build-apk.sh              # build only
+#   ./scripts/phase17/build-apk.sh --install    # build + sideload
+#   ./scripts/phase17/build-apk.sh --install-only  # sideload existing APK without rebuilding
+#
+# Override UE5 install path:
+#   UE5_ROOT="D:/Epic Games/UE_5.3" ./scripts/phase17/build-apk.sh
+#
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+UPROJECT="$REPO_ROOT/UnrealProject/HyperMageVR.uproject"
+OUTPUT_DIR="$REPO_ROOT/Packaged/Android"
+ADB="C:/Users/j_e_a/AppData/Local/Android/Sdk/platform-tools/adb.exe"
+
+# ── Detect UE5 install ────────────────────────────────────────────────────────
+UE5_ROOT="${UE5_ROOT:-}"
+if [[ -z "$UE5_ROOT" ]]; then
+  for candidate in \
+    "C:/Program Files/Epic Games/UE_5.3" \
+    "C:/Program Files/Epic Games/UE_5.4" \
+    "D:/Epic Games/UE_5.3" \
+    "D:/Epic Games/UE_5.4"; do
+    if [[ -f "$candidate/Engine/Build/BatchFiles/RunUAT.bat" ]]; then
+      UE5_ROOT="$candidate"
+      break
+    fi
+  done
+fi
+
+if [[ -z "$UE5_ROOT" ]]; then
+  echo "ERROR: Could not find UE5 install. Set UE5_ROOT env var:" >&2
+  echo "  UE5_ROOT='D:/Epic Games/UE_5.3' ./scripts/phase17/build-apk.sh" >&2
+  exit 1
+fi
+
+RUNUAT="$UE5_ROOT/Engine/Build/BatchFiles/RunUAT.bat"
+echo "UE5 root : $UE5_ROOT"
+echo "RunUAT   : $RUNUAT"
+
+# ── Parse args ────────────────────────────────────────────────────────────────
+DO_BUILD=true
+DO_INSTALL=false
+for arg in "${@:-}"; do
+  case "$arg" in
+    --install)      DO_INSTALL=true ;;
+    --install-only) DO_BUILD=false; DO_INSTALL=true ;;
+  esac
+done
+
+# ── Resolve APK path (UE5 names it deterministically) ─────────────────────────
+APK_PATH="$OUTPUT_DIR/Android_ASTC/HyperMageVR-Android-Development-arm64.apk"
+
+# ── Build ─────────────────────────────────────────────────────────────────────
+if [[ "$DO_BUILD" == true ]]; then
+  echo ""
+  echo "=== Building HyperMage VR APK (Android/Quest 3) ==="
+  echo "Output : $OUTPUT_DIR"
+  echo ""
+
+  # Convert paths to Windows format for RunUAT
+  UPROJECT_WIN=$(cygpath -w "$UPROJECT")
+  OUTPUT_WIN=$(cygpath -w "$OUTPUT_DIR")
+
+  mkdir -p "$OUTPUT_DIR"
+
+  # RunUAT.bat must be called via cmd.exe from Git Bash
+  cmd.exe /c "\"$RUNUAT\" BuildCookRun \
+    -project=\"$UPROJECT_WIN\" \
+    -noP4 \
+    -platform=Android \
+    -clientconfig=Development \
+    -cook -build -stage -pak \
+    -cookflavor=ASTC \
+    -archive \
+    -archivedirectory=\"$OUTPUT_WIN\" \
+    -nocompileeditor \
+    -log"
+
+  echo ""
+  if [[ -f "$APK_PATH" ]]; then
+    APK_SIZE=$(du -sh "$APK_PATH" | cut -f1)
+    echo "=== APK built successfully ==="
+    echo "  Path : $APK_PATH"
+    echo "  Size : $APK_SIZE"
+  else
+    # UE5 sometimes places APK without the _ASTC suffix — check fallback locations
+    FALLBACK=$(find "$OUTPUT_DIR" -name "*.apk" 2>/dev/null | head -1)
+    if [[ -n "$FALLBACK" ]]; then
+      APK_PATH="$FALLBACK"
+      echo "=== APK built (found at alternate path) ==="
+      echo "  Path : $APK_PATH"
+    else
+      echo "ERROR: Build completed but APK not found under $OUTPUT_DIR" >&2
+      echo "Check UE5 packaging log above for errors." >&2
+      exit 1
+    fi
+  fi
+fi
+
+# ── Install ───────────────────────────────────────────────────────────────────
+if [[ "$DO_INSTALL" == true ]]; then
+  echo ""
+  echo "=== Installing APK on Quest 3 ==="
+
+  if [[ ! -f "$APK_PATH" ]]; then
+    # Try to find any APK in the output dir
+    FALLBACK=$(find "$OUTPUT_DIR" -name "*.apk" 2>/dev/null | head -1)
+    if [[ -n "$FALLBACK" ]]; then
+      APK_PATH="$FALLBACK"
+    else
+      echo "ERROR: No APK found at $APK_PATH" >&2
+      echo "Run without --install-only to build first." >&2
+      exit 1
+    fi
+  fi
+
+  ADB_WIN=$(cygpath -w "$APK_PATH")
+
+  echo "Connected devices:"
+  "$ADB" devices
+
+  echo ""
+  echo "Installing $APK_PATH ..."
+  "$ADB" install -r "$(cygpath -w "$APK_PATH")"
+
+  echo ""
+  echo "=== Install complete ==="
+  echo "Launch from: Quest 3 library → Unknown Sources → HyperMage VR"
+fi
+
+echo ""
+echo "Done."
