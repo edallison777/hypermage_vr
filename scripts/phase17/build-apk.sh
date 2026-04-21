@@ -75,24 +75,26 @@ if [[ "$DO_BUILD" == true ]]; then
   echo "Output : $OUTPUT_DIR"
   echo ""
 
-  # Convert paths to Windows format for RunUAT
-  UPROJECT_WIN=$(cygpath -w "$UPROJECT")
-  OUTPUT_WIN=$(cygpath -w "$OUTPUT_DIR")
-  RUNUAT_WIN=$(cygpath -w "$RUNUAT")
+  # cygpath -m = mixed mode: drive letter + forward slashes (works in both cmd and PS)
+  UPROJECT_WIN=$(cygpath -m "$UPROJECT")
+  OUTPUT_WIN=$(cygpath -m "$OUTPUT_DIR")
+  RUNUAT_WIN=$(cygpath -m "$RUNUAT")
 
   mkdir -p "$OUTPUT_DIR"
 
-  # Write a temp .bat file — most reliable way to invoke RunUAT with spaces in paths
-  BAT_FILE="$REPO_ROOT/.run-uat-apk.bat"
-  BAT_WIN=$(cygpath -w "$BAT_FILE")
+  # Write a temp .bat file (Unix path for shell writes, mixed path for cmd execution)
+  BAT_UNIX="$REPO_ROOT/.run-uat-apk.bat"
+  BAT_WIN=$(cygpath -m "$BAT_UNIX")
 
-  printf '@echo off\r\n' > "$BAT_FILE"
-  printf '"%s" BuildCookRun -project="%s" -noP4 -platform=Android -clientconfig=Development -cook -build -stage -pak -cookflavor=ASTC -archive -archivedirectory="%s" -nocompileeditor -log\r\n' \
-    "$RUNUAT_WIN" "$UPROJECT_WIN" "$OUTPUT_WIN" >> "$BAT_FILE"
+  # @echo on so RunUAT errors are visible; single long line avoids cmd continuation issues
+  printf '@echo on\r\n"%s" BuildCookRun -project="%s" -noP4 -platform=Android -clientconfig=Development -cook -build -stage -pak -cookflavor=ASTC -archive -archivedirectory="%s" -nocompileeditor -log\r\n' \
+    "$RUNUAT_WIN" "$UPROJECT_WIN" "$OUTPUT_WIN" > "$BAT_UNIX"
 
-  cmd.exe /c "$BAT_WIN"
+  echo "Running: $BAT_WIN"
+  # Use //c (double-slash) to prevent Git Bash from converting /c to a drive path
+  cmd //c "$BAT_WIN"
   EXIT_CODE=$?
-  rm -f "$BAT_FILE"
+  rm -f "$BAT_UNIX"
 
   if [[ $EXIT_CODE -ne 0 ]]; then
     echo "ERROR: RunUAT exited with code $EXIT_CODE" >&2
