@@ -293,23 +293,20 @@ aws gamelift update-fleet-capacity --fleet-id fleet-bdae1b71-b2c1-42cf-b242-6322
 
 ---
 
-### Phase 17 — Live E2E on Quest 3 + Error UX Blueprint [-]
+### Phase 17 — Live E2E on Quest 3 + Error UX [-]
 > **Goal:** Full live end-to-end test on the headset with the Phase 16 error UX visible: matchmaking shows "Searching…", failure shows error widget with working Retry/Cancel buttons.
 > **Done when:** Quest 3 connects successfully to the new fleet with real session persistence, AND deliberately-triggered failure shows the error widget.
 
-- [ ] Create `BP_StatusWidget` Blueprint subclass of `UHMVRStatusWidget` in UE5 editor
-  - Implement `ShowSearching`, `ShowConnecting`, `ShowError`, `ShowSuccess`, `HideWidget` events with UMG visuals
-  - Wire `OnRetryRequested` and `OnCancelRequested` button clicks
-- [ ] Set `StatusWidgetClass = BP_StatusWidget` on `BP_HMVRGameInstance` defaults
-- [ ] Set `MainMenuLevelName` on `BP_HMVRGameInstance` defaults
+- [x] `UHMVRStatusWidget` refactored to self-contained C++ widget — builds UMG layout in `NativeConstruct()`, no Blueprint subclass or editor setup needed
+  - `BlueprintImplementableEvent` → `BlueprintNativeEvent` with C++ default implementations
+  - Full layout: full-screen overlay, status text, Retry + Cancel buttons (shown only on error)
+  - `EnsureStatusWidget()` falls back to `UHMVRStatusWidget::StaticClass()` when `StatusWidgetClass` unset
+- [x] Pre-live checks: 5/5 passed (2026-04-21) — fleet ACTIVE, alias correct, C++ source complete
+- [ ] Rebuild APK with updated C++ and sideload to Quest 3
 - [ ] Scale fleet to 1: `aws gamelift update-fleet-capacity --fleet-id fleet-bdae1b71-b2c1-42cf-b242-6322be08d5a9 --desired-instances 1 --region eu-west-1`
-- [ ] Live Quest 3 test — happy path: login → matchmaking → "Searching…" widget → COMPLETED → connected
+- [ ] Live Quest 3 test — happy path: login → matchmaking → "Searching..." widget → COMPLETED → connected
 - [ ] Live Quest 3 test — failure path: disable network mid-search → error widget visible → Retry works
-- [ ] Verify DynamoDB `player-sessions` entry contains real Cognito sub (not a GUID)
-- [ ] Run `python scripts/test_phase17.py --check-e2e` to confirm no GUID playerIds + fleet scaled down
-- [ ] Scale fleet back to 0 after testing
-
-**Pre-live checks:** 5/5 passed (2026-04-21) — fleet ACTIVE, alias correct, C++ source complete
+- [ ] Run `python scripts/test_phase17.py --check-e2e` to confirm real Cognito subs in DynamoDB + fleet scaled down
 
 ---
 
