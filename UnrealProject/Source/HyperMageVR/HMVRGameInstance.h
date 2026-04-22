@@ -6,6 +6,7 @@
 #include "Engine/GameInstance.h"
 #include "VoiceChatInterface.h"
 #include "HMVRStatusWidget.h"
+#include "HMVRLoginWidget.h"
 #include "HMVRSaveGame.h"
 #include "Http.h"
 #include "HMVRGameInstance.generated.h"
@@ -13,6 +14,7 @@
 class FGameLiftServerSDKModule; // incomplete type; only used as pointer — no header needed
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnAutoLoginComplete, bool, bSuccess, const FString&, ErrorMessage);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnLoginResult,      bool, bSuccess, const FString&, ErrorMessage);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMatchmakingStatusChanged, const FString&, Status);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMatchmakingError,         const FString&, ErrorMessage);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnConnectionEstablished);
@@ -31,9 +33,13 @@ class HYPERMAGEVR_API UHMVRGameInstance : public UGameInstance
 
 public:
 	virtual void Init() override;
+	virtual void OnStart() override;
 	virtual void Shutdown() override;
 
 	// Authentication
+	UFUNCTION(BlueprintCallable, Category = "Authentication")
+	void Login(const FString& Username, const FString& Password);
+
 	UFUNCTION(BlueprintCallable, Category = "Authentication")
 	void SetJWTToken(const FString& Token);
 
@@ -91,6 +97,10 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Authentication")
 	FOnAutoLoginComplete OnAutoLoginComplete;
 
+	/** Fired after a manual Login() call completes. */
+	UPROPERTY(BlueprintAssignable, Category = "Authentication")
+	FOnLoginResult OnLoginResult;
+
 	/** Fired when matchmaking status changes (e.g. "SEARCHING", "COMPLETED", "CANCELLED"). */
 	UPROPERTY(BlueprintAssignable, Category = "Matchmaking")
 	FOnMatchmakingStatusChanged OnMatchmakingStatusChanged;
@@ -144,6 +154,13 @@ protected:
 	void OnTokenRefreshResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
 	void SaveCredentials(const FString& RefreshToken, const FString& Username);
 
+	// Manual login
+	void OnLoginResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully);
+
+	// UI flow
+	void HandleAutoLoginResult(bool bSuccess, const FString& ErrorMessage);
+	void ShowLoginWidget();
+
 	// Matchmaking callbacks
 	void OnMatchmakingSuccess(const FString& ServerAddress, int32 Port, const FString& SessionId);
 	void OnMatchmakingFailure(const FString& ErrorMessage);
@@ -185,11 +202,21 @@ private:
 	// Credential persistence
 	static const FString CredentialsSaveSlot;
 	FString CachedUsername;
+	FString PendingLoginUsername;
+
+	// Auto-login result state (set in Init/async, consumed in OnStart)
+	bool bAutoLoginAttempted = false;
+	bool bAutoLoginSucceeded = false;
+	FString AutoLoginError;
+	bool bOnStartFired = false;
 
 	// Matchmaking HTTP polling state
 	FTimerHandle MatchmakingPollTimerHandle;
 	int32 MatchmakingPollAttempt = 0;
 	static constexpr int32 MaxMatchmakingPollAttempts = 40; // 2 min at 3s intervals
+
+	// Login widget retry — defers ShowLoginWidget until PlayerController is spawned
+	FTimerHandle ShowLoginWidgetRetryHandle;
 
 	// Session API base URL (POST /matchmaking/start, GET /matchmaking/status/{id}, DELETE /matchmaking/cancel/{id})
 	const FString SessionApiBaseUrl = TEXT("https://fhjoxyk9x5.execute-api.eu-west-1.amazonaws.com/dev");

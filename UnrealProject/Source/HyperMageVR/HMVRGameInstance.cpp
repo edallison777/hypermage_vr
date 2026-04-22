@@ -1,6 +1,7 @@
 // Copyright 2026 HyperMage. All Rights Reserved.
 
 #include "HMVRGameInstance.h"
+#include "HMVRLoginWidget.h"
 #include "HMVRSaveGame.h"
 #include "JWTValidator.h"
 #include "VoiceChatInterface.h"
@@ -55,6 +56,18 @@ void UHMVRGameInstance::Init()
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Initialized"));
+}
+
+void UHMVRGameInstance::OnStart()
+{
+	Super::OnStart();
+	bOnStartFired = true;
+
+	if (bAutoLoginAttempted)
+	{
+		HandleAutoLoginResult(bAutoLoginSucceeded, AutoLoginError);
+	}
+	// else: still waiting for HTTP — HandleAutoLoginResult called from OnTokenRefreshResponse
 }
 
 void UHMVRGameInstance::Shutdown()
@@ -140,6 +153,8 @@ void UHMVRGameInstance::TryAutoLogin()
 	if (!Save || Save->RefreshToken.IsEmpty())
 	{
 		UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: No saved credentials — showing login UI"));
+		bAutoLoginAttempted = true;
+		bAutoLoginSucceeded = false;
 		OnAutoLoginComplete.Broadcast(false, TEXT(""));
 		return;
 	}
@@ -173,10 +188,22 @@ void UHMVRGameInstance::TryAutoLogin()
 
 void UHMVRGameInstance::OnTokenRefreshResponse(FHttpRequestPtr /*Request*/, FHttpResponsePtr Response, bool bConnectedSuccessfully)
 {
+	auto Finish = [this](bool bSuccess, const FString& Error)
+	{
+		bAutoLoginAttempted = true;
+		bAutoLoginSucceeded = bSuccess;
+		AutoLoginError = Error;
+		OnAutoLoginComplete.Broadcast(bSuccess, Error);
+		if (bOnStartFired)
+		{
+			HandleAutoLoginResult(bSuccess, Error);
+		}
+	};
+
 	if (!bConnectedSuccessfully || !Response.IsValid())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("HMVRGameInstance: Auto-login — network error, showing login UI"));
-		OnAutoLoginComplete.Broadcast(false, TEXT("No internet connection"));
+		Finish(false, TEXT("No internet connection"));
 		return;
 	}
 
@@ -185,11 +212,10 @@ void UHMVRGameInstance::OnTokenRefreshResponse(FHttpRequestPtr /*Request*/, FHtt
 
 	if (Response->GetResponseCode() != 200 || !FJsonSerializer::Deserialize(Reader, Json) || !Json.IsValid())
 	{
-		// Token expired or revoked — clear it so we don't retry next launch
 		UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Refresh token invalid (HTTP %d) — clearing credentials"),
 			Response->GetResponseCode());
 		ClearSavedCredentials();
-		OnAutoLoginComplete.Broadcast(false, TEXT("Session expired — please log in again"));
+		Finish(false, TEXT("Session expired — please log in again"));
 		return;
 	}
 
@@ -198,7 +224,7 @@ void UHMVRGameInstance::OnTokenRefreshResponse(FHttpRequestPtr /*Request*/, FHtt
 	{
 		UE_LOG(LogTemp, Warning, TEXT("HMVRGameInstance: Auto-login — unexpected Cognito response"));
 		ClearSavedCredentials();
-		OnAutoLoginComplete.Broadcast(false, TEXT("Unexpected authentication response"));
+		Finish(false, TEXT("Unexpected authentication response"));
 		return;
 	}
 
@@ -208,13 +234,13 @@ void UHMVRGameInstance::OnTokenRefreshResponse(FHttpRequestPtr /*Request*/, FHtt
 	if (IdToken.IsEmpty())
 	{
 		ClearSavedCredentials();
-		OnAutoLoginComplete.Broadcast(false, TEXT("Empty token in response"));
+		Finish(false, TEXT("Empty token in response"));
 		return;
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Auto-login succeeded for '%s'"), *CachedUsername);
 	SetJWTToken(IdToken);
-	OnAutoLoginComplete.Broadcast(true, TEXT(""));
+	Finish(true, TEXT(""));
 }
 
 void UHMVRGameInstance::SetRefreshToken(const FString& Token, const FString& Username)
@@ -243,6 +269,142 @@ void UHMVRGameInstance::ClearSavedCredentials()
 	UGameplayStatics::DeleteGameInSlot(CredentialsSaveSlot, 0);
 	CachedUsername.Empty();
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Saved credentials cleared"));
+}
+
+void UHMVRGameInstance::Login(const FString& Username, const FString& Password)
+{
+	PendingLoginUsername = Username;
+
+	TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
+	Body->SetStringField(TEXT("AuthFlow"), TEXT("USER_PASSWORD_AUTH"));
+	Body->SetStringField(TEXT("ClientId"), TEXT("2iinqhoja78kj1et6rcv28bjvf"));
+
+	TSharedRef<FJsonObject> Params = MakeShared<FJsonObject>();
+	Params->SetStringField(TEXT("USERNAME"), Username);
+	Params->SetStringField(TEXT("PASSWORD"), Password);
+	Body->SetObjectField(TEXT("AuthParameters"), Params);
+
+	FString BodyString;
+	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&BodyString);
+	FJsonSerializer::Serialize(Body, Writer);
+
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Req = FHttpModule::Get().CreateRequest();
+	Req->SetURL(TEXT("https://cognito-idp.eu-west-1.amazonaws.com/"));
+	Req->SetVerb(TEXT("POST"));
+	Req->SetHeader(TEXT("Content-Type"), TEXT("application/x-amz-json-1.1"));
+	Req->SetHeader(TEXT("X-Amz-Target"), TEXT("AWSCognitoIdentityProviderService.InitiateAuth"));
+	Req->SetContentAsString(BodyString);
+	Req->OnProcessRequestComplete().BindUObject(this, &UHMVRGameInstance::OnLoginResponse);
+	Req->ProcessRequest();
+
+	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Login attempt for '%s'"), *Username);
+}
+
+void UHMVRGameInstance::OnLoginResponse(FHttpRequestPtr /*Request*/, FHttpResponsePtr Response, bool bConnectedSuccessfully)
+{
+	if (!bConnectedSuccessfully || !Response.IsValid())
+	{
+		OnLoginResult.Broadcast(false, TEXT("Network error — check your connection"));
+		return;
+	}
+
+	if (Response->GetResponseCode() != 200)
+	{
+		TSharedPtr<FJsonObject> Json;
+		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Response->GetContentAsString());
+		FString ErrorMessage = FString::Printf(TEXT("Login failed (HTTP %d)"), Response->GetResponseCode());
+		if (FJsonSerializer::Deserialize(Reader, Json) && Json.IsValid())
+		{
+			FString Msg;
+			if (Json->TryGetStringField(TEXT("message"), Msg) && !Msg.IsEmpty())
+			{
+				ErrorMessage = Msg;
+			}
+		}
+		OnLoginResult.Broadcast(false, ErrorMessage);
+		return;
+	}
+
+	TSharedPtr<FJsonObject> Json;
+	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Response->GetContentAsString());
+	if (!FJsonSerializer::Deserialize(Reader, Json) || !Json.IsValid())
+	{
+		OnLoginResult.Broadcast(false, TEXT("Unexpected server response"));
+		return;
+	}
+
+	const TSharedPtr<FJsonObject>* AuthResult;
+	if (!Json->TryGetObjectField(TEXT("AuthenticationResult"), AuthResult))
+	{
+		OnLoginResult.Broadcast(false, TEXT("Unexpected authentication response"));
+		return;
+	}
+
+	FString IdToken, RefreshToken;
+	(*AuthResult)->TryGetStringField(TEXT("IdToken"), IdToken);
+	(*AuthResult)->TryGetStringField(TEXT("RefreshToken"), RefreshToken);
+
+	if (IdToken.IsEmpty())
+	{
+		OnLoginResult.Broadcast(false, TEXT("Empty token in response"));
+		return;
+	}
+
+	SetJWTToken(IdToken);
+	if (!RefreshToken.IsEmpty())
+	{
+		SaveCredentials(RefreshToken, PendingLoginUsername);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Login successful for '%s'"), *PendingLoginUsername);
+	OnLoginResult.Broadcast(true, TEXT(""));
+	StartMatchmaking();
+}
+
+void UHMVRGameInstance::HandleAutoLoginResult(bool bSuccess, const FString& /*ErrorMessage*/)
+{
+	if (bSuccess)
+	{
+		UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Auto-login succeeded — starting matchmaking"));
+		StartMatchmaking();
+	}
+	else
+	{
+		UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Auto-login failed — showing login UI"));
+		ShowLoginWidget();
+	}
+}
+
+void UHMVRGameInstance::ShowLoginWidget()
+{
+	APlayerController* PC = GetFirstLocalPlayerController(GetWorld());
+	if (!PC)
+	{
+		// PlayerController not ready yet (can happen if OnStart fires before PostLogin).
+		// Retry every 0.5s — PC is typically available on the first retry.
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimer(
+				ShowLoginWidgetRetryHandle,
+				this,
+				&UHMVRGameInstance::ShowLoginWidget,
+				0.5f,
+				false
+			);
+		}
+		return;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(ShowLoginWidgetRetryHandle);
+	}
+
+	UHMVRLoginWidget* Widget = CreateWidget<UHMVRLoginWidget>(PC, UHMVRLoginWidget::StaticClass());
+	if (Widget)
+	{
+		Widget->AddToViewport();
+	}
 }
 
 bool UHMVRGameInstance::HasSavedCredentials() const
