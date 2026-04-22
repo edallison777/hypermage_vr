@@ -12,7 +12,9 @@
 #include "Engine/World.h"
 #include "TimerManager.h"
 
+#if WITH_GAMELIFT
 #include "GameLiftServerSDK.h"
+#endif
 #include "HMVRGameInstance.h"
 
 AHMVRGameMode::AHMVRGameMode()
@@ -60,10 +62,12 @@ void AHMVRGameMode::InitGame(const FString& MapName, const FString& Options, FSt
 	}
 
 	// Initialize GameLift if running on AWS
+#if WITH_GAMELIFT
 	if (GetWorld()->GetNetMode() == NM_DedicatedServer)
 	{
 		InitializeGameLift();
 	}
+#endif
 
 	// Generate session ID
 	CurrentSessionId = FGuid::NewGuid().ToString();
@@ -102,6 +106,7 @@ void AHMVRGameMode::PreLogin(const FString& Options, const FString& Address, con
 		return;
 	}
 
+#if WITH_GAMELIFT
 	// Validate GameLift player session if running on AWS
 	if (bGameLiftInitialized)
 	{
@@ -115,7 +120,7 @@ void AHMVRGameMode::PreLogin(const FString& Options, const FString& Address, con
 				UE_LOG(LogTemp, Warning, TEXT("HMVRGameMode: Rejected connection - GameLift validation failed: %s"), *ValidationError);
 				return;
 			}
-			
+
 			// Accept the player session with GameLift
 			AcceptPlayerSession(PlayerSessionId);
 		}
@@ -126,6 +131,7 @@ void AHMVRGameMode::PreLogin(const FString& Options, const FString& Address, con
 			return;
 		}
 	}
+#endif
 
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: PreLogin successful for player %s"), *PlayerId);
 }
@@ -176,6 +182,7 @@ void AHMVRGameMode::Logout(AController* Exiting)
 {
 	if (APlayerController* ExitingPlayer = Cast<APlayerController>(Exiting))
 	{
+#if WITH_GAMELIFT
 		// Find and remove player session from GameLift
 		for (const auto& Entry : PlayerSessionMap)
 		{
@@ -184,6 +191,7 @@ void AHMVRGameMode::Logout(AController* Exiting)
 			RemovePlayerSession(Entry.Key);
 			break;
 		}
+#endif
 
 		// Remove from connected players list
 		ConnectedPlayers.Remove(ExitingPlayer);
@@ -250,6 +258,16 @@ bool AHMVRGameMode::ValidateJWTToken(const FString& Token, FString& OutPlayerId,
 	return true;
 }
 
+void AHMVRGameMode::InitializeGameLift()
+{
+#if !WITH_GAMELIFT
+	// No-op on client builds
+}
+void AHMVRGameMode::ReportServerHealth() {}
+bool AHMVRGameMode::ValidatePlayerSession(const FString&, FString& OutErrorMessage) { OutErrorMessage = TEXT("GameLift not available"); return false; }
+void AHMVRGameMode::AcceptPlayerSession(const FString&) {}
+void AHMVRGameMode::RemovePlayerSession(const FString&) {}
+#else
 void AHMVRGameMode::InitializeGameLift()
 {
 	UHMVRGameInstance* GameInstance = Cast<UHMVRGameInstance>(GetGameInstance());
@@ -380,6 +398,7 @@ void AHMVRGameMode::RemovePlayerSession(const FString& PlayerSessionId)
 	PlayerSessionMap.Remove(PlayerSessionId);
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Removed player session: %s"), *PlayerSessionId);
 }
+#endif // WITH_GAMELIFT (else stub implementations above)
 
 
 void AHMVRGameMode::OnPlayerJoined(APlayerController* NewPlayer)

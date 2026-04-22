@@ -8,7 +8,7 @@
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonWriter.h"
 #include "Serialization/JsonSerializer.h"
-#include "Misc/TSTicker.h"
+#include "Containers/Ticker.h"
 
 // ── Public interface ─────────────────────────────────────────────────────────
 

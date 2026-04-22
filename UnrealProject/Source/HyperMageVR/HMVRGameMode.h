@@ -11,7 +11,7 @@
 #include "HMVRPlayerState.h"
 #include "HMVRGameMode.generated.h"
 
-class FGameLiftServerSDKModule;
+class FGameLiftServerSDKModule; // incomplete type; only used as pointer — no header needed
 
 /**
  * Server-authoritative Game Mode for VR Multiplayer
@@ -51,7 +51,7 @@ protected:
 	// JWT authentication (Requirement 3.1-3.4)
 	bool ValidateJWTToken(const FString& Token, FString& OutPlayerId, FString& OutErrorMessage);
 
-	// GameLift integration (Requirement 2.4)
+	// GameLift integration (server only; no-op implementations on client builds)
 	void InitializeGameLift();
 	void ReportServerHealth();
 	bool ValidatePlayerSession(const FString& PlayerSessionId, FString& OutErrorMessage);
@@ -97,12 +97,12 @@ private:
 	// Player session tracking (PlayerId -> SessionId)
 	TMap<FString, FString> PlayerToSessionMap;
 
-	// GameLift SDK integration
+	// GameLift SDK integration (server only; inert on client builds)
 	bool bGameLiftInitialized = false;
 	bool bGameLiftProcessReady = false;
 	FTimerHandle HealthReportTimerHandle;
 	FGameLiftServerSDKModule* GameLiftSdkModule = nullptr;
-	
+
 	// Track player sessions for GameLift
 	TMap<FString, FString> PlayerSessionMap; // PlayerSessionId -> PlayerId
 

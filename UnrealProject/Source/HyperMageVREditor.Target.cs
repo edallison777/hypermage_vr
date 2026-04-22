@@ -3,11 +3,11 @@
 using UnrealBuildTool;
 using System.Collections.Generic;
 
-public class HyperMageVRTarget : TargetRules
+public class HyperMageVREditorTarget : TargetRules
 {
-	public HyperMageVRTarget(TargetInfo Target) : base(Target)
+	public HyperMageVREditorTarget(TargetInfo Target) : base(Target)
 	{
-		Type = TargetType.Game;
+		Type = TargetType.Editor;
 		DefaultBuildSettings = BuildSettingsVersion.V5;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
 		ExtraModuleNames.Add("HyperMageVR");

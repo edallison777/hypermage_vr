@@ -12,7 +12,6 @@
 				"Engine",
 				"OnlineSubsystem",
 				"OnlineSubsystemUtils",
-				"GameLiftServerSDK",
 				"HeadMountedDisplay",
 				"EnhancedInput"
 			]
@@ -41,7 +40,8 @@
 		},
 		{
 			"Name": "GameLiftServerSDK",
-			"Enabled": true
+			"Enabled": true,
+			"WhitelistTargets": ["Server"]
 		},
 		{
 			"Name": "Bridge",

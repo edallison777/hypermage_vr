@@ -4,11 +4,10 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Components/TextBlock.h"
+#include "Components/Button.h"
+#include "Components/HorizontalBox.h"
 #include "HMVRStatusWidget.generated.h"
-
-class UTextBlock;
-class UButton;
-class UHorizontalBox;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStatusAction);
 
@@ -16,10 +15,10 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStatusAction);
  * Self-contained C++ status widget for matchmaking / connection UI.
  *
  * Builds its own UMG layout in NativeConstruct() — no Blueprint subclass or editor setup needed.
- * GameInstance calls Show*/HideWidget; Retry/Cancel buttons broadcast the assignable delegates.
- * Blueprint subclasses may override the Show*/HideWidget events if custom visuals are wanted.
+ * GameInstance calls ShowXxx / HideWidget; Retry/Cancel buttons broadcast the assignable delegates.
+ * Blueprint subclasses may override the ShowXxx / HideWidget events if custom visuals are wanted.
  */
-UCLASS(Blueprintable)
+UCLASS()
 class HYPERMAGEVR_API UHMVRStatusWidget : public UUserWidget
 {
 	GENERATED_BODY()

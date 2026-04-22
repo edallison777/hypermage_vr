@@ -10,7 +10,7 @@
 #include "Http.h"
 #include "HMVRGameInstance.generated.h"
 
-class FGameLiftServerSDKModule;
+class FGameLiftServerSDKModule; // incomplete type; only used as pointer — no header needed
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnAutoLoginComplete, bool, bSuccess, const FString&, ErrorMessage);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMatchmakingStatusChanged, const FString&, Status);
@@ -169,7 +169,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Voice Chat")
 	UVoiceChatManager* GetVoiceChatManager() const { return VoiceChatManager; }
 
-	// GameLift SDK access for game mode
+	// GameLift SDK access for game mode (server only; no-op on client builds)
 	FGameLiftServerSDKModule* GetGameLiftSdkModule() const { return GameLiftSdkModule; }
 	bool IsGameLiftInitialized() const { return bGameLiftInitialized; }
 	FString GetGameLiftSessionId() const { return GameLiftSessionId; }

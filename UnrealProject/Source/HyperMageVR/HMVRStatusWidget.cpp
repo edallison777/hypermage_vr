@@ -1,6 +1,7 @@
 // Copyright 2026 HyperMage. All Rights Reserved.
 
 #include "HMVRStatusWidget.h"
+#include "Blueprint/WidgetTree.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
 #include "Components/VerticalBox.h"

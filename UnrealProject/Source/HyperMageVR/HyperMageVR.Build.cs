@@ -18,10 +18,14 @@ public class HyperMageVR : ModuleRules
 			"HeadMountedDisplay",
 			"OnlineSubsystem",
 			"OnlineSubsystemUtils",
-			"GameLiftServerSDK",
 			"HTTP",
 			"UMG"
 		});
+
+		if (Target.Type == TargetType.Server)
+		{
+			PublicDependencyModuleNames.Add("GameLiftServerSDK");
+		}
 
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{

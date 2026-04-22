@@ -86,8 +86,21 @@ if [[ "$DO_BUILD" == true ]]; then
   BAT_UNIX="$REPO_ROOT/.run-uat-apk.bat"
   BAT_WIN=$(cygpath -m "$BAT_UNIX")
 
-  # @echo on so RunUAT errors are visible; single long line avoids cmd continuation issues
-  printf '@echo on\r\n"%s" BuildCookRun -project="%s" -noP4 -platform=Android -clientconfig=Development -cook -build -stage -pak -cookflavor=ASTC -archive -archivedirectory="%s" -nocompileeditor -log\r\n' \
+  # Resolve NDK path — prefer the version SetupAndroid.bat installed
+  NDK_PATH=$(ls -d "C:/Users/j_e_a/AppData/Local/Android/Sdk/ndk/"* 2>/dev/null | sort -V | tail -1)
+  NDK_WIN=$(cygpath -m "$NDK_PATH")
+  SDK_WIN="C:/Users/j_e_a/AppData/Local/Android/Sdk"
+
+  JAVA_HOME_WIN="C:/Program Files/Android/Android Studio1/jbr"
+  UBT_WIN=$(cygpath -m "$UE5_ROOT/Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.dll")
+  DOTNET_WIN=$(cygpath -m "$UE5_ROOT/Engine/Binaries/ThirdParty/DotNet/8.0.300/win-x64/dotnet.exe")
+
+  # @echo on so RunUAT errors are visible; set SDK env vars so UBT finds them even in a stale shell
+  # Step 1: compile HyperMageVREditor for Win64 so the editor can load UnrealEditor-HyperMageVR.dll during the cook step
+  # Step 2: full Android BuildCookRun (build + cook + stage + pak + archive)
+  printf '@echo on\r\nset ANDROID_HOME=%s\r\nset NDKROOT=%s\r\nset NDK_ROOT=%s\r\nset JAVA_HOME=%s\r\nset PATH=%%JAVA_HOME%%\\bin;%%PATH%%\r\necho === Building Win64 game module for cook step ===\r\n"%s" "%s" HyperMageVREditor Win64 Development -Project="%s" -NoUBTMakefiles\r\nif ERRORLEVEL 1 exit /b 1\r\necho === Building and packaging Android APK ===\r\n"%s" BuildCookRun -project="%s" -noP4 -platform=Android -clientconfig=Development -cook -build -stage -pak -cookflavor=ASTC -archive -archivedirectory="%s" -nocompileeditor -log\r\n' \
+    "$SDK_WIN" "$NDK_WIN" "$NDK_WIN" "$JAVA_HOME_WIN" \
+    "$DOTNET_WIN" "$UBT_WIN" "$UPROJECT_WIN" \
     "$RUNUAT_WIN" "$UPROJECT_WIN" "$OUTPUT_WIN" > "$BAT_UNIX"
 
   echo "Running: $BAT_WIN"

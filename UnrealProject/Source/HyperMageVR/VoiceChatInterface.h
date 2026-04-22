@@ -22,7 +22,6 @@ class UVoiceChatProvider : public UInterface
 class IVoiceChatProvider
 {
 	GENERATED_BODY()
-
 public:
 	/**
 	 * Initialize the voice provider

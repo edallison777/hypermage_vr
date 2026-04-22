@@ -7,7 +7,9 @@
 #include "MockVoiceProvider.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
+#if WITH_GAMELIFT
 #include "GameLiftServerSDK.h"
+#endif
 #include "HttpModule.h"
 #include "Interfaces/IHttpRequest.h"
 #include "Interfaces/IHttpResponse.h"
@@ -25,7 +27,9 @@ void UHMVRGameInstance::Init()
 
 	if (IsRunningDedicatedServer())
 	{
+#if WITH_GAMELIFT
 		InitializeGameLift();
+#endif
 		return;
 	}
 
@@ -68,6 +72,10 @@ void UHMVRGameInstance::Shutdown()
 
 void UHMVRGameInstance::InitializeGameLift()
 {
+#if !WITH_GAMELIFT
+	// No-op on client builds — GameLift SDK is server-only
+}
+#else
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Initializing GameLift SDK"));
 
 	GameLiftSdkModule = &FModuleManager::LoadModuleChecked<FGameLiftServerSDKModule>(FName("GameLiftServerSDK"));
@@ -120,6 +128,7 @@ void UHMVRGameInstance::InitializeGameLift()
 	bGameLiftInitialized = true;
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: GameLift SDK initialized and ProcessReady called"));
 }
+#endif // WITH_GAMELIFT
 
 // ── Auto-login (refresh token persistence) ────────────────────────────────────
 
@@ -586,8 +595,8 @@ UHMVRStatusWidget* UHMVRGameInstance::EnsureStatusWidget()
 		return nullptr;
 	}
 
-	TSubclassOf<UHMVRStatusWidget> WidgetClass = StatusWidgetClass
-		? StatusWidgetClass
+	UClass* WidgetClass = StatusWidgetClass
+		? static_cast<UClass*>(StatusWidgetClass)
 		: UHMVRStatusWidget::StaticClass();
 
 	ActiveStatusWidget = CreateWidget<UHMVRStatusWidget>(PC, WidgetClass);
