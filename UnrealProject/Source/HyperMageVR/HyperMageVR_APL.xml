@@ -1,20 +1,56 @@
 <?xml version="1.0" encoding="utf-8"?>
 <root xmlns:android="http://schemas.android.com/apk/res/android">
   <!--
-    RunUAT always sets the uebp_LOCAL_ROOT environment variable, which causes
-    UEDeployAndroid.RequiresOBB() to unconditionally return true (the "on build
-    machine" branch).  The result is bHasOBBFiles=true in the manifest even
-    when bPackageDataInsideApk=True is set in DefaultEngine.ini.
+    Two manifest fixes for sideloaded Quest 3 builds:
 
-    With bHasOBBFiles=true, Android's SplashActivity (from UE's downloader
-    library) tries to verify/download an OBB from the Play Store.  For a
-    sideloaded Quest 3 build there is no OBB and no Play Store session, so
-    SplashActivity hangs indefinitely.
+    1. Move the LAUNCHER intent-filter from SplashActivity to GameActivity.
+       The Quest shell (SEO) caches nativeAppLaunchConfiguration per-package and
+       passes bHasOBBFiles via Intent extras to SplashActivity.  Even after
+       rebuilding with bHasOBBFiles=false in the APK manifest, SplashActivity
+       still reads the cached Intent extra value (true) and hangs waiting for an
+       OBB from the Play Store.  Removing the LAUNCHER from SplashActivity and
+       adding it to GameActivity bypasses SplashActivity entirely.
 
-    This UPL runs inside androidManifestUpdates AFTER the toolchain writes the
-    manifest, so it can patch the value back to false.
+    2. Fix bHasOBBFiles=true that RunUAT always generates.
+       RunUAT always sets uebp_LOCAL_ROOT, causing UEDeployAndroid.RequiresOBB()
+       to return true unconditionally.  We patch it false so that if SplashActivity
+       is ever reached by another path it won't block.
+
+    Both sections run inside androidManifestUpdates, AFTER the toolchain writes
+    the manifest, so they see and can overwrite the toolchain-generated values.
   -->
   <androidManifestUpdates>
+
+    <!-- ── 1. Swap LAUNCHER from SplashActivity to GameActivity ─────────── -->
+    <loopElements tag="activity">
+      <setStringFromAttribute result="actName" tag="$" name="android:name"/>
+
+      <!-- SplashActivity: remove its intent-filter (drops MAIN/LAUNCHER from it) -->
+      <setBoolIsEqual result="isSplash" arg1="$S(actName)" arg2="com.epicgames.unreal.SplashActivity"/>
+      <if condition="isSplash">
+        <true>
+          <loopElements tag="intent-filter">
+            <removeElement tag="$"/>
+          </loopElements>
+        </true>
+      </if>
+
+      <!-- GameActivity: add MAIN/LAUNCHER so the Quest library starts it directly -->
+      <setBoolIsEqual result="isGame" arg1="$S(actName)" arg2="com.epicgames.unreal.GameActivity"/>
+      <if condition="isGame">
+        <true>
+          <addAttribute tag="$" name="android:exported" value="true"/>
+          <addElements tag="$">
+            <intent-filter>
+              <action android:name="android.intent.action.MAIN"/>
+              <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+          </addElements>
+        </true>
+      </if>
+    </loopElements>
+
+    <!-- ── 2. Force bHasOBBFiles=false (belt-and-suspenders) ────────────── -->
     <loopElements tag="meta-data">
       <setStringFromAttribute result="metaName" tag="$" name="android:name"/>
       <setBoolIsEqual result="isOBBFlag" arg1="$S(metaName)" arg2="com.epicgames.unreal.GameActivity.bHasOBBFiles"/>
@@ -24,5 +60,6 @@
         </true>
       </if>
     </loopElements>
+
   </androidManifestUpdates>
 </root>
