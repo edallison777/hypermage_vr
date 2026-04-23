@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root xmlns:android="http://schemas.android.com/apk/res/android">
+  <!--
+    RunUAT always sets the uebp_LOCAL_ROOT environment variable, which causes
+    UEDeployAndroid.RequiresOBB() to unconditionally return true (the "on build
+    machine" branch).  The result is bHasOBBFiles=true in the manifest even
+    when bPackageDataInsideApk=True is set in DefaultEngine.ini.
+
+    With bHasOBBFiles=true, Android's SplashActivity (from UE's downloader
+    library) tries to verify/download an OBB from the Play Store.  For a
+    sideloaded Quest 3 build there is no OBB and no Play Store session, so
+    SplashActivity hangs indefinitely.
+
+    This UPL runs inside androidManifestUpdates AFTER the toolchain writes the
+    manifest, so it can patch the value back to false.
+  -->
+  <androidManifestUpdates>
+    <loopElements tag="meta-data">
+      <setStringFromAttribute result="metaName" tag="$" name="android:name"/>
+      <setBoolIsEqual result="isOBBFlag" arg1="$S(metaName)" arg2="com.epicgames.unreal.GameActivity.bHasOBBFiles"/>
+      <if condition="isOBBFlag">
+        <true>
+          <addAttribute tag="$" name="android:value" value="false"/>
+        </true>
+      </if>
+    </loopElements>
+  </androidManifestUpdates>
+</root>

@@ -35,7 +35,7 @@ public class HyperMageVR : ModuleRules
 			"JsonUtilities"
 		});
 
-		// VR-specific modules
+		// VR-specific modules + Android manifest patch
 		if (Target.Platform == UnrealTargetPlatform.Android)
 		{
 			PrivateDependencyModuleNames.AddRange(new string[]
@@ -44,6 +44,12 @@ public class HyperMageVR : ModuleRules
 				"OpenXRHMD",
 				"OpenXRInput"
 			});
+
+			// Register the APL that forces bHasOBBFiles=false.
+			// RunUAT always sets uebp_LOCAL_ROOT, making RequiresOBB() return true
+			// unconditionally; the APL patches it back after manifest generation.
+			AdditionalPropertiesForReceipt.Add("AndroidPlugin",
+				System.IO.Path.Combine(ModuleDirectory, "HyperMageVR_APL.xml"));
 		}
 	}
 }
