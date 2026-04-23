@@ -88,16 +88,17 @@ if [[ "$DO_BUILD" == true ]]; then
   echo "Stopping any stale Gradle daemons..."
   powershell.exe -Command "Get-Process -Name 'java' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue" 2>/dev/null || true
 
-  # Redirect the Gradle project dir to a local (non-OneDrive) path via a junction.
-  # OneDrive locks files the instant Gradle creates them, causing 'Unable to delete directory'
-  # failures mid-task. A junction makes UE/Gradle write to C:\Temp instead, outside OneDrive's watch.
+  # Redirect OneDrive-watched directories to local temp via junctions.
+  # OneDrive locks files on write (reparse points, placeholders) causing
+  # 'Access denied' or 'Unable to delete directory' failures mid-build.
+  # Junctions make UE/Gradle write to C:\Temp instead.
+
+  # ── Gradle junction ────────────────────────────────────────────────────────
   GRADLE_DIR="$REPO_ROOT/UnrealProject/Intermediate/Android/arm64/gradle"
   GRADLE_DIR_WIN=$(cygpath -w "$GRADLE_DIR")
   GRADLE_TEMP_WIN="C:\\Temp\\hypermage-gradle"
 
-  echo "Redirecting Gradle dir to local temp (OneDrive lock prevention)..."
-  # Remove old junction or real directory, clean temp target, then create junction via bat
-  # (bat avoids bash→cmd quoting issues with backslash paths)
+  echo "Redirecting Gradle dir to local temp..."
   powershell.exe -Command "
     \$g = '$GRADLE_DIR_WIN'
     if (Test-Path \$g) {
@@ -114,14 +115,44 @@ if [[ "$DO_BUILD" == true ]]; then
   " 2>/dev/null || true
 
   JLINK_BAT_UNIX="$REPO_ROOT/.run-mklink.bat"
-  # rmdir (no /s) removes a junction without following it into the target.
-  # If it's a real dir, rmdir fails → fall back to rmdir /s /q.
   printf '@echo off\r\nif exist "%s" rmdir "%s" 2>NUL\r\nif exist "%s" rmdir /s /q "%s"\r\nmklink /J "%s" "%s"\r\n' \
     "$GRADLE_DIR_WIN" "$GRADLE_DIR_WIN" \
     "$GRADLE_DIR_WIN" "$GRADLE_DIR_WIN" \
     "$GRADLE_DIR_WIN" "$GRADLE_TEMP_WIN" > "$JLINK_BAT_UNIX"
   cmd //c "$(cygpath -m "$JLINK_BAT_UNIX")"
   rm -f "$JLINK_BAT_UNIX"
+
+  # ── StagedBuilds junction ──────────────────────────────────────────────────
+  # OpenXR ships OneDrive placeholder directories inside arm64-v8a; when UE
+  # tries to delete StagedBuilds between builds it gets 'Access denied' on
+  # those placeholders.  A junction moves the whole StagedBuilds tree to C:\Temp.
+  STAGED_DIR="$REPO_ROOT/UnrealProject/Saved/StagedBuilds"
+  STAGED_DIR_WIN=$(cygpath -w "$STAGED_DIR")
+  STAGED_TEMP_WIN="C:\\Temp\\hypermage-staged"
+
+  echo "Redirecting StagedBuilds to local temp..."
+  powershell.exe -Command "
+    \$s = '$STAGED_DIR_WIN'
+    if (Test-Path \$s) {
+      \$attr = (Get-Item \$s -Force).Attributes
+      if (\$attr -band [System.IO.FileAttributes]::ReparsePoint) {
+        Remove-Item \$s -Force -ErrorAction SilentlyContinue
+      } else {
+        cmd.exe /c \"rmdir /s /q \$s\" 2>&1 | Out-Null
+      }
+    }
+    if (Test-Path '$STAGED_TEMP_WIN') { cmd.exe /c \"rmdir /s /q $STAGED_TEMP_WIN\" 2>&1 | Out-Null }
+    New-Item -ItemType Directory -Force '$STAGED_TEMP_WIN' | Out-Null
+    New-Item -ItemType Directory -Force (Split-Path '$STAGED_DIR_WIN') | Out-Null
+  " 2>/dev/null || true
+
+  JLINK2_BAT_UNIX="$REPO_ROOT/.run-mklink2.bat"
+  printf '@echo off\r\nif exist "%s" rmdir "%s" 2>NUL\r\nif exist "%s" rmdir /s /q "%s"\r\nmklink /J "%s" "%s"\r\n' \
+    "$STAGED_DIR_WIN" "$STAGED_DIR_WIN" \
+    "$STAGED_DIR_WIN" "$STAGED_DIR_WIN" \
+    "$STAGED_DIR_WIN" "$STAGED_TEMP_WIN" > "$JLINK2_BAT_UNIX"
+  cmd //c "$(cygpath -m "$JLINK2_BAT_UNIX")"
+  rm -f "$JLINK2_BAT_UNIX"
 
   # Write a temp .bat file (Unix path for shell writes, mixed path for cmd execution)
   BAT_UNIX="$REPO_ROOT/.run-uat-apk.bat"
