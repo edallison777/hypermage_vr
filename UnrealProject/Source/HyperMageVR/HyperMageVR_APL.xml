@@ -50,11 +50,20 @@
       </if>
     </loopElements>
 
-    <!-- ── 2. Force bHasOBBFiles=false (belt-and-suspenders) ────────────── -->
+    <!-- ── 2. Force bHasOBBFiles=false and bPackageDataInsideApk=false ─── -->
+    <!--    bHasOBBFiles=false: prevents SplashActivity waiting for a Play Store OBB -->
+    <!--    bPackageDataInsideApk=false: skips AFS file descriptor path in Java;    -->
+    <!--    lets C++ find the PAK via sdcard UE4Game directory fallback             -->
     <loopElements tag="meta-data">
       <setStringFromAttribute result="metaName" tag="$" name="android:name"/>
       <setBoolIsEqual result="isOBBFlag" arg1="$S(metaName)" arg2="com.epicgames.unreal.GameActivity.bHasOBBFiles"/>
+      <setBoolIsEqual result="isPkgDataFlag" arg1="$S(metaName)" arg2="com.epicgames.unreal.GameActivity.bPackageDataInsideApk"/>
       <if condition="isOBBFlag">
+        <true>
+          <addAttribute tag="$" name="android:value" value="false"/>
+        </true>
+      </if>
+      <if condition="isPkgDataFlag">
         <true>
           <addAttribute tag="$" name="android:value" value="false"/>
         </true>

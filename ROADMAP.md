@@ -293,31 +293,71 @@ aws gamelift update-fleet-capacity --fleet-id fleet-bdae1b71-b2c1-42cf-b242-6322
 
 ---
 
-### Phase 17 — Live E2E on Quest 3 + Error UX [-]
-> **Goal:** Full live end-to-end test on the headset with the Phase 16 error UX visible: matchmaking shows "Searching…", failure shows error widget with working Retry/Cancel buttons.
-> **Done when:** Quest 3 connects successfully to the new fleet with real session persistence, AND deliberately-triggered failure shows the error widget.
+### Phase 17 — APK Rebuild + Sideload ✅ COMPLETE (2026-04-22)
+> **Goal:** Quest 3 runs the latest C++ (Phases 13–16). All changes compile, package, and launch on device.
+> **Done when:** APK installs and GameActivity starts successfully on the headset.
 
 - [x] `UHMVRStatusWidget` refactored to self-contained C++ widget — builds UMG layout in `NativeConstruct()`, no Blueprint subclass or editor setup needed
-  - `BlueprintImplementableEvent` → `BlueprintNativeEvent` with C++ default implementations
-  - Full layout: full-screen overlay, status text, Retry + Cancel buttons (shown only on error)
-  - `EnsureStatusWidget()` falls back to `UHMVRStatusWidget::StaticClass()` when `StatusWidgetClass` unset
 - [x] Persistent refresh token auto-login (`HMVRSaveGame`, `TryAutoLogin`, `SetRefreshToken`, `OnAutoLoginComplete`)
-  - First launch: Blueprint calls `SetRefreshToken(token, username)` after manual login → saved to disk
-  - Subsequent launches: `TryAutoLogin()` exchanges saved token via Cognito `REFRESH_TOKEN_AUTH` → skips login UI
-  - Expired/revoked token: credentials cleared automatically → login UI shown with "Session expired" message
-- [x] Pre-live checks: 6/6 passed (2026-04-21) — fleet ACTIVE, alias correct, C++ source complete
-- [ ] Rebuild APK with updated C++ and sideload to Quest 3:
-  - Build + install: `./scripts/phase17/build-apk.sh --install`
-  - Build only: `./scripts/phase17/build-apk.sh`
-  - Override UE5 path if needed: `UE5_ROOT="D:/Epic Games/UE_5.3" ./scripts/phase17/build-apk.sh --install`
-- [ ] Scale fleet to 1: `aws gamelift update-fleet-capacity --fleet-id fleet-bdae1b71-b2c1-42cf-b242-6322be08d5a9 --desired-instances 1 --region eu-west-1`
-- [ ] Live Quest 3 test — happy path: login → matchmaking → "Searching..." widget → COMPLETED → connected
-- [ ] Live Quest 3 test — failure path: disable network mid-search → error widget visible → Retry works
-- [ ] Run `python scripts/test_phase17.py --check-e2e` to confirm real Cognito subs in DynamoDB + fleet scaled down
+- [x] APK built via `./scripts/phase17/build-apk.sh` — 12 UE5.6 Android build issues fixed (see `memory/phase17-apk-build.md`)
+- [x] StagedBuilds junction to `C:\Temp\hypermage-staged` (Phase 19a fix — prevents OneDrive access-denied failures)
+- [x] APK sideloaded and GameActivity confirmed launching on Quest 3
+- [x] Runs as flat 2D panel (`isVrApplication=false`) — VR mode deferred (needs Meta XR plugin)
+- [x] **BLOCKER discovered and fixed**: `Content/` empty → no level to render; fixed by C++ Login Widget approach (Phase 18)
 
 ---
 
-### Phase 18 — Interaction Systems, Voice, QA
+### Phase 18 — C++ Login Widget (APK deployed) [x]
+> **Goal:** Quest 3 shows a login UI from C++ alone — no Unreal Editor needed.
+> **Done when:** `HMVRLoginWidget` appears on the headset display after app launch.
+
+- [x] `HMVRLoginWidget` (C++): self-contained UMG widget built entirely in `NativeConstruct()`
+  - Username (`UEditableTextBox`) + password (`UEditableText` with `bIsPassword`) + Login button
+  - Binds to `GameInstance::OnLoginResult` delegate; on success collapses itself, `StartMatchmaking()` auto-called
+- [x] `HMVRGameInstance`: `OnLoginResult` delegate + `ShowLoginWidget()` with 0.5s retry timer
+- [x] `GameDefaultMap=/Engine/Maps/Entry` + `GlobalDefaultGameMode=HMVRGameMode` (no custom level needed)
+- [x] APK rebuilt and installed on Quest 3 (commit `c092976`)
+- [x] **BLOCKER fixed (Phase 19a/b)**: SplashActivity OBB hang resolved via `HyperMageVR_APL.xml` UPL:
+  - Swaps LAUNCHER intent-filter from SplashActivity → GameActivity (bypasses OBB wait)
+  - Patches `bHasOBBFiles=false` + `bPackageDataInsideApk=false` in manifest meta-data
+- [x] Gradle debug APK built at `C:\Temp\hypermage-gradle` (17s builds)
+- [x] inject17 installed: `assets/configrules.bin.png` (4 bytes STORED), `assets/UECommandLine.txt` (STORED)
+
+See `memory/phase19-apk-debug.md` for full inject series history and resume commands.
+
+---
+
+### Phase 19 — Login Widget Live + Quest 3 E2E [-]
+> **Goal:** Full live end-to-end test on the headset: login widget appears, user logs in, matchmaking completes, player appears in scene.
+> **Done when:** Quest 3 connects to GameLift fleet with real Cognito sub in DynamoDB session record.
+
+**Current blocker**: Quest shows "failed to open descriptor file" — no Vulkan frames rendered.
+
+**Root causes identified (session 7, 2026-04-26)**:
+- `-noopenxr` was preventing Vulkan init — Quest 3 drives Vulkan via OpenXR; bypassing OpenXR = no render
+- VulkanPSOChunks (last updated 2026-04-24) confirms Vulkan worked BEFORE `-noopenxr` was applied
+- UE Shipping builds have NO logcat output (NO_LOGGING=1) — only log file via `-abslog`
+- Correct UE external path: `UnrealGame/HyperMageVR/HyperMageVR/` (not UE4Game or HyperMageVR directly)
+- PAK NOT yet at correct path: `UnrealGame/HyperMageVR/HyperMageVR/Content/Paks/`
+
+**State at end of session 7**:
+- All commandlines (internal + 4 external paths) set to: `-log -abslog=/sdcard/Android/data/com.hypermage.vr/files/HyperMageVR.log`
+- `-noopenxr` removed from all commandline files
+- App relaunched (PID 15197) — headset result UNKNOWN
+- Log file NOT yet created (may appear next session)
+
+**Next session checklist**:
+- [ ] Deploy PAK to correct path: `adb push PAK /sdcard/Android/data/com.hypermage.vr/files/UnrealGame/HyperMageVR/HyperMageVR/Content/Paks/`
+- [ ] Check VulkanPSOChunks timestamp (was it updated today? = Vulkan initializing)
+- [ ] Check/pull `HyperMageVR.log` from `/sdcard/Android/data/com.hypermage.vr/files/`
+- [ ] Observe headset: does it show UE splash / login widget / black screen / error overlay?
+- [ ] If 54ms VkCreateDevice crash returns: investigate via log → may need `bPackageDataInsideApk=true` rebuild
+- [ ] Scale fleet to 1 before live E2E test
+- [ ] Confirm real Cognito sub in DynamoDB `player-sessions` after connected session
+
+---
+
+### Phase 20 — Interaction Systems, Voice, QA
 > **Goal:** Participants can interact with the world. Agents validate the whole pipeline automatically.
 > **Done when:** Full automated QA pass on a generated scene — assets, audio, narrative hooks, VR + web delivery all validated.
 

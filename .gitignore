@@ -62,6 +62,12 @@ terraform.tfvars
 # Packer
 Infra/packer/packer-manifest.json
 
+# Build artifacts
+Packaged/
+
+# Claude Code runtime files
+.claude/scheduled_tasks.lock
+
 # Unreal Engine
 UnrealProject/Binaries/
 UnrealProject/Build/
