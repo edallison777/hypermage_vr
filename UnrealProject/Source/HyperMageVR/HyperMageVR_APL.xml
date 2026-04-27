@@ -58,6 +58,8 @@
       <setStringFromAttribute result="metaName" tag="$" name="android:name"/>
       <setBoolIsEqual result="isOBBFlag" arg1="$S(metaName)" arg2="com.epicgames.unreal.GameActivity.bHasOBBFiles"/>
       <setBoolIsEqual result="isPkgDataFlag" arg1="$S(metaName)" arg2="com.epicgames.unreal.GameActivity.bPackageDataInsideApk"/>
+      <setBoolIsEqual result="isExtFilesDir" arg1="$S(metaName)" arg2="com.epicgames.unreal.GameActivity.bUseExternalFilesDir"/>
+      <setBoolIsEqual result="isPublicLog" arg1="$S(metaName)" arg2="com.epicgames.unreal.GameActivity.bPublicLogFiles"/>
       <if condition="isOBBFlag">
         <true>
           <addAttribute tag="$" name="android:value" value="false"/>
@@ -66,6 +68,16 @@
       <if condition="isPkgDataFlag">
         <true>
           <addAttribute tag="$" name="android:value" value="false"/>
+        </true>
+      </if>
+      <if condition="isExtFilesDir">
+        <true>
+          <addAttribute tag="$" name="android:value" value="true"/>
+        </true>
+      </if>
+      <if condition="isPublicLog">
+        <true>
+          <addAttribute tag="$" name="android:value" value="true"/>
         </true>
       </if>
     </loopElements>
