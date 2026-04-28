@@ -194,6 +194,95 @@
                         "type": "array",
                         "description": "If set, this zone is only visible/accessible in these narrative states",
                         "items": {"type": "string"}
+                    },
+                    "interactables": {
+                        "type": "array",
+                        "description": "Interactive objects placed within this zone. IDs must be unique across the entire scene.",
+                        "items": {
+                            "type": "object",
+                            "required": ["id", "type", "position", "behaviour"],
+                            "properties": {
+                                "id": {
+                                    "type": "string",
+                                    "description": "Unique identifier for this object across the whole scene. Used as object_id in the world-state database."
+                                },
+                                "type": {
+                                    "type": "string",
+                                    "enum": ["creature", "machinery", "artefact", "environmental"],
+                                    "description": "creature: AI enemy with patrol/chase/attack behaviour. machinery: triggered mechanism (door, lock, lever). artefact: collectible item. environmental: scripted world event (collapsing bridge, trap, etc)."
+                                },
+                                "position": {
+                                    "type": "object",
+                                    "required": ["x", "y", "z"],
+                                    "description": "World position in Unreal units (cm). Must be within the zone bounds.",
+                                    "properties": {
+                                        "x": {"type": "number"},
+                                        "y": {"type": "number"},
+                                        "z": {"type": "number"}
+                                    }
+                                },
+                                "behaviour": {
+                                    "type": "string",
+                                    "description": "Natural language description of how this object behaves. E.g. 'Patrols the perimeter, attacks players within 200cm, drops the vault key on death.'"
+                                },
+                                "persistent": {
+                                    "type": "boolean",
+                                    "default": false,
+                                    "description": "If true, state is persisted across sessions (e.g. a door stays unlocked, a boss stays dead). Use sparingly."
+                                },
+                                "health": {
+                                    "type": "number",
+                                    "minimum": 1,
+                                    "description": "Starting health points. Creature type only."
+                                },
+                                "patrol_radius": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "description": "Radius (cm) the creature patrols from its spawn position. Creature type only."
+                                },
+                                "trigger_radius": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "description": "Radius (cm) at which this object reacts to a nearby player. Environmental and machinery types."
+                                },
+                                "required_key_id": {
+                                    "type": "string",
+                                    "description": "Interactable ID of an artefact the player must carry to interact with this machinery."
+                                },
+                                "artefact_id": {
+                                    "type": "string",
+                                    "description": "Asset catalogue ID for the visual/audio asset representing this artefact."
+                                },
+                                "grants_ability": {
+                                    "type": "string",
+                                    "description": "Ability ID granted to the collecting player. Artefact type only."
+                                },
+                                "audio_profile": {
+                                    "type": "string",
+                                    "description": "Audio description for this object at each state. E.g. 'low hum at rest, grinding metal on activation, explosion on destruction'. Fed to the audio pipeline."
+                                },
+                                "loot": {
+                                    "type": "array",
+                                    "description": "Artefacts dropped when this object is destroyed or resolved.",
+                                    "items": {
+                                        "type": "object",
+                                        "required": ["artefact_id"],
+                                        "properties": {
+                                            "artefact_id": {
+                                                "type": "string",
+                                                "description": "Interactable ID of the artefact that drops"
+                                            },
+                                            "drop_chance": {
+                                                "type": "number",
+                                                "minimum": 0,
+                                                "maximum": 1,
+                                                "default": 1.0
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

@@ -67,13 +67,38 @@ Design principles:
 - If the user mentions commissioned artwork or uploaded assets, call get_available_assets() and
   reference matching assets in asset_sources[] and zone asset_references[]
 
+INTERACTIVE OBJECTS (zones[].interactables[]):
+Every scene should populate interactables[] in appropriate zones. Four types are available:
+- creature: AI enemy (patrol -> chase -> attack). Required fields: health, patrol_radius.
+  Place in combat/exploration zones only - never in spawn zones.
+  Use loot[] to drop artefacts on death. Creatures reset each session (persistent: false default).
+- machinery: Triggered mechanism (locked door, lever, puzzle device). Include trigger_radius.
+  Use required_key_id to reference an artefact the player must carry to unlock it.
+  Set persistent: true if the door should stay open across sessions.
+- artefact: Collectible item. Include artefact_id (from asset catalogue when available).
+  Use grants_ability if collecting it powers up the player.
+  Set persistent: true if collecting it once should be remembered (e.g. a boss key).
+- environmental: Scripted world event (collapsing bridge, gas trap, lightning strike).
+  Include trigger_radius and a rich behaviour description. One-shot by default.
+
+Rules for interactables:
+- All gameplay is PvE - objects react to players, never player vs player
+- Object IDs must be unique across the ENTIRE scene (prefix with zone id, e.g. "vault_guardian_1")
+- audio_profile is mandatory - it feeds directly into the audio generation pipeline
+- Position each object within its zone's bounds (use zone center +/- offset within extents)
+- A machinery required_key_id must reference an artefact id that exists somewhere in the scene
+- loot artefact_ids must reference artefact interactables that exist in the scene
+
 When given a description:
 1. Call get_available_rewards() to know which reward IDs are valid
 2. Call get_available_assets() to see commissioned/uploaded assets in the catalogue
-3. Reason through the scene design — zones, atmosphere, narrative arc, GM hooks
+3. Reason through the scene design -- zones, atmosphere, narrative arc, GM hooks, and interactables
 4. Generate the complete ScenePlan JSON
-   - If catalogue assets match the scene theme, include them in asset_sources[]
-   - Reference their S3 URI in zone asset_references[] for the zone they belong in
+   - Populate interactables[] for each zone appropriate to the scene type
+   - Combat/exploration zones: creatures + artefacts as loot
+   - Objective zones: machinery (locks/puzzles) + key artefacts in adjacent zones
+   - Environmental zones: environmental interactables triggered by player proximity
+   - If catalogue assets match the scene theme, include them in asset_sources[] and artefact_id fields
 5. Call validate_scene_plan(scene_plan_json) to check it
 6. Fix any validation errors and re-validate
 7. Call save_scene_plan(scene_plan_json) to persist to S3
@@ -185,6 +210,53 @@ def validate_scene_plan(scene_plan_json: str) -> str:
     zone_ids   = {z["id"] for z in plan.get("zones", [])}
     initial_states = [s for s in plan.get("narrative_states", []) if s.get("is_initial")]
 
+    # Collect and validate interactables across all zones
+    all_interactable_ids = []
+    interactable_types   = {}
+    spawn_zone_ids       = {z["id"] for z in plan.get("zones", []) if z.get("type") == "spawn"}
+
+    for zone in plan.get("zones", []):
+        zone_id = zone["id"]
+        for obj in zone.get("interactables", []):
+            obj_id   = obj.get("id", "")
+            obj_type = obj.get("type", "")
+
+            if obj_id in all_interactable_ids:
+                errors.append({"path": f"zones[{zone_id}].interactables",
+                               "message": f"Interactable id '{obj_id}' is not unique across the scene"})
+            else:
+                all_interactable_ids.append(obj_id)
+                interactable_types[obj_id] = obj_type
+
+            if obj_type == "creature" and zone_id in spawn_zone_ids:
+                warnings.append(f"Creature '{obj_id}' is in spawn zone '{zone_id}' — move to combat/exploration zone")
+
+            if "audio_profile" not in obj or not obj["audio_profile"]:
+                warnings.append(f"Interactable '{obj_id}' has no audio_profile — audio pipeline will have no guidance")
+
+    # Second pass: validate cross-references between interactables
+    for zone in plan.get("zones", []):
+        zone_id = zone["id"]
+        for obj in zone.get("interactables", []):
+            obj_id = obj.get("id", "")
+            key_id = obj.get("required_key_id")
+            if key_id:
+                if key_id not in interactable_types:
+                    errors.append({"path": f"zones[{zone_id}].interactables[{obj_id}]",
+                                   "message": f"required_key_id '{key_id}' does not match any interactable id in the scene"})
+                elif interactable_types[key_id] != "artefact":
+                    errors.append({"path": f"zones[{zone_id}].interactables[{obj_id}]",
+                                   "message": f"required_key_id '{key_id}' must reference an artefact (got '{interactable_types[key_id]}')"})
+            for loot in obj.get("loot", []):
+                loot_id = loot.get("artefact_id", "")
+                if loot_id not in interactable_types:
+                    errors.append({"path": f"zones[{zone_id}].interactables[{obj_id}].loot",
+                                   "message": f"loot artefact_id '{loot_id}' does not match any interactable in the scene"})
+                elif interactable_types.get(loot_id) != "artefact":
+                    errors.append({"path": f"zones[{zone_id}].interactables[{obj_id}].loot",
+                                   "message": f"loot artefact_id '{loot_id}' must be type artefact (got '{interactable_types.get(loot_id)}')"})
+
+
     if len(initial_states) != 1:
         errors.append({"path": "narrative_states",
                        "message": f"Exactly one narrative state must have is_initial=true, found {len(initial_states)}"})
@@ -215,18 +287,20 @@ def validate_scene_plan(scene_plan_json: str) -> str:
     if errors:
         return json.dumps({"valid": False, "error_count": len(errors), "errors": errors, "warnings": warnings})
 
+    interactable_count = sum(len(z.get("interactables", [])) for z in plan.get("zones", []))
     return json.dumps({
-        "valid":           True,
-        "scene_id":        plan.get("id"),
-        "scene_name":      plan.get("name"),
-        "zone_count":      len(plan.get("zones", [])),
-        "objective_count": len(plan.get("objectives", [])),
-        "state_count":     len(plan.get("narrative_states", [])),
-        "hook_count":      len(plan.get("gm_hooks", [])),
-        "asset_sources":   len(plan.get("asset_sources", [])),
-        "platforms":       plan.get("platforms", []),
-        "warnings":        warnings,
-        "message":         "ScenePlan is valid and ready to save.",
+        "valid":              True,
+        "scene_id":           plan.get("id"),
+        "scene_name":         plan.get("name"),
+        "zone_count":         len(plan.get("zones", [])),
+        "interactable_count": interactable_count,
+        "objective_count":    len(plan.get("objectives", [])),
+        "state_count":        len(plan.get("narrative_states", [])),
+        "hook_count":         len(plan.get("gm_hooks", [])),
+        "asset_sources":      len(plan.get("asset_sources", [])),
+        "platforms":          plan.get("platforms", []),
+        "warnings":           warnings,
+        "message":            "ScenePlan is valid and ready to save.",
     })
 
 
@@ -262,18 +336,20 @@ def save_scene_plan(scene_plan_json: str) -> str:
     except Exception as e:
         return json.dumps({"status": "error", "message": f"S3 save failed: {e}"})
 
+    interactable_count = sum(len(z.get("interactables", [])) for z in plan.get("zones", []))
     return json.dumps({
-        "status":           "saved",
-        "scene_id":         scene_id,
-        "scene_name":       plan.get("name"),
-        "s3_uri":           s3_uri,
-        "s3_key":           s3_key,
-        "platforms":        plan.get("platforms", []),
-        "zones":            len(plan.get("zones", [])),
-        "asset_sources":    len(plan.get("asset_sources", [])),
-        "gm_hooks":         [h["id"] for h in plan.get("gm_hooks", [])],
-        "narrative_states": [s["id"] for s in plan.get("narrative_states", [])],
-        "message":          "ScenePlan saved. Ready for UnrealLevelBuilder (VR) and/or WebPlatformAgent (web).",
+        "status":             "saved",
+        "scene_id":           scene_id,
+        "scene_name":         plan.get("name"),
+        "s3_uri":             s3_uri,
+        "s3_key":             s3_key,
+        "platforms":          plan.get("platforms", []),
+        "zones":              len(plan.get("zones", [])),
+        "interactable_count": interactable_count,
+        "asset_sources":      len(plan.get("asset_sources", [])),
+        "gm_hooks":           [h["id"] for h in plan.get("gm_hooks", [])],
+        "narrative_states":   [s["id"] for s in plan.get("narrative_states", [])],
+        "message":            "ScenePlan saved. Ready for UnrealLevelBuilder (VR) and/or WebPlatformAgent (web).",
     })
 
 

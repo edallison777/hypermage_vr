@@ -150,6 +150,276 @@ def _query_gltf_assets(_scene_id: str) -> list[dict]:
         return []
 
 
+# ── Interactable helpers ───────────────────────────────────────────────────────
+
+def _build_interactables_js(zones: list[dict]) -> str:
+    """Extract all interactable objects from ScenePlan zones into a JS array literal."""
+    scale = 0.01
+    items = []
+    for zone in zones:
+        for obj in zone.get("interactables", []):
+            pos  = obj.get("position", {})
+            px   = pos.get("x", 0) * scale
+            py   = pos.get("z", 0) * scale  # UE5 Z → Babylon Y
+            pz   = pos.get("y", 0) * scale  # UE5 Y → Babylon Z
+            loot = json.dumps([lt.get("artefact_id", "") for lt in obj.get("loot", [])])
+            items.append(
+                f'  {{ id:{json.dumps(obj.get("id",""))}, type:{json.dumps(obj.get("type",""))}, '
+                f'px:{px:.2f}, py:{py:.2f}, pz:{pz:.2f}, '
+                f'health:{obj.get("health", 100)}, '
+                f'triggerRadius:{obj.get("trigger_radius", 400) * scale:.2f}, '
+                f'triggerDelay:{obj.get("trigger_delay", 2)}, '
+                f'requiredKeyId:{json.dumps(obj.get("required_key_id", ""))}, '
+                f'artefactId:{json.dumps(obj.get("artefact_id", ""))}, '
+                f'grantsAbility:{json.dumps(obj.get("grants_ability", ""))}, '
+                f'behaviour:{json.dumps(obj.get("behaviour", ""))}, '
+                f'loot:{loot} }}'
+            )
+    return "[\n" + ",\n".join(items) + "\n]"
+
+
+def _build_interactable_render_js(interactables_array_js: str) -> str:
+    """Return the complete interactable object system JS block for injection."""
+    return (
+        "    // ── Interactable object system ──────────────────────────────────────\n"
+        "    var INTERACTABLES = " + interactables_array_js + ";\n"
+        +
+"""
+    var playerState = { health:100, maxHealth:100, inventory:[], score:0 };
+    var objectStates = {};
+    var advancedTexture = null;
+    try { advancedTexture = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI"); }
+    catch(e) { console.warn("Babylon GUI unavailable:", e); }
+
+    function makeCreatureHealthBar(mesh, objId) {
+      if (!advancedTexture) return;
+      var bg = new BABYLON.GUI.Rectangle();
+      bg.width = "80px"; bg.height = "10px"; bg.cornerRadius = 3;
+      bg.background = "rgba(0,0,0,0.65)"; bg.color = "rgba(255,255,255,0.2)";
+      advancedTexture.addControl(bg);
+      bg.linkWithMesh(mesh); bg.linkOffsetY = -90;
+      var fill = new BABYLON.GUI.Rectangle();
+      fill.width = "76px"; fill.height = "6px"; fill.background = "#e74c3c";
+      fill.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+      bg.addControl(fill);
+      objectStates[objId].hpBg   = bg;
+      objectStates[objId].hpFill = fill;
+    }
+
+    function updateCreatureHp(objId, cur, max) {
+      var s = objectStates[objId];
+      if (!s || !s.hpFill) return;
+      var pct = Math.max(0, cur / max);
+      s.hpFill.width = Math.round(76 * pct) + "px";
+      s.hpFill.background = pct > 0.5 ? "#2ecc71" : pct > 0.25 ? "#f39c12" : "#e74c3c";
+      if (cur <= 0 && s.hpBg) s.hpBg.isVisible = false;
+    }
+
+    function updatePlayerHUD() {
+      var fill  = document.getElementById("player-hp-fill");
+      var val   = document.getElementById("player-hp-val");
+      var inv   = document.getElementById("inv-count");
+      var score = document.getElementById("score-val");
+      if (fill) {
+        var pct = playerState.health / playerState.maxHealth;
+        fill.style.width = Math.round(pct * 100) + "%";
+        fill.style.background = pct > 0.5 ? "#2ecc71" : pct > 0.25 ? "#f39c12" : "#e74c3c";
+      }
+      if (val)   val.textContent   = playerState.health;
+      if (inv)   inv.textContent   = playerState.inventory.length;
+      if (score) score.textContent = playerState.score;
+    }
+
+    var _fbTimer = null;
+    function showFeedback(msg, col) {
+      var el = document.getElementById("feedback-toast");
+      if (!el) return;
+      el.textContent = msg;
+      el.style.borderColor = col || "rgba(255,255,255,0.25)";
+      el.classList.add("show");
+      clearTimeout(_fbTimer);
+      _fbTimer = setTimeout(function() { el.classList.remove("show"); }, 2800);
+    }
+
+    function broadcastObj(objId, action, data) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify({
+        action:"narrative_event", sceneId:SCENE_ID,
+        objectId:objId, objectAction:action, objectData:data||{}
+      }));
+    }
+
+    function resolveObject(obj, reason) {
+      var s = objectStates[obj.id];
+      if (!s) return;
+      s.state = "resolved";
+      if (s.mesh)     s.mesh.setEnabled(false);
+      if (s.indicator) s.indicator.setEnabled(false);
+      if (s.hpBg)     s.hpBg.isVisible = false;
+      if (obj.loot && reason === "killed") {
+        obj.loot.forEach(function(lootId) {
+          var ls = objectStates[lootId];
+          if (ls && ls.mesh) { ls.mesh.setEnabled(true); ls.state = "idle"; }
+        });
+        showFeedback("Item dropped — go collect it!", "#f39c12");
+      }
+      broadcastObj(obj.id, "resolved", { reason:reason });
+    }
+
+    function triggerEnvironmental(obj) {
+      var s = objectStates[obj.id];
+      if (!s || s.state === "active" || s.state === "resolved") return;
+      s.state = "active";
+      var desc = obj.behaviour ? obj.behaviour.slice(0, 80) : "Environmental event triggered!";
+      showFeedback(desc, "#e67e22");
+      broadcastObj(obj.id, "triggered", {});
+      setTimeout(function() { resolveObject(obj, "triggered"); },
+                 (obj.triggerDelay || 5) * 1000);
+    }
+
+    function handleInteract(obj) {
+      var s = objectStates[obj.id];
+      if (!s || s.state === "resolved") return;
+      if (obj.type === "creature") {
+        if (playerState.health <= 0) { showFeedback("You are defeated.", "#e74c3c"); return; }
+        s.health = Math.max(0, s.health - 25);
+        s.state = "active";
+        updateCreatureHp(obj.id, s.health, obj.health || 100);
+        playerState.health = Math.max(0, playerState.health - 10);
+        updatePlayerHUD();
+        if (s.health <= 0) {
+          playerState.score += 50; updatePlayerHUD();
+          resolveObject(obj, "killed");
+          showFeedback("Enemy defeated! +50 pts", "#2ecc71");
+        } else {
+          showFeedback("Hit! Enemy " + s.health + " HP  You " + playerState.health + " HP");
+          broadcastObj(obj.id, "damage", { remaining:s.health });
+        }
+      } else if (obj.type === "artefact") {
+        playerState.inventory.push(obj.id);
+        playerState.score += 100; updatePlayerHUD();
+        resolveObject(obj, "collected");
+        showFeedback(obj.grantsAbility ? "Ability: " + obj.grantsAbility + "  +100 pts"
+                                       : "Collected!  +100 pts", "#2ecc71");
+      } else if (obj.type === "machinery") {
+        if (obj.requiredKeyId && playerState.inventory.indexOf(obj.requiredKeyId) < 0) {
+          showFeedback("You need a key item to open this.", "#e74c3c"); return;
+        }
+        if (s.state === "active") return;
+        s.state = "active";
+        if (s.indMat) s.indMat.emissiveColor = new BABYLON.Color3(1.0, 0.5, 0.0);
+        showFeedback("Unlocking...");
+        broadcastObj(obj.id, "unlocking", {});
+        setTimeout(function() {
+          playerState.score += 75; updatePlayerHUD();
+          resolveObject(obj, "opened");
+          if (s.indMat) s.indMat.emissiveColor = new BABYLON.Color3(0.0, 1.0, 0.0);
+          showFeedback("Unlocked!  +75 pts", "#2ecc71");
+        }, (obj.triggerDelay || 2) * 1000);
+      } else if (obj.type === "environmental") {
+        triggerEnvironmental(obj);
+      }
+    }
+
+    // Render interactable meshes
+    INTERACTABLES.forEach(function(obj) {
+      objectStates[obj.id] = { state:"idle", health:obj.health||100, mesh:null };
+      var pos = new BABYLON.Vector3(obj.px, obj.py, obj.pz);
+      var mesh, mat;
+      if (obj.type === "creature") {
+        mesh = BABYLON.MeshBuilder.CreateCylinder("obj_"+obj.id, {height:1.8, diameter:0.8}, scene);
+        mesh.position = pos;
+        mat = new BABYLON.StandardMaterial("mat_"+obj.id, scene);
+        mat.diffuseColor  = new BABYLON.Color3(0.7, 0.1, 0.1);
+        mat.emissiveColor = new BABYLON.Color3(0.15, 0.0, 0.0);
+        mesh.material = mat;
+        makeCreatureHealthBar(mesh, obj.id);
+        (function(m, baseY) {
+          var t = Math.random() * Math.PI * 2;
+          scene.registerBeforeRender(function() {
+            if (objectStates[obj.id].state !== "resolved") {
+              m.position.y = baseY + 0.08 * Math.sin(t); t += 0.025;
+            }
+          });
+        })(mesh, pos.y);
+      } else if (obj.type === "artefact") {
+        var isLoot = INTERACTABLES.some(function(o) {
+          return o.loot && o.loot.indexOf(obj.id) >= 0;
+        });
+        mesh = BABYLON.MeshBuilder.CreateSphere("obj_"+obj.id, {diameter:0.5}, scene);
+        mesh.position = pos;
+        mat = new BABYLON.StandardMaterial("mat_"+obj.id, scene);
+        mat.diffuseColor  = new BABYLON.Color3(1.0, 0.8, 0.1);
+        mat.emissiveColor = new BABYLON.Color3(0.4, 0.3, 0.0);
+        mesh.material = mat;
+        if (isLoot) mesh.setEnabled(false);
+        scene.registerBeforeRender(function() {
+          if (objectStates[obj.id].state !== "resolved") mesh.rotation.y += 0.02;
+        });
+      } else if (obj.type === "machinery") {
+        mesh = BABYLON.MeshBuilder.CreateBox("obj_"+obj.id, {width:1.0,height:2.0,depth:0.5}, scene);
+        mesh.position = pos;
+        mat = new BABYLON.StandardMaterial("mat_"+obj.id, scene);
+        mat.diffuseColor  = new BABYLON.Color3(0.35, 0.38, 0.45);
+        mat.specularColor = new BABYLON.Color3(0.4, 0.4, 0.5);
+        mesh.material = mat;
+        var ind = BABYLON.MeshBuilder.CreateSphere("ind_"+obj.id, {diameter:0.22}, scene);
+        ind.position = new BABYLON.Vector3(pos.x, pos.y + 1.2, pos.z);
+        var indMat = new BABYLON.StandardMaterial("indmat_"+obj.id, scene);
+        indMat.emissiveColor = obj.requiredKeyId ? new BABYLON.Color3(1,0,0)
+                                                 : new BABYLON.Color3(0,1,0);
+        ind.material = indMat;
+        objectStates[obj.id].indicator = ind;
+        objectStates[obj.id].indMat    = indMat;
+      } else if (obj.type === "environmental") {
+        var r = obj.triggerRadius > 0 ? obj.triggerRadius : 4.0;
+        mesh = BABYLON.MeshBuilder.CreateDisc("obj_"+obj.id, {radius:r}, scene);
+        mesh.rotation.x = Math.PI / 2;
+        mesh.position = new BABYLON.Vector3(pos.x, 0.05, pos.z);
+        mat = new BABYLON.StandardMaterial("mat_"+obj.id, scene);
+        mat.diffuseColor = new BABYLON.Color3(1.0, 0.5, 0.0);
+        mat.alpha = 0.3; mat.backFaceCulling = false;
+        mesh.material = mat;
+        (function(m) {
+          var t = Math.random() * Math.PI * 2;
+          scene.registerBeforeRender(function() {
+            if (objectStates[obj.id].state !== "resolved") {
+              m.material.alpha = 0.15 + 0.15 * Math.sin(t); t += 0.04;
+            }
+          });
+        })(mesh);
+      }
+      if (mesh) { objectStates[obj.id].mesh = mesh; mesh.metadata = {interactable:obj}; }
+    });
+
+    // Proximity trigger for environmental objects
+    scene.registerBeforeRender(function() {
+      INTERACTABLES.forEach(function(obj) {
+        if (obj.type !== "environmental") return;
+        var s = objectStates[obj.id];
+        if (!s || s.state !== "idle" || !s.mesh) return;
+        var p = s.mesh.position;
+        var d = BABYLON.Vector3.Distance(
+          new BABYLON.Vector3(camera.position.x, 0, camera.position.z),
+          new BABYLON.Vector3(p.x, 0, p.z));
+        if (d < obj.triggerRadius) triggerEnvironmental(obj);
+      });
+    });
+
+    function handleIncomingObjectEvent(msg) {
+      if (!msg.objectId || !msg.objectAction) return;
+      var obj = INTERACTABLES.find(function(o) { return o.id === msg.objectId; });
+      if (!obj) return;
+      var s = objectStates[obj.id];
+      if (!s || s.state === "resolved") return;
+      if (msg.objectAction === "resolved") resolveObject(obj, "remote");
+      else if (msg.objectAction === "damage" && msg.objectData)
+        updateCreatureHp(obj.id, msg.objectData.remaining, obj.health || 100);
+    }
+"""
+    )
+
+
 # ── Babylon.js scene generator ─────────────────────────────────────────────────
 
 _ZONE_COLORS: dict[str, str] = {
@@ -230,8 +500,9 @@ def _generate_babylon_html(scene_plan: dict, ws_url: str,
     ambient_r, ambient_g, ambient_b = lighting["ambient"]
     diff_r, diff_g, diff_b = lighting["diffuse"]
 
-    zones_js  = "[\n" + ",\n".join(zone_defs) + "\n]"
-    states_js = json.dumps(state_names)
+    zones_js         = "[\n" + ",\n".join(zone_defs) + "\n]"
+    states_js        = json.dumps(state_names)
+    interactable_block = _build_interactable_render_js(_build_interactables_js(zones))
 
     # Build audio JS block
     audio_js_lines = []
@@ -312,6 +583,25 @@ def _generate_babylon_html(scene_plan: dict, ws_url: str,
       background:rgba(0,0,0,0.55); border-radius:8px; padding:8px 12px;
       font-size:11px; backdrop-filter:blur(8px);
     }}
+    #player-hud {{
+      position:absolute; bottom:16px; left:16px; color:#fff;
+      background:rgba(0,0,0,0.55); border-radius:8px; padding:10px 14px;
+      min-width:170px; backdrop-filter:blur(8px);
+    }}
+    .hud-row {{ display:flex; align-items:center; gap:8px; margin-bottom:5px; }}
+    .hud-label {{ font-size:10px; color:#aaa; width:22px; }}
+    .hud-bar-bg {{ flex:1; height:8px; background:rgba(255,255,255,0.15); border-radius:4px; overflow:hidden; }}
+    .hud-bar-fill {{ height:100%; background:#2ecc71; border-radius:4px; transition:width .25s,background .25s; }}
+    .hud-val {{ font-size:11px; width:28px; text-align:right; }}
+    .hud-stat {{ font-size:11px; color:#ccc; margin-top:2px; }}
+    #feedback-toast {{
+      position:absolute; top:45%; left:50%; transform:translate(-50%,-50%);
+      background:rgba(0,0,0,0.78); color:#fff; padding:9px 18px;
+      border-radius:8px; font-size:13px; pointer-events:none;
+      border:1px solid rgba(255,255,255,0.25);
+      opacity:0; transition:opacity .25s; backdrop-filter:blur(6px); text-align:center;
+    }}
+    #feedback-toast.show {{ opacity:1; }}
   </style>
 </head>
 <body>
@@ -322,9 +612,19 @@ def _generate_babylon_html(scene_plan: dict, ws_url: str,
     <div class="zone-list" id="zone-list"></div>
   </div>
   <div id="presence">Participants: <span id="p-count">1</span></div>
+  <div id="player-hud">
+    <div class="hud-row">
+      <span class="hud-label">HP</span>
+      <div class="hud-bar-bg"><div class="hud-bar-fill" id="player-hp-fill" style="width:100%"></div></div>
+      <span class="hud-val" id="player-hp-val">100</span>
+    </div>
+    <div class="hud-stat">Items: <span id="inv-count">0</span> &nbsp;|&nbsp; Score: <span id="score-val">0</span></div>
+  </div>
+  <div id="feedback-toast"></div>
 
   <script src="https://cdn.babylonjs.com/babylon.js"></script>
   <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+  <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
   <script>
   (function() {{
     // ── Cognito gate ─────────────────────────────────────────────────────────
@@ -423,6 +723,8 @@ def _generate_babylon_html(scene_plan: dict, ws_url: str,
     // ── glTF asset loading ───────────────────────────────────────────────────
 {gltf_block}
 
+{interactable_block}
+
     // ── WebSocket presence ───────────────────────────────────────────────────
     const pCount = document.getElementById("p-count");
     const narr   = document.getElementById("narr-state");
@@ -440,6 +742,7 @@ def _generate_babylon_html(scene_plan: dict, ws_url: str,
               if (msg.narrativeState) narr.textContent = msg.narrativeState;
               if (msg.participantCount !== undefined)
                 pCount.textContent = msg.participantCount;
+              if (msg.objectId) handleIncomingObjectEvent(msg);
             }} else if (msg.action === "presence") {{
               pCount.textContent = parseInt(pCount.textContent||1) + 0;
             }}
@@ -453,21 +756,21 @@ def _generate_babylon_html(scene_plan: dict, ws_url: str,
       }} catch(e) {{ console.log("WS error:", e); }}
     }}
 
-    // ── Tap-to-interact (picks mesh, sends narrative_event via WS) ────────────
+    // ── Tap-to-interact (interactable objects first, then narrative WS event) ──
     scene.onPointerObservable.add(function(pi) {{
-      if (pi.type === BABYLON.PointerEventTypes.POINTERTAP) {{
-        var ray = scene.createPickingRay(
-          scene.pointerX, scene.pointerY,
-          BABYLON.Matrix.Identity(), camera
-        );
-        var hit = scene.pickWithRay(ray);
-        if (hit && hit.hit && ws && ws.readyState === WebSocket.OPEN) {{
-          ws.send(JSON.stringify({{
-            action: "narrative_event",
-            sceneId: SCENE_ID,
-            interactedMesh: hit.pickedMesh ? hit.pickedMesh.name : ""
-          }}));
-        }}
+      if (pi.type !== BABYLON.PointerEventTypes.POINTERTAP) return;
+      var ray = scene.createPickingRay(
+        scene.pointerX, scene.pointerY, BABYLON.Matrix.Identity(), camera);
+      var hit = scene.pickWithRay(ray);
+      if (!hit || !hit.hit || !hit.pickedMesh) return;
+      var meta = hit.pickedMesh.metadata;
+      if (meta && meta.interactable) {{
+        handleInteract(meta.interactable);
+      }} else if (ws && ws.readyState === WebSocket.OPEN) {{
+        ws.send(JSON.stringify({{
+          action:"narrative_event", sceneId:SCENE_ID,
+          interactedMesh: hit.pickedMesh.name
+        }}));
       }}
     }});
 

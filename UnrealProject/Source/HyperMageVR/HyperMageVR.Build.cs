@@ -19,7 +19,10 @@ public class HyperMageVR : ModuleRules
 			"OnlineSubsystem",
 			"OnlineSubsystemUtils",
 			"HTTP",
-			"UMG"
+			"UMG",
+			"AIModule",
+			"NavigationSystem",
+			"GameplayTasks"
 		});
 
 		if (Target.Type == TargetType.Server)
