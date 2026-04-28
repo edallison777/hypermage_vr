@@ -6,7 +6,7 @@
 #include "HttpModule.h"
 #include "Interfaces/IHttpResponse.h"
 
-const FString UHMVRInteractableComponent::WorldStateApiUrl = TEXT(""); // set when world-state Lambda is deployed
+FString UHMVRInteractableComponent::WorldStateApiUrl = TEXT("");
 
 UHMVRInteractableComponent::UHMVRInteractableComponent()
 {

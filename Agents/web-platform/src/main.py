@@ -37,6 +37,7 @@ BUILD_S3_BUCKET       = os.environ.get("BUILD_S3_BUCKET", "hypermage-vr-unreal-b
 CLOUDFRONT_DOMAIN_SSM = "/hypermage/web-platform/cloudfront-domain"
 WS_URL_SSM            = "/hypermage/web-platform/ws-url"
 BUCKET_SSM            = "/hypermage/web-platform/scenes-bucket"
+WORLD_STATE_URL_SSM   = "/hypermage/world-state/api-url"
 
 dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
 s3       = boto3.client("s3",   region_name=AWS_REGION)
@@ -173,16 +174,17 @@ def _build_interactables_js(zones: list[dict]) -> str:
                 f'artefactId:{json.dumps(obj.get("artefact_id", ""))}, '
                 f'grantsAbility:{json.dumps(obj.get("grants_ability", ""))}, '
                 f'behaviour:{json.dumps(obj.get("behaviour", ""))}, '
-                f'loot:{loot} }}'
+                f'persistent:{str(obj.get("persistent", False)).lower()}, loot:{loot} }}'
             )
     return "[\n" + ",\n".join(items) + "\n]"
 
 
-def _build_interactable_render_js(interactables_array_js: str) -> str:
+def _build_interactable_render_js(interactables_array_js: str, world_state_url: str = "") -> str:
     """Return the complete interactable object system JS block for injection."""
     return (
         "    // ── Interactable object system ──────────────────────────────────────\n"
         "    var INTERACTABLES = " + interactables_array_js + ";\n"
+        "    var WORLD_STATE_URL = " + json.dumps(world_state_url) + ";\n"
         +
 """
     var playerState = { health:100, maxHealth:100, inventory:[], score:0 };
@@ -249,10 +251,37 @@ def _build_interactable_render_js(interactables_array_js: str) -> str:
       }));
     }
 
+    function persistObjState(objId, state) {
+      if (!WORLD_STATE_URL) return;
+      var obj = INTERACTABLES.find(function(o) { return o.id === objId; });
+      if (!obj || !obj.persistent) return;
+      fetch(WORLD_STATE_URL + "/world-state", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({object_id: objId, state: state})
+      }).catch(function(e) { console.warn("world-state persist failed:", e); });
+    }
+
+    function loadObjectStates() {
+      if (!WORLD_STATE_URL) return;
+      INTERACTABLES.forEach(function(obj) {
+        if (!obj.persistent) return;
+        fetch(WORLD_STATE_URL + "/world-state/" + encodeURIComponent(obj.id))
+          .then(function(r) { return r.ok ? r.json() : null; })
+          .then(function(data) {
+            if (!data || !data.state) return;
+            if ((data.state + "").toLowerCase().indexOf("resolved") >= 0)
+              resolveObject(obj, "restored");
+          })
+          .catch(function() {});
+      });
+    }
+
     function resolveObject(obj, reason) {
       var s = objectStates[obj.id];
       if (!s) return;
       s.state = "resolved";
+      persistObjState(obj.id, "resolved");
       if (s.mesh)     s.mesh.setEnabled(false);
       if (s.indicator) s.indicator.setEnabled(false);
       if (s.hpBg)     s.hpBg.isVisible = false;
@@ -270,6 +299,7 @@ def _build_interactable_render_js(interactables_array_js: str) -> str:
       var s = objectStates[obj.id];
       if (!s || s.state === "active" || s.state === "resolved") return;
       s.state = "active";
+      persistObjState(obj.id, "active");
       var desc = obj.behaviour ? obj.behaviour.slice(0, 80) : "Environmental event triggered!";
       showFeedback(desc, "#e67e22");
       broadcastObj(obj.id, "triggered", {});
@@ -284,6 +314,7 @@ def _build_interactable_render_js(interactables_array_js: str) -> str:
         if (playerState.health <= 0) { showFeedback("You are defeated.", "#e74c3c"); return; }
         s.health = Math.max(0, s.health - 25);
         s.state = "active";
+        persistObjState(obj.id, "active");
         updateCreatureHp(obj.id, s.health, obj.health || 100);
         playerState.health = Math.max(0, playerState.health - 10);
         updatePlayerHUD();
@@ -307,6 +338,7 @@ def _build_interactable_render_js(interactables_array_js: str) -> str:
         }
         if (s.state === "active") return;
         s.state = "active";
+        persistObjState(obj.id, "active");
         if (s.indMat) s.indMat.emissiveColor = new BABYLON.Color3(1.0, 0.5, 0.0);
         showFeedback("Unlocking...");
         broadcastObj(obj.id, "unlocking", {});
@@ -391,6 +423,7 @@ def _build_interactable_render_js(interactables_array_js: str) -> str:
       }
       if (mesh) { objectStates[obj.id].mesh = mesh; mesh.metadata = {interactable:obj}; }
     });
+    loadObjectStates();
 
     // Proximity trigger for environmental objects
     scene.registerBeforeRender(function() {
@@ -453,7 +486,8 @@ def _get_lighting(mood: str) -> dict[str, Any]:
 
 def _generate_babylon_html(scene_plan: dict, ws_url: str,
                            audio_assets: list[dict] | None = None,
-                           gltf_assets: list[dict] | None = None) -> str:
+                           gltf_assets: list[dict] | None = None,
+                           world_state_url: str = "") -> str:
     """Convert a ScenePlan dict into a self-contained Babylon.js HTML page."""
     audio_assets = audio_assets or []
     gltf_assets  = gltf_assets  or []
@@ -502,7 +536,7 @@ def _generate_babylon_html(scene_plan: dict, ws_url: str,
 
     zones_js         = "[\n" + ",\n".join(zone_defs) + "\n]"
     states_js        = json.dumps(state_names)
-    interactable_block = _build_interactable_render_js(_build_interactables_js(zones))
+    interactable_block = _build_interactable_render_js(_build_interactables_js(zones), world_state_url)
 
     # Build audio JS block
     audio_js_lines = []
@@ -845,8 +879,9 @@ def generate_web_scene(scene_plan_json: str) -> dict:
         return {"status": "error", "error": f"Invalid ScenePlan JSON: {exc}"}
 
     bucket    = _get_ssm(BUCKET_SSM)
-    ws_url    = _get_ssm(WS_URL_SSM) or "NOT_SET"
-    cf_domain = _get_ssm(CLOUDFRONT_DOMAIN_SSM)
+    ws_url          = _get_ssm(WS_URL_SSM) or "NOT_SET"
+    cf_domain       = _get_ssm(CLOUDFRONT_DOMAIN_SSM)
+    world_state_url = _get_ssm(WORLD_STATE_URL_SSM) or ""
 
     if not bucket:
         return {"status": "skipped", "note": "Web platform SSM not configured — run deploy_phase10.py first"}
@@ -860,7 +895,7 @@ def generate_web_scene(scene_plan_json: str) -> dict:
     # Query glTF assets
     gltf_assets = _query_gltf_assets(scene_id)
 
-    html     = _generate_babylon_html(scene_plan, ws_url, audio_assets, gltf_assets)
+    html     = _generate_babylon_html(scene_plan, ws_url, audio_assets, gltf_assets, world_state_url)
     manifest = _generate_manifest(scene_id, scene_name)
 
     s3_key      = f"scenes/{scene_id}/index.html"

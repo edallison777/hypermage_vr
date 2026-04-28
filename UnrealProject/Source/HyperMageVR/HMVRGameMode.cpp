@@ -16,6 +16,7 @@
 #include "GameLiftServerSDK.h"
 #endif
 #include "HMVRGameInstance.h"
+#include "HMVRInteractableComponent.h"
 
 AHMVRGameMode::AHMVRGameMode()
 {
@@ -54,6 +55,9 @@ void AHMVRGameMode::InitGame(const FString& MapName, const FString& Options, FSt
 		SessionAPIClient->SetEndpointURL(TEXT("https://fhjoxyk9x5.execute-api.eu-west-1.amazonaws.com/dev"));
 		SessionAPIClient->SetAwsRegion(TEXT("eu-west-1"));
 	}
+
+	// Configure world-state API for persistent interactable objects (Phase 20)
+	UHMVRInteractableComponent::WorldStateApiUrl = TEXT("https://hnhmoxjhmd.execute-api.eu-west-1.amazonaws.com/dev");
 
 	// Initialize reward system
 	if (RewardSystem && !RewardSystem->Initialize())

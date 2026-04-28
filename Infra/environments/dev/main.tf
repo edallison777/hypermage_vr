@@ -329,6 +329,30 @@ output "larp_gm_event_url" {
   value       = module.larp_integration.gm_event_url
 }
 
+# World State Module (Phase 20)
+# Persistent interactable-object state storage for VR and browser sessions.
+# All serverless — zero idle cost.
+module "world_state" {
+  source = "../../modules/world-state"
+
+  project_name       = var.project_name
+  environment        = "dev"
+  aws_region         = var.aws_region
+  log_retention_days = 14
+
+  tags = { CostCenter = "Development", Owner = "DevOps Team" }
+}
+
+output "world_state_api_url" {
+  description = "World-state API base URL (Phase 20) — set in HMVRGameMode::InitGame"
+  value       = module.world_state.api_url
+}
+
+output "world_state_table_name" {
+  description = "DynamoDB world-state table name (Phase 20)"
+  value       = module.world_state.table_name
+}
+
 # Outputs
 
 output "build_s3_bucket" {
