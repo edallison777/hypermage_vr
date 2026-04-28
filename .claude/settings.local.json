@@ -306,7 +306,15 @@
       "Bash(unzip -l C:/Users/j_e_a/OneDrive/Projects/Hypermage/Hypermage_VR/UnrealProject/Binaries/Android/HyperMageVR-Android-Shipping-arm64.apk)",
       "Bash(echo \"Copy result: $?\")",
       "Bash(echo \"Symlink result: $?\")",
-      "Bash(C:/Users/j_e_a/AppData/Local/Android/Sdk/build-tools/35.0.0/zipalign.exe -f 4 C:/tmp/inject16.apk C:/tmp/inject16_aligned.apk)"
+      "Bash(C:/Users/j_e_a/AppData/Local/Android/Sdk/build-tools/35.0.0/zipalign.exe -f 4 C:/tmp/inject16.apk C:/tmp/inject16_aligned.apk)",
+      "Bash(xxd)",
+      "Bash(C:/Users/j_e_a/AppData/Local/Android/Sdk/platform-tools/adb.exe uninstall *)",
+      "Bash(unzip -l \"C:/Users/j_e_a/OneDrive/Projects/Hypermage/Hypermage_VR/UnrealProject/Binaries/Android/HyperMageVR-Android-Shipping-arm64.apk\")",
+      "Bash(C:/Users/j_e_a/AppData/Local/Android/Sdk/build-tools/35.0.1/aapt2.exe dump *)",
+      "Bash(bedrock-agentcore --version)",
+      "Bash(agentcore --version)",
+      "Bash(/c/Python312/Scripts/bedrock-agentcore.exe deploy *)",
+      "Bash(bedrock-agentcore deploy *)"
     ]
   }
 }
