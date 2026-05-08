@@ -6,17 +6,18 @@
 #include "RewardSystem.h"
 #include "SessionAPIClient.h"
 #include "HMVRPlayerState.h"
+#include "HMVRInteractableComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "TimerManager.h"
 
 #if WITH_GAMELIFT
 #include "GameLiftServerSDK.h"
 #endif
 #include "HMVRGameInstance.h"
-#include "HMVRInteractableComponent.h"
 
 AHMVRGameMode::AHMVRGameMode()
 {
@@ -41,6 +42,30 @@ AHMVRGameMode::AHMVRGameMode()
 
 	// Create Session API client
 	SessionAPIClient = CreateDefaultSubobject<USessionAPIClient>(TEXT("SessionAPIClient"));
+}
+
+void AHMVRGameMode::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// Scan the level for all interactable objects. Persistent ones load their
+	// last known state from DynamoDB so world-state survives across sessions.
+	int32 PersistentCount = 0;
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	{
+		if (UHMVRInteractableComponent* Comp = It->FindComponentByClass<UHMVRInteractableComponent>())
+		{
+			RegisteredInteractables.Add(Comp);
+			if (Comp->bPersistent)
+			{
+				Comp->LoadState();
+				++PersistentCount;
+			}
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Registered %d interactables (%d persistent, loading state)"),
+		RegisteredInteractables.Num(), PersistentCount);
 }
 
 void AHMVRGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
@@ -516,8 +541,14 @@ void AHMVRGameMode::GrantRewardToPlayer(APlayerController* Player, const FString
 		return;
 	}
 
-	// Extract player ID (TODO: from player state)
-	FString PlayerId = FGuid::NewGuid().ToString();
+	FString PlayerId;
+	if (const AHMVRPlayerState* PS = Player->GetPlayerState<AHMVRPlayerState>())
+		PlayerId = PS->CognitoPlayerId;
+	if (PlayerId.IsEmpty())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("HMVRGameMode: GrantRewardToPlayer — no PlayerId on PlayerState, aborting"));
+		return;
+	}
 
 	// Grant reward with validation (Requirement 5.3, 15.2, 15.3)
 	FRewardGrantResult Result = RewardSystem->GrantReward(PlayerId, RewardId);

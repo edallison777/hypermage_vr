@@ -9,6 +9,7 @@
 #include "RewardSystem.h"
 #include "SessionAPIClient.h"
 #include "HMVRPlayerState.h"
+#include "HMVRInteractableComponent.h"
 #include "HMVRGameMode.generated.h"
 
 class FGameLiftServerSDKModule; // incomplete type; only used as pointer — no header needed
@@ -26,6 +27,7 @@ public:
 	AHMVRGameMode();
 
 	// GameMode overrides
+	virtual void BeginPlay() override;
 	virtual void PreLogin(const FString& Options, const FString& Address, const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage) override;
 	virtual APlayerController* Login(UPlayer* NewPlayer, ENetRole InRemoteRole, const FString& Portal, const FString& Options, const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage) override;
 	virtual void Logout(AController* Exiting) override;
@@ -81,6 +83,9 @@ protected:
 private:
 	// Track connected players
 	TArray<TWeakObjectPtr<APlayerController>> ConnectedPlayers;
+
+	// Interactable objects placed in the level — populated in BeginPlay
+	TArray<TWeakObjectPtr<UHMVRInteractableComponent>> RegisteredInteractables;
 
 	// Session manager
 	UPROPERTY()
