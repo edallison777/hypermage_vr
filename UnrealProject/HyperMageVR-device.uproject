@@ -1,0 +1,55 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.6",
+	"Category": "",
+	"Description": "VR Multiplayer System for Meta Quest 3",
+	"Modules": [
+		{
+			"Name": "HyperMageVR",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [
+				"Engine",
+				"OnlineSubsystem",
+				"OnlineSubsystemUtils",
+				"HeadMountedDisplay",
+				"EnhancedInput"
+			]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "OpenXR",
+			"Enabled": false
+		},
+		{
+			"Name": "OpenXRHandTracking",
+			"Enabled": false
+		},
+		{
+			"Name": "AndroidPermission",
+			"Enabled": true
+		},
+		{
+			"Name": "OnlineSubsystem",
+			"Enabled": true
+		},
+		{
+			"Name": "OnlineSubsystemUtils",
+			"Enabled": true
+		},
+		{
+			"Name": "GameLiftServerSDK",
+			"Enabled": true,
+			"WhitelistTargets": ["Server"]
+		},
+		{
+			"Name": "Bridge",
+			"Enabled": false
+		}
+	],
+	"TargetPlatforms": [
+		"Android",
+		"Windows"
+	]
+}
