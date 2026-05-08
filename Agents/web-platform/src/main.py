@@ -219,6 +219,7 @@ def _build_interactables_js(zones: list[dict], asset_urls: dict[str, str] | None
                 f'  {{ id:{json.dumps(obj.get("id",""))}, type:{json.dumps(obj.get("type",""))}, '
                 f'px:{px:.2f}, py:{py:.2f}, pz:{pz:.2f}, '
                 f'health:{obj.get("health", 100)}, '
+                f'patrolRadius:{obj.get("patrol_radius", 300) * scale:.2f}, '
                 f'triggerRadius:{obj.get("trigger_radius", 400) * scale:.2f}, '
                 f'triggerDelay:{obj.get("trigger_delay", 2)}, '
                 f'requiredKeyId:{json.dumps(obj.get("required_key_id", ""))}, '
@@ -352,6 +353,7 @@ def _build_interactable_render_js(interactables_array_js: str, world_state_url: 
       if (!s || s.state === "active" || s.state === "resolved") return;
       s.state = "active";
       persistObjState(obj.id, "active");
+      SFX.trigger();
       var desc = obj.behaviour ? obj.behaviour.slice(0, 80) : "Environmental event triggered!";
       showFeedback(desc, "#e67e22");
       broadcastObj(obj.id, "triggered", {});
@@ -359,26 +361,53 @@ def _build_interactable_render_js(interactables_array_js: str, world_state_url: 
                  (obj.triggerDelay || 5) * 1000);
     }
 
+    // ── Synthesized sound effects (Web Audio API) ────────────────────────────
+    function _playTone(freq, type, dur, vol) {
+      try {
+        var ctx = BABYLON.Engine.audioEngine && BABYLON.Engine.audioEngine.audioContext;
+        if (!ctx || ctx.state === "suspended") return;
+        var osc = ctx.createOscillator();
+        var g   = ctx.createGain();
+        osc.connect(g); g.connect(ctx.destination);
+        osc.frequency.value = freq;
+        osc.type = type || "sine";
+        g.gain.setValueAtTime(vol || 0.3, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+        osc.start(); osc.stop(ctx.currentTime + dur);
+      } catch(e) {}
+    }
+    var SFX = {
+      swing:      function() { _playTone(200, "square",   0.07, 0.30); _playTone(140, "sawtooth", 0.05, 0.20); },
+      creatureHurt: function() { _playTone(180, "sawtooth", 0.10, 0.40); },
+      creatureDied: function() { _playTone(90,  "sawtooth", 0.25, 0.55); setTimeout(function(){ _playTone(65, "sine", 0.40, 0.25); }, 130); },
+      playerHurt:   function() { _playTone(150, "sawtooth", 0.10, 0.45); },
+      collect:      function() { _playTone(880, "sine", 0.12, 0.25); setTimeout(function(){ _playTone(1100, "sine", 0.10, 0.20); }, 70); setTimeout(function(){ _playTone(1320, "sine", 0.15, 0.15); }, 140); },
+      unlock:       function() { _playTone(440, "square", 0.06, 0.20); setTimeout(function(){ _playTone(550, "square", 0.06, 0.18); }, 80); setTimeout(function(){ _playTone(660, "sine", 0.22, 0.25); }, 170); },
+      trigger:      function() { _playTone(55, "sawtooth", 0.60, 0.40); _playTone(80, "sine", 0.80, 0.15); },
+    };
+
     function handleInteract(obj) {
       var s = objectStates[obj.id];
       if (!s || s.state === "resolved") return;
       if (obj.type === "creature") {
         if (playerState.health <= 0) { showFeedback("You are defeated.", "#e74c3c"); return; }
+        SFX.swing();
         s.health = Math.max(0, s.health - 25);
         s.state = "active";
         persistObjState(obj.id, "active");
         updateCreatureHp(obj.id, s.health, obj.health || 100);
-        playerState.health = Math.max(0, playerState.health - 10);
-        updatePlayerHUD();
         if (s.health <= 0) {
+          SFX.creatureDied();
           playerState.score += 50; updatePlayerHUD();
           resolveObject(obj, "killed");
           showFeedback("Enemy defeated! +50 pts", "#2ecc71");
         } else {
-          showFeedback("Hit! Enemy " + s.health + " HP  You " + playerState.health + " HP");
+          SFX.creatureHurt();
+          showFeedback("Hit! Enemy " + s.health + " HP", "#f39c12");
           broadcastObj(obj.id, "damage", { remaining:s.health });
         }
       } else if (obj.type === "artefact") {
+        SFX.collect();
         playerState.inventory.push(obj.id);
         playerState.score += 100; updatePlayerHUD();
         resolveObject(obj, "collected");
@@ -395,6 +424,7 @@ def _build_interactable_render_js(interactables_array_js: str, world_state_url: 
         showFeedback("Unlocking...");
         broadcastObj(obj.id, "unlocking", {});
         setTimeout(function() {
+          SFX.unlock();
           playerState.score += 75; updatePlayerHUD();
           resolveObject(obj, "opened");
           if (s.indMat) s.indMat.emissiveColor = new BABYLON.Color3(0.0, 1.0, 0.0);
@@ -475,7 +505,7 @@ def _build_interactable_render_js(interactables_array_js: str, world_state_url: 
     }
 
     INTERACTABLES.forEach(function(obj) {
-      objectStates[obj.id] = { state:"idle", health:obj.health||100, mesh:null };
+      objectStates[obj.id] = { state:"idle", health:obj.health||100, mesh:null, spawnPos:new BABYLON.Vector3(obj.px, obj.py, obj.pz) };
       var pos = new BABYLON.Vector3(obj.px, obj.py, obj.pz);
       if (obj.modelUrl) {
         (function(o, p) {
@@ -523,6 +553,54 @@ def _build_interactable_render_js(interactables_array_js: str, world_state_url: 
       }
     });
     loadObjectStates();
+
+    // ── Creature movement (patrol → chase → auto-attack) ─────────────────────
+    scene.registerBeforeRender(function() {
+      if (playerState.health <= 0) return;
+      INTERACTABLES.forEach(function(obj) {
+        if (obj.type !== "creature") return;
+        var s = objectStates[obj.id];
+        if (!s || s.state === "resolved" || !s.mesh) return;
+        var mesh  = s.mesh;
+        var spawn = s.spawnPos;
+        var cp    = camera.position;
+        var dx = cp.x - mesh.position.x;
+        var dz = cp.z - mesh.position.z;
+        var dist = Math.sqrt(dx * dx + dz * dz);
+        var CHASE_RANGE  = 8.0;
+        var ATTACK_RANGE = 1.5;
+        var PATROL_SPEED = 0.006;
+        var CHASE_SPEED  = 0.018;
+        if (dist < ATTACK_RANGE) {
+          var now = Date.now();
+          if (!s.lastAttack || now - s.lastAttack > 2000) {
+            s.lastAttack = now;
+            SFX.playerHurt();
+            playerState.health = Math.max(0, playerState.health - 8);
+            updatePlayerHUD();
+            showFeedback("Taking damage! HP: " + playerState.health, "#e74c3c");
+          }
+        } else if (dist < CHASE_RANGE) {
+          mesh.position.x += (dx / dist) * CHASE_SPEED;
+          mesh.position.z += (dz / dist) * CHASE_SPEED;
+          mesh.rotation.y  = Math.atan2(dx, dz);
+        } else {
+          if (s.patrolAngle === undefined) s.patrolAngle = Math.random() * Math.PI * 2;
+          s.patrolAngle += 0.008;
+          var pr  = obj.patrolRadius > 0 ? obj.patrolRadius : 3.0;
+          var tx  = spawn.x + Math.cos(s.patrolAngle) * pr;
+          var tz  = spawn.z + Math.sin(s.patrolAngle) * pr;
+          var pdx = tx - mesh.position.x;
+          var pdz = tz - mesh.position.z;
+          var pd  = Math.sqrt(pdx * pdx + pdz * pdz);
+          if (pd > 0.1) {
+            mesh.position.x += (pdx / pd) * PATROL_SPEED;
+            mesh.position.z += (pdz / pd) * PATROL_SPEED;
+            mesh.rotation.y  = Math.atan2(pdx, pdz);
+          }
+        }
+      });
+    });
 
     // Proximity trigger for environmental objects
     scene.registerBeforeRender(function() {
