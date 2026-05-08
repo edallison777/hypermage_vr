@@ -6,9 +6,6 @@
 #include "AIController.h"
 #include "HMVRCreatureAIController.generated.h"
 
-class UBehaviorTree;
-class UBlackboardComponent;
-
 UCLASS()
 class HYPERMAGEVR_API AHMVRCreatureAIController : public AAIController
 {
@@ -17,13 +14,22 @@ class HYPERMAGEVR_API AHMVRCreatureAIController : public AAIController
 public:
 	AHMVRCreatureAIController();
 
-	static const FName BB_PatrolTarget;   // FVector blackboard key
-	static const FName BB_ChaseTarget;    // UObject (APawn) blackboard key
-	static const FName BB_AttackRadius;   // float blackboard key
-
-	void SetPatrolTarget(FVector Location);
 	void SetChaseTarget(APawn* Target);
+	void ClearChaseTarget();
 
 protected:
 	virtual void OnPossess(APawn* InPawn) override;
+	virtual void OnUnPossess() override;
+
+private:
+	UPROPERTY()
+	APawn* ChaseTarget = nullptr;
+
+	FVector SpawnLocation;
+	FTimerHandle TickTimer;
+
+	void AITick();
+	void DoPatrol();
+	void DoChase();
+	void DoAttack();
 };

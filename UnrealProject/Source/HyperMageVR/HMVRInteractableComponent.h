@@ -65,6 +65,7 @@ private:
 	void OnPersistResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnected);
 	void OnLoadResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnected);
 
+public:
 	// Set from HMVRGameMode::InitGame() once world-state Lambda is deployed.
 	static FString WorldStateApiUrl;
 };

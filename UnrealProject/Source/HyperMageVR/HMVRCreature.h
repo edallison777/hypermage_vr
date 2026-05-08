@@ -9,7 +9,6 @@
 #include "HMVRCreature.generated.h"
 
 class USphereComponent;
-class UBehaviorTree;
 class AHMVRCreatureAIController;
 
 UENUM(BlueprintType)
@@ -51,9 +50,6 @@ public:
 	float AttackDamage = 15.f;
 
 	// ── AI ──────────────────────────────────────────────────────────────────────
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI")
-	UBehaviorTree* BehaviorTreeAsset;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AI")
 	float DetectionRadius = 800.f;

@@ -64,6 +64,8 @@ void AHMVRCreature::OnDetectionOverlapEnd(UPrimitiveComponent*, AActor* OtherAct
 	{
 		Interactable->TransitionTo(EInteractableState::Idle);
 		SetCreatureSubState(ECreatureSubState::Patrol);
+		if (AHMVRCreatureAIController* AI = Cast<AHMVRCreatureAIController>(GetController()))
+			AI->ClearChaseTarget();
 	}
 }
 

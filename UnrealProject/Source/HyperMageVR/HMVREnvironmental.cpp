@@ -61,7 +61,7 @@ void AHMVREnvironmental::OnPlayerInteract(APlayerController* Player)
 	Trigger(Player);
 }
 
-void AHMVREnvironmental::Trigger(AActor* Instigator)
+void AHMVREnvironmental::Trigger(AActor* TriggerSource)
 {
 	if (!HasAuthority()) return;
 	if (bOneShot && bTriggered) return;
@@ -69,7 +69,7 @@ void AHMVREnvironmental::Trigger(AActor* Instigator)
 
 	bTriggered = true;
 	Interactable->TransitionTo(EInteractableState::Active);
-	BP_OnTriggered(Instigator);
+	BP_OnTriggered(TriggerSource);
 
 	GetWorldTimerManager().SetTimer(SequenceTimerHandle, this,
 	                                &AHMVREnvironmental::OnSequenceComplete,

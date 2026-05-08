@@ -26,7 +26,7 @@ public:
 
 	// Trigger the event sequence. Can be called externally (e.g. by a puzzle system).
 	UFUNCTION(BlueprintCallable, Category="Environmental")
-	void Trigger(AActor* Instigator = nullptr);
+	void Trigger(AActor* TriggerSource = nullptr);
 
 	// Player enters this radius to auto-trigger (if bAutoTrigger=true).
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Environmental")
@@ -45,7 +45,7 @@ public:
 	float EventSequenceDuration = 5.f;
 
 	UFUNCTION(BlueprintImplementableEvent, Category="Environmental")
-	void BP_OnTriggered(AActor* Instigator);
+	void BP_OnTriggered(AActor* TriggerSource);
 
 	UFUNCTION(BlueprintImplementableEvent, Category="Environmental")
 	void BP_OnResolved();
