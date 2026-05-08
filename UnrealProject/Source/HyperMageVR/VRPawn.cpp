@@ -10,6 +10,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "DrawDebugHelpers.h"
+#include "EngineUtils.h"
 
 AVRPawn::AVRPawn()
 {
@@ -98,6 +99,12 @@ void AVRPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 		if (FlightAction && bFlightModeEnabled)
 		{
 			EnhancedInput->BindAction(FlightAction, ETriggerEvent::Triggered, this, &AVRPawn::HandleFlight);
+		}
+
+		// Bind interact (right trigger / grip button — assigned in UE Editor input mapping)
+		if (InteractAction)
+		{
+			EnhancedInput->BindAction(InteractAction, ETriggerEvent::Started, this, &AVRPawn::HandleInteract);
 		}
 	}
 }
@@ -433,4 +440,48 @@ bool AVRPawn::ServerTeleport_Validate(FVector TargetLocation, float Timestamp)
 	// Validate teleport distance
 	float Distance = FVector::Dist(GetActorLocation(), TargetLocation);
 	return Distance <= TeleportMaxDistance * 1.1f;
+}
+
+void AVRPawn::HandleInteract(const FInputActionValue&)
+{
+	// Find the nearest IHMVRInteractable within InteractRadius
+	AActor* Nearest = nullptr;
+	float NearestDist = InteractRadius;
+	FVector MyLoc = GetActorLocation();
+
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	{
+		if (!It->Implements<UHMVRInteractable>()) continue;
+		float Dist = FVector::Dist(MyLoc, It->GetActorLocation());
+		if (Dist < NearestDist)
+		{
+			NearestDist = Dist;
+			Nearest = *It;
+		}
+	}
+
+	if (!Nearest) return;
+
+	if (HasAuthority())
+		ServerInteract_Implementation(Nearest);
+	else
+		ServerInteract(Nearest);
+}
+
+void AVRPawn::ServerInteract_Implementation(AActor* Target)
+{
+	if (!Target) return;
+	IHMVRInteractable* Interactable = Cast<IHMVRInteractable>(Target);
+	if (!Interactable) return;
+
+	// Double-check range server-side to prevent spoofing
+	if (FVector::Dist(GetActorLocation(), Target->GetActorLocation()) > InteractRadius * 1.2f) return;
+
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	Interactable->OnPlayerInteract(PC);
+}
+
+bool AVRPawn::ServerInteract_Validate(AActor* Target)
+{
+	return Target != nullptr;
 }

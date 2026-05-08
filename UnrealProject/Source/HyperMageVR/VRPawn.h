@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
 #include "InputActionValue.h"
+#include "HMVRInteractable.h"
 #include "VRPawn.generated.h"
 
 class UCameraComponent;
@@ -80,6 +81,9 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	TObjectPtr<UInputAction> FlightAction;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	TObjectPtr<UInputAction> InteractAction;
+
 	// Comfort Settings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VR|Comfort", Replicated)
 	EVRLocomotionMode LocomotionMode = EVRLocomotionMode::SmoothLocomotion;
@@ -102,6 +106,10 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VR|Locomotion")
 	float TeleportMaxDistance = 1000.0f; // cm
+
+	// Radius within which the interact button fires OnPlayerInteract (should match InteractRadius on components)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VR|Interaction")
+	float InteractRadius = 150.0f; // cm
 
 	// Rotation Parameters
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VR|Rotation")
@@ -126,6 +134,7 @@ private:
 	void HandleTurn(const FInputActionValue& Value);
 	void HandleTeleport(const FInputActionValue& Value);
 	void HandleFlight(const FInputActionValue& Value);
+	void HandleInteract(const FInputActionValue& Value);
 
 	// Locomotion Implementation
 	void ApplySmoothLocomotion(const FVector2D& Input, float DeltaTime);
@@ -157,4 +166,7 @@ private:
 
 	UFUNCTION(Server, Reliable, WithValidation)
 	void ServerTeleport(FVector TargetLocation, float Timestamp);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ServerInteract(AActor* Target);
 };
