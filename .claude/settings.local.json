@@ -314,7 +314,12 @@
       "Bash(bedrock-agentcore --version)",
       "Bash(agentcore --version)",
       "Bash(/c/Python312/Scripts/bedrock-agentcore.exe deploy *)",
-      "Bash(bedrock-agentcore deploy *)"
+      "Bash(bedrock-agentcore deploy *)",
+      "PowerShell($env:JAVA_HOME = \"C:\\\\Program Files\\\\Android\\\\Android Studio1\\\\jbr\"; $env:PATH = \"$env:JAVA_HOME\\\\bin;$env:PATH\"; Set-Location \"C:\\\\Temp\\\\hypermage-gradle\"; .\\\\gradlew.bat assembleRelease 2>&1)",
+      "Bash('C:\\\\Users\\\\j_e_a\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe' shell *)",
+      "Bash('C:\\\\Users\\\\j_e_a\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe' logcat *)",
+      "PowerShell",
+      "Bash(GIT_CURL_VERBOSE=1 git push)"
     ]
   }
 }
