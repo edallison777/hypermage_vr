@@ -441,9 +441,11 @@ def _build_interactable_render_js(interactables_array_js: str, world_state_url: 
       if (obj.type === "creature") {
         mesh = BABYLON.MeshBuilder.CreateCylinder("obj_"+obj.id, {height:1.8, diameter:0.8}, scene);
         mesh.position = pos;
-        mat = new BABYLON.StandardMaterial("mat_"+obj.id, scene);
-        mat.diffuseColor  = new BABYLON.Color3(0.7, 0.1, 0.1);
-        mat.emissiveColor = new BABYLON.Color3(0.15, 0.0, 0.0);
+        mat = new BABYLON.PBRMaterial("mat_"+obj.id, scene);
+        mat.albedoColor  = new BABYLON.Color3(0.7, 0.1, 0.1);
+        mat.roughness    = 0.6;
+        mat.metallic     = 0.2;
+        mat.emissiveColor = new BABYLON.Color3(0.18, 0.0, 0.0);
         mesh.material = mat;
         makeCreatureHealthBar(mesh, obj.id);
         (function(m, baseY) {
@@ -460,9 +462,11 @@ def _build_interactable_render_js(interactables_array_js: str, world_state_url: 
         });
         mesh = BABYLON.MeshBuilder.CreateSphere("obj_"+obj.id, {diameter:0.5}, scene);
         mesh.position = pos;
-        mat = new BABYLON.StandardMaterial("mat_"+obj.id, scene);
-        mat.diffuseColor  = new BABYLON.Color3(1.0, 0.8, 0.1);
-        mat.emissiveColor = new BABYLON.Color3(0.4, 0.3, 0.0);
+        mat = new BABYLON.PBRMaterial("mat_"+obj.id, scene);
+        mat.albedoColor  = new BABYLON.Color3(1.0, 0.8, 0.1);
+        mat.metallic     = 0.88;
+        mat.roughness    = 0.12;
+        mat.emissiveColor = new BABYLON.Color3(0.28, 0.20, 0.0);
         mesh.material = mat;
         if (isLoot) mesh.setEnabled(false);
         scene.registerBeforeRender(function() {
@@ -471,9 +475,10 @@ def _build_interactable_render_js(interactables_array_js: str, world_state_url: 
       } else if (obj.type === "machinery") {
         mesh = BABYLON.MeshBuilder.CreateBox("obj_"+obj.id, {width:1.0,height:2.0,depth:0.5}, scene);
         mesh.position = pos;
-        mat = new BABYLON.StandardMaterial("mat_"+obj.id, scene);
-        mat.diffuseColor  = new BABYLON.Color3(0.35, 0.38, 0.45);
-        mat.specularColor = new BABYLON.Color3(0.4, 0.4, 0.5);
+        mat = new BABYLON.PBRMaterial("mat_"+obj.id, scene);
+        mat.albedoColor = new BABYLON.Color3(0.35, 0.38, 0.45);
+        mat.roughness   = 0.45;
+        mat.metallic    = 0.65;
         mesh.material = mat;
         var ind = BABYLON.MeshBuilder.CreateSphere("ind_"+obj.id, {diameter:0.22}, scene);
         ind.position = new BABYLON.Vector3(pos.x, pos.y + 1.2, pos.z);
@@ -488,9 +493,13 @@ def _build_interactable_render_js(interactables_array_js: str, world_state_url: 
         mesh = BABYLON.MeshBuilder.CreateDisc("obj_"+obj.id, {radius:r}, scene);
         mesh.rotation.x = Math.PI / 2;
         mesh.position = new BABYLON.Vector3(pos.x, 0.05, pos.z);
-        mat = new BABYLON.StandardMaterial("mat_"+obj.id, scene);
-        mat.diffuseColor = new BABYLON.Color3(1.0, 0.5, 0.0);
-        mat.alpha = 0.3; mat.backFaceCulling = false;
+        mat = new BABYLON.PBRMaterial("mat_"+obj.id, scene);
+        mat.albedoColor     = new BABYLON.Color3(1.0, 0.5, 0.0);
+        mat.emissiveColor   = new BABYLON.Color3(0.25, 0.12, 0.0);
+        mat.roughness       = 0.8;
+        mat.metallic        = 0.0;
+        mat.alpha           = 0.35;
+        mat.backFaceCulling = false;
         mesh.material = mat;
         (function(m) {
           var t = Math.random() * Math.PI * 2;
@@ -501,7 +510,11 @@ def _build_interactable_render_js(interactables_array_js: str, world_state_url: 
           });
         })(mesh);
       }
-      if (mesh) { objectStates[obj.id].mesh = mesh; mesh.metadata = {interactable:obj}; }
+      if (mesh) {
+        objectStates[obj.id].mesh = mesh;
+        mesh.metadata = {interactable:obj};
+        mesh.receiveShadows = true;
+      }
     }
 
     INTERACTABLES.forEach(function(obj) {
@@ -885,50 +898,92 @@ def _generate_babylon_html(scene_plan: dict, ws_url: str,
     sun.intensity = 1.2;
     sun.diffuse   = new BABYLON.Color3({diff_r}, {diff_g}, {diff_b});
 
-    // ── Ground plane ─────────────────────────────────────────────────────────
-    const ground = BABYLON.MeshBuilder.CreateGround("ground",
-      {{ width: 200, height: 200 }}, scene);
-    const gMat = new BABYLON.StandardMaterial("gMat", scene);
-    gMat.diffuseColor = new BABYLON.Color3(0.15, 0.15, 0.18);
-    gMat.specularColor = new BABYLON.Color3(0.05, 0.05, 0.05);
-    ground.material = gMat;
+    // ── Shadows ───────────────────────────────────────────────────────────────
+    var shadowGen = null;
+    try {{
+      shadowGen = new BABYLON.ShadowGenerator(1024, sun);
+      shadowGen.useBlurExponentialShadowMap = true;
+      shadowGen.blurKernel = 16;
+    }} catch(e) {{ console.warn("Shadows unavailable:", e); }}
 
-    // ── Zone meshes ──────────────────────────────────────────────────────────
+    // ── Post-processing (bloom, FXAA, tone mapping) ───────────────────────────
+    try {{
+      var pipeline = new BABYLON.DefaultRenderingPipeline("pp", true, scene, [camera]);
+      pipeline.bloomEnabled    = true;
+      pipeline.bloomThreshold  = 0.65;
+      pipeline.bloomWeight     = 0.25;
+      pipeline.bloomKernel     = 64;
+      pipeline.fxaaEnabled     = true;
+      pipeline.imageProcessingEnabled = true;
+      pipeline.imageProcessing.toneMappingEnabled = true;
+      pipeline.imageProcessing.toneMappingType =
+        BABYLON.ImageProcessingConfiguration.TONEMAPPING_ACES;
+      pipeline.imageProcessing.contrast = 1.25;
+      pipeline.imageProcessing.exposure = 1.1;
+    }} catch(e) {{ console.warn("Post-processing unavailable:", e); }}
+
+    // ── Ground plane (PBR) ────────────────────────────────────────────────────
+    const ground = BABYLON.MeshBuilder.CreateGround("ground",
+      {{ width: 200, height: 200, subdivisions: 2 }}, scene);
+    ground.receiveShadows = true;
+    const gMat = new BABYLON.PBRMaterial("gMat", scene);
+    gMat.albedoColor = new BABYLON.Color3(0.10, 0.10, 0.12);
+    gMat.roughness   = 0.92;
+    gMat.metallic    = 0.05;
+    ground.material  = gMat;
+
+    // ── Atmospheric fog ───────────────────────────────────────────────────────
+    scene.fogMode    = BABYLON.Scene.FOGMODE_EXP2;
+    scene.fogColor   = scene.clearColor.toColor3();
+    scene.fogDensity = 0.018;
+
+    // ── Zone meshes — PBR floor tiles + corner pillars ───────────────────────
     const zoneList = document.getElementById("zone-list");
     ZONES.forEach(function(z) {{
-      const box = BABYLON.MeshBuilder.CreateBox("zone_" + z.id,
-        {{ width: z.ex * 2, height: z.ey * 2, depth: z.ez * 2 }}, scene);
-      box.position = new BABYLON.Vector3(z.cx, z.cy, z.cz);
-      const mat = new BABYLON.StandardMaterial("mat_" + z.id, scene);
-      const hex = z.color.replace("#","");
-      const r = parseInt(hex.substr(0,2),16)/255;
-      const g = parseInt(hex.substr(2,2),16)/255;
-      const b = parseInt(hex.substr(4,2),16)/255;
-      mat.diffuseColor  = new BABYLON.Color3(r, g, b);
-      mat.alpha         = 0.35;
-      mat.wireframe     = false;
-      mat.backFaceCulling = false;
-      box.material = mat;
+      var hex = z.color.replace("#","");
+      var r = parseInt(hex.substr(0,2),16)/255;
+      var g = parseInt(hex.substr(2,2),16)/255;
+      var b = parseInt(hex.substr(4,2),16)/255;
 
-      const li = document.createElement("div");
+      // Floor tile
+      var tile = BABYLON.MeshBuilder.CreateBox("tile_"+z.id,
+        {{width:z.ex*2, height:0.08, depth:z.ez*2}}, scene);
+      tile.position = new BABYLON.Vector3(z.cx, 0.04, z.cz);
+      tile.receiveShadows = true;
+      var tmat = new BABYLON.PBRMaterial("tmat_"+z.id, scene);
+      tmat.albedoColor   = new BABYLON.Color3(r*0.45, g*0.45, b*0.45);
+      tmat.roughness     = 0.85;
+      tmat.metallic      = 0.08;
+      tmat.emissiveColor = new BABYLON.Color3(r*0.06, g*0.06, b*0.06);
+      tile.material = tmat;
+      if (shadowGen) shadowGen.addShadowCaster(tile);
+
+      // Corner pillars
+      var ph = 1.8, po = 0.12;
+      var corners = [
+        [z.cx+z.ex-po, z.cz+z.ez-po], [z.cx-z.ex+po, z.cz+z.ez-po],
+        [z.cx+z.ex-po, z.cz-z.ez+po], [z.cx-z.ex+po, z.cz-z.ez+po]
+      ];
+      corners.forEach(function(c, i) {{
+        var pil = BABYLON.MeshBuilder.CreateBox("pil_"+z.id+"_"+i,
+          {{width:po*2, height:ph, depth:po*2}}, scene);
+        pil.position = new BABYLON.Vector3(c[0], ph/2, c[1]);
+        pil.receiveShadows = true;
+        var pm = new BABYLON.PBRMaterial("pm_"+z.id+"_"+i, scene);
+        pm.albedoColor   = new BABYLON.Color3(r*0.65, g*0.65, b*0.65);
+        pm.roughness     = 0.35;
+        pm.metallic      = 0.45;
+        pm.emissiveColor = new BABYLON.Color3(r*0.18, g*0.18, b*0.18);
+        pil.material = pm;
+        if (shadowGen) shadowGen.addShadowCaster(pil);
+      }});
+
+      var li = document.createElement("div");
       li.style.cssText = "margin-top:3px; display:flex; align-items:center; gap:6px;";
       li.innerHTML = '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' +
         z.color + '"></span><span>' + z.name + ' (' + z.type + ')</span>';
       zoneList.appendChild(li);
     }});
-
-    // ── Grid lines overlay ───────────────────────────────────────────────────
-    try {{
-      const grid = new BABYLON.GridMaterial("grid", scene);
-      grid.majorUnitFrequency  = 10;
-      grid.minorUnitVisibility = 0.45;
-      grid.gridRatio           = 1;
-      grid.backFaceCulling     = false;
-      grid.mainColor     = new BABYLON.Color3(0.2, 0.2, 0.35);
-      grid.lineColor     = new BABYLON.Color3(0.3, 0.3, 0.5);
-      grid.opacity       = 0.75;
-      ground.material    = grid;
-    }} catch(e) {{ /* GridMaterial not available without extras CDN */ }}
 
     // ── Audio ────────────────────────────────────────────────────────────────
 {audio_block}
