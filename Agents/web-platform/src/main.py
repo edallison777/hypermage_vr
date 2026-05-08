@@ -151,10 +151,56 @@ def _query_gltf_assets(_scene_id: str) -> list[dict]:
         return []
 
 
+def _collect_interactable_asset_ids(zones: list[dict]) -> list[str]:
+    """Return all model asset IDs referenced by interactables across zones."""
+    ids: list[str] = []
+    for zone in zones:
+        for obj in zone.get("interactables", []):
+            mid = obj.get("model_asset_id", "")
+            if mid:
+                ids.append(mid)
+            elif obj.get("type") == "artefact":
+                aid = obj.get("artefact_id", "")
+                if aid:
+                    ids.append(aid)
+    return ids
+
+
+def _query_assets_by_ids(asset_ids: list[str]) -> dict[str, str]:
+    """Fetch presigned glTF/glb URLs for specific asset catalogue IDs.
+    Returns {asset_id: presigned_url} for any ID that resolves to a ready 3D asset."""
+    if not asset_ids:
+        return {}
+    try:
+        table = dynamodb.Table(ASSET_CATALOGUE_TABLE)
+        result: dict[str, str] = {}
+        for asset_id in dict.fromkeys(asset_ids):  # deduplicate, preserve order
+            if not asset_id:
+                continue
+            resp = table.get_item(Key={"assetId": asset_id})
+            item = resp.get("Item")
+            if not item or item.get("status") != "ready":
+                continue
+            s3_uri = item.get("s3Uri", "")
+            if not (s3_uri.lower().endswith(".gltf") or s3_uri.lower().endswith(".glb")):
+                outputs = item.get("outputs", {})
+                s3_uri = outputs.get("glb") or outputs.get("gltf") or ""
+            if not s3_uri:
+                continue
+            bucket, key = _s3_uri_to_bucket_key(s3_uri)
+            url = _presign(bucket, key)
+            if url:
+                result[asset_id] = url
+        return result
+    except Exception:
+        return {}
+
+
 # ── Interactable helpers ───────────────────────────────────────────────────────
 
-def _build_interactables_js(zones: list[dict]) -> str:
+def _build_interactables_js(zones: list[dict], asset_urls: dict[str, str] | None = None) -> str:
     """Extract all interactable objects from ScenePlan zones into a JS array literal."""
+    asset_urls = asset_urls or {}
     scale = 0.01
     items = []
     for zone in zones:
@@ -164,6 +210,11 @@ def _build_interactables_js(zones: list[dict]) -> str:
             py   = pos.get("z", 0) * scale  # UE5 Z → Babylon Y
             pz   = pos.get("y", 0) * scale  # UE5 Y → Babylon Z
             loot = json.dumps([lt.get("artefact_id", "") for lt in obj.get("loot", [])])
+            # Resolve model URL: model_asset_id for all types; artefact_id fallback for artefact type
+            model_id  = obj.get("model_asset_id", "")
+            if not model_id and obj.get("type") == "artefact":
+                model_id = obj.get("artefact_id", "")
+            model_url = asset_urls.get(model_id, "")
             items.append(
                 f'  {{ id:{json.dumps(obj.get("id",""))}, type:{json.dumps(obj.get("type",""))}, '
                 f'px:{px:.2f}, py:{py:.2f}, pz:{pz:.2f}, '
@@ -174,6 +225,7 @@ def _build_interactables_js(zones: list[dict]) -> str:
                 f'artefactId:{json.dumps(obj.get("artefact_id", ""))}, '
                 f'grantsAbility:{json.dumps(obj.get("grants_ability", ""))}, '
                 f'behaviour:{json.dumps(obj.get("behaviour", ""))}, '
+                f'modelUrl:{json.dumps(model_url)}, '
                 f'persistent:{str(obj.get("persistent", False)).lower()}, loot:{loot} }}'
             )
     return "[\n" + ",\n".join(items) + "\n]"
@@ -353,10 +405,8 @@ def _build_interactable_render_js(interactables_array_js: str, world_state_url: 
       }
     }
 
-    // Render interactable meshes
-    INTERACTABLES.forEach(function(obj) {
-      objectStates[obj.id] = { state:"idle", health:obj.health||100, mesh:null };
-      var pos = new BABYLON.Vector3(obj.px, obj.py, obj.pz);
+    // Render interactable meshes — real 3D assets when available, primitives as fallback
+    function _spawnPrimitive(obj, pos) {
       var mesh, mat;
       if (obj.type === "creature") {
         mesh = BABYLON.MeshBuilder.CreateCylinder("obj_"+obj.id, {height:1.8, diameter:0.8}, scene);
@@ -422,6 +472,55 @@ def _build_interactable_render_js(interactables_array_js: str, world_state_url: 
         })(mesh);
       }
       if (mesh) { objectStates[obj.id].mesh = mesh; mesh.metadata = {interactable:obj}; }
+    }
+
+    INTERACTABLES.forEach(function(obj) {
+      objectStates[obj.id] = { state:"idle", health:obj.health||100, mesh:null };
+      var pos = new BABYLON.Vector3(obj.px, obj.py, obj.pz);
+      if (obj.modelUrl) {
+        (function(o, p) {
+          try {
+            BABYLON.SceneLoader.ImportMesh("", o.modelUrl, "", scene, function(meshes) {
+              if (!meshes || meshes.length === 0) { _spawnPrimitive(o, p); return; }
+              var root = meshes[0];
+              root.position = p.clone();
+              objectStates[o.id].mesh = root;
+              meshes.forEach(function(m) { m.metadata = {interactable:o}; });
+              if (o.type === "creature") {
+                makeCreatureHealthBar(root, o.id);
+                var t = Math.random() * Math.PI * 2;
+                scene.registerBeforeRender(function() {
+                  if (objectStates[o.id].state !== "resolved") {
+                    root.position.y = p.y + 0.08 * Math.sin(t); t += 0.025;
+                  }
+                });
+              } else if (o.type === "artefact") {
+                var isLoot = INTERACTABLES.some(function(x) { return x.loot && x.loot.indexOf(o.id) >= 0; });
+                if (isLoot) root.setEnabled(false);
+                scene.registerBeforeRender(function() {
+                  if (objectStates[o.id].state !== "resolved") root.rotation.y += 0.02;
+                });
+              } else if (o.type === "machinery") {
+                var ind = BABYLON.MeshBuilder.CreateSphere("ind_"+o.id, {diameter:0.22}, scene);
+                ind.position = new BABYLON.Vector3(p.x, p.y + 1.2, p.z);
+                var indMat = new BABYLON.StandardMaterial("indmat_"+o.id, scene);
+                indMat.emissiveColor = o.requiredKeyId ? new BABYLON.Color3(1,0,0) : new BABYLON.Color3(0,1,0);
+                ind.material = indMat;
+                objectStates[o.id].indicator = ind;
+                objectStates[o.id].indMat    = indMat;
+              }
+            }, null, function(_, msg) {
+              console.warn("glTF load failed for " + o.id + " — using fallback primitive:", msg);
+              _spawnPrimitive(o, p);
+            });
+          } catch(e) {
+            console.warn("glTF import error for " + o.id + ":", e);
+            _spawnPrimitive(o, p);
+          }
+        })(obj, pos);
+      } else {
+        _spawnPrimitive(obj, pos);
+      }
     });
     loadObjectStates();
 
@@ -487,7 +586,8 @@ def _get_lighting(mood: str) -> dict[str, Any]:
 def _generate_babylon_html(scene_plan: dict, ws_url: str,
                            audio_assets: list[dict] | None = None,
                            gltf_assets: list[dict] | None = None,
-                           world_state_url: str = "") -> str:
+                           world_state_url: str = "",
+                           interactable_asset_urls: dict[str, str] | None = None) -> str:
     """Convert a ScenePlan dict into a self-contained Babylon.js HTML page."""
     audio_assets = audio_assets or []
     gltf_assets  = gltf_assets  or []
@@ -536,7 +636,9 @@ def _generate_babylon_html(scene_plan: dict, ws_url: str,
 
     zones_js         = "[\n" + ",\n".join(zone_defs) + "\n]"
     states_js        = json.dumps(state_names)
-    interactable_block = _build_interactable_render_js(_build_interactables_js(zones), world_state_url)
+    interactable_block = _build_interactable_render_js(
+        _build_interactables_js(zones, interactable_asset_urls), world_state_url
+    )
 
     # Build audio JS block
     audio_js_lines = []
@@ -892,10 +994,17 @@ def generate_web_scene(scene_plan_json: str) -> dict:
     # Query audio assets for this scene
     audio_assets = _query_audio_assets(scene_id)
 
-    # Query glTF assets
+    # Query glTF assets (zone-level environment assets)
     gltf_assets = _query_gltf_assets(scene_id)
 
-    html     = _generate_babylon_html(scene_plan, ws_url, audio_assets, gltf_assets, world_state_url)
+    # Resolve 3D model URLs for interactable objects
+    zones = scene_plan.get("zones", [])
+    interactable_asset_ids  = _collect_interactable_asset_ids(zones)
+    interactable_asset_urls = _query_assets_by_ids(interactable_asset_ids)
+
+    html = _generate_babylon_html(
+        scene_plan, ws_url, audio_assets, gltf_assets, world_state_url, interactable_asset_urls
+    )
     manifest = _generate_manifest(scene_id, scene_name)
 
     s3_key      = f"scenes/{scene_id}/index.html"
@@ -958,8 +1067,9 @@ def generate_web_scene(scene_plan_json: str) -> dict:
         "s3_key":        s3_key,
         "s3_uri":        s3_uri,
         "web_url":       web_url,
-        "audio_assets":  len(audio_assets),
-        "gltf_assets":   len(gltf_assets),
+        "audio_assets":         len(audio_assets),
+        "gltf_assets":          len(gltf_assets),
+        "interactable_assets":  len(interactable_asset_urls),
         "manifest_key":  manifest_key,
         "note":          "HTML + manifest generated — call deploy_web_scene to get a live CloudFront URL",
     }

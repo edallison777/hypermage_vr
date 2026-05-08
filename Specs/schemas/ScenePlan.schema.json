@@ -253,6 +253,10 @@
                                     "type": "string",
                                     "description": "Asset catalogue ID for the visual/audio asset representing this artefact."
                                 },
+                                "model_asset_id": {
+                                    "type": "string",
+                                    "description": "Asset catalogue ID for the 3D model of this object (any type). The WebPlatformAgent resolves this to a presigned glTF URL and loads the real model in the browser renderer instead of a placeholder primitive. Set from get_available_assets() results. For artefact type, artefact_id serves the same purpose."
+                                },
                                 "grants_ability": {
                                     "type": "string",
                                     "description": "Ability ID granted to the collecting player. Artefact type only."

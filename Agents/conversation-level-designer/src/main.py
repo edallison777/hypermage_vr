@@ -72,14 +72,18 @@ Every scene should populate interactables[] in appropriate zones. Four types are
 - creature: AI enemy (patrol -> chase -> attack). Required fields: health, patrol_radius.
   Place in combat/exploration zones only - never in spawn zones.
   Use loot[] to drop artefacts on death. Creatures reset each session (persistent: false default).
+  Use model_asset_id (from asset catalogue mesh assets) to replace the placeholder red cylinder with a real 3D model.
 - machinery: Triggered mechanism (locked door, lever, puzzle device). Include trigger_radius.
   Use required_key_id to reference an artefact the player must carry to unlock it.
   Set persistent: true if the door should stay open across sessions.
+  Use model_asset_id (from asset catalogue mesh assets) to replace the placeholder grey box with a real 3D model.
 - artefact: Collectible item. Include artefact_id (from asset catalogue when available).
   Use grants_ability if collecting it powers up the player.
   Set persistent: true if collecting it once should be remembered (e.g. a boss key).
+  artefact_id serves as the visual model ID for artefacts — the browser will load it as a 3D model if it is a glTF/glb asset in the catalogue.
 - environmental: Scripted world event (collapsing bridge, gas trap, lightning strike).
   Include trigger_radius and a rich behaviour description. One-shot by default.
+  Use model_asset_id (from asset catalogue mesh assets) to replace the placeholder orange disc with a real 3D model.
 
 Rules for interactables:
 - All gameplay is PvE - objects react to players, never player vs player
@@ -98,7 +102,8 @@ When given a description:
    - Combat/exploration zones: creatures + artefacts as loot
    - Objective zones: machinery (locks/puzzles) + key artefacts in adjacent zones
    - Environmental zones: environmental interactables triggered by player proximity
-   - If catalogue assets match the scene theme, include them in asset_sources[] and artefact_id fields
+   - If catalogue mesh assets match the scene theme, set model_asset_id (creature/machinery/environmental)
+     or artefact_id (artefact type) to the matching assetId from get_available_assets()
 5. Call validate_scene_plan(scene_plan_json) to check it
 6. Fix any validation errors and re-validate
 7. Call save_scene_plan(scene_plan_json) to persist to S3
