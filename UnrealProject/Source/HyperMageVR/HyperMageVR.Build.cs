@@ -28,6 +28,11 @@ public class HyperMageVR : ModuleRules
 		if (Target.Type == TargetType.Server)
 		{
 			PublicDependencyModuleNames.Add("GameLiftServerSDK");
+			PublicDefinitions.Add("WITH_GAMELIFT=1");
+		}
+		else
+		{
+			PublicDefinitions.Add("WITH_GAMELIFT=0");
 		}
 
 		PrivateDependencyModuleNames.AddRange(new string[]
