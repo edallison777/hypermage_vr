@@ -25,6 +25,7 @@ public:
 	void ShowError(const FString& Message);
 
 protected:
+	virtual void NativeOnInitialized() override;
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 

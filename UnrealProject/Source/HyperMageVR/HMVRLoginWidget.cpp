@@ -14,15 +14,17 @@
 #include "Components/Border.h"
 #include "Components/BorderSlot.h"
 
+void UHMVRLoginWidget::NativeOnInitialized()
+{
+	Super::NativeOnInitialized();
+	// Build the widget tree here so it's ready when FWidgetRenderer calls TakeWidget(),
+	// even without AddToViewport (which would normally trigger NativeConstruct).
+	BuildWidgetTree();
+}
+
 void UHMVRLoginWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-
-	if (!WidgetTree->RootWidget)
-	{
-		BuildWidgetTree();
-	}
-
 	if (UHMVRGameInstance* GI = Cast<UHMVRGameInstance>(GetGameInstance()))
 	{
 		GI->OnLoginResult.AddDynamic(this, &UHMVRLoginWidget::OnLoginResult);

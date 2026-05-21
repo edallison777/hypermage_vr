@@ -11,6 +11,8 @@
 #if WITH_GAMELIFT
 #include "GameLiftServerSDK.h"
 #endif
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "Components/StereoLayerComponent.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Slate/WidgetRenderer.h"
@@ -150,6 +152,27 @@ void UHMVRGameInstance::InitializeGameLift()
 
 void UHMVRGameInstance::TryAutoLogin()
 {
+	// Check for AutoLogin.txt in Saved/ — push via adb to set test credentials without a rebuild.
+	// File format: line 1 = username, line 2 = password.
+	FString AutoLoginPath = FPaths::ProjectSavedDir() + TEXT("AutoLogin.txt");
+	FString AutoLoginContent;
+	if (FFileHelper::LoadFileToString(AutoLoginContent, *AutoLoginPath))
+	{
+		TArray<FString> Lines;
+		AutoLoginContent.ParseIntoArrayLines(Lines);
+		if (Lines.Num() >= 2)
+		{
+			FString AutoUsername = Lines[0].TrimStartAndEnd();
+			FString AutoPassword = Lines[1].TrimStartAndEnd();
+			if (!AutoUsername.IsEmpty() && !AutoPassword.IsEmpty())
+			{
+				UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Auto-login from AutoLogin.txt as '%s'"), *AutoUsername);
+				Login(AutoUsername, AutoPassword);
+				return;
+			}
+		}
+	}
+
 	UHMVRSaveGame* Save = Cast<UHMVRSaveGame>(
 		UGameplayStatics::LoadGameFromSlot(CredentialsSaveSlot, 0));
 
@@ -413,8 +436,8 @@ void UHMVRGameInstance::ShowLoginWidget()
 	World->GetTimerManager().ClearTimer(ShowLoginWidgetRetryHandle);
 
 	// Render target — the widget is drawn into this each frame.
-	// ClearColor set to the panel background blue so the stereo layer shows something
-	// even if DrawWidget clears to transparent before the widget renders.
+	// ClearColor set to magenta as a diagnostic fallback: if the panel is magenta,
+	// DrawWidget isn't rendering anything; if it shows the widget, DrawWidget is working.
 	LoginWidgetRT = NewObject<UTextureRenderTarget2D>(this);
 	LoginWidgetRT->bAutoGenerateMips = false;
 	LoginWidgetRT->RenderTargetFormat = RTF_RGBA8;
@@ -422,13 +445,10 @@ void UHMVRGameInstance::ShowLoginWidget()
 	LoginWidgetRT->InitAutoFormat(1024, 768);
 	LoginWidgetRT->UpdateResourceImmediate(true);
 
-	// Create the UMG widget — AddToViewport so it stays in the input stack
-	// (invisible in the VR headset, but receives focus/keyboard events)
+	// Create the widget WITHOUT AddToViewport — adding to the viewport parents the SWidget
+	// to the real game window, which conflicts when FWidgetRenderer tries to parent the same
+	// SWidget to its virtual window for off-screen rendering, producing a blank RT.
 	LoginWidgetInstance = CreateWidget<UHMVRLoginWidget>(PC, UHMVRLoginWidget::StaticClass());
-	if (LoginWidgetInstance)
-	{
-		LoginWidgetInstance->AddToViewport(-100);
-	}
 
 	// Stereo compositor overlay quad — submitted directly to the Quest runtime,
 	// displayed correctly in both eyes without going through the 3D render pipeline.
@@ -772,19 +792,13 @@ void UHMVRGameInstance::OnCancelMatchmakingResponse(FHttpRequestPtr /*Request*/,
 
 void UHMVRGameInstance::ConnectToGameServer(const FString& ServerAddress, int32 Port)
 {
-	if (JWTToken.IsEmpty())
-	{
-		UE_LOG(LogTemp, Error, TEXT("HMVRGameInstance: Cannot connect - no JWT token"));
-		OnConnectionFailure(TEXT("No authentication token"));
-		return;
-	}
-
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Connecting to %s:%d"), *ServerAddress, Port);
 
-	FString TravelURL = FString::Printf(TEXT("%s:%d?Token=%s"), *ServerAddress, Port, *JWTToken);
+	// JWT is too long for FName (1023 char limit) — server validates via GameLift player session.
+	FString TravelURL = FString::Printf(TEXT("%s:%d"), *ServerAddress, Port);
 	if (!PlayerSessionId.IsEmpty())
 	{
-		TravelURL += FString::Printf(TEXT("&PlayerSessionId=%s"), *PlayerSessionId);
+		TravelURL += FString::Printf(TEXT("?PlayerSessionId=%s"), *PlayerSessionId);
 	}
 
 	UGameplayStatics::OpenLevel(this, FName(*TravelURL), true);
