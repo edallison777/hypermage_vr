@@ -11,6 +11,9 @@
 #if WITH_GAMELIFT
 #include "GameLiftServerSDK.h"
 #endif
+#include "Components/StereoLayerComponent.h"
+#include "Engine/TextureRenderTarget2D.h"
+#include "Slate/WidgetRenderer.h"
 #include "HttpModule.h"
 #include "Interfaces/IHttpRequest.h"
 #include "Interfaces/IHttpResponse.h"
@@ -358,6 +361,7 @@ void UHMVRGameInstance::OnLoginResponse(FHttpRequestPtr /*Request*/, FHttpRespon
 
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Login successful for '%s'"), *PendingLoginUsername);
 	OnLoginResult.Broadcast(true, TEXT(""));
+	TearDownLoginWidget();
 	StartMatchmaking();
 }
 
@@ -371,7 +375,17 @@ void UHMVRGameInstance::HandleAutoLoginResult(bool bSuccess, const FString& /*Er
 	else
 	{
 		UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Auto-login failed — showing login UI"));
-		ShowLoginWidget();
+		// Delay 2s so the OpenXR runtime has delivered at least one HMD pose before we position the widget
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimer(
+				ShowLoginWidgetRetryHandle,
+				this,
+				&UHMVRGameInstance::ShowLoginWidget,
+				2.0f,
+				false
+			);
+		}
 	}
 }
 
@@ -380,8 +394,6 @@ void UHMVRGameInstance::ShowLoginWidget()
 	APlayerController* PC = GetFirstLocalPlayerController(GetWorld());
 	if (!PC)
 	{
-		// PlayerController not ready yet (can happen if OnStart fires before PostLogin).
-		// Retry every 0.5s — PC is typically available on the first retry.
 		if (UWorld* World = GetWorld())
 		{
 			World->GetTimerManager().SetTimer(
@@ -395,16 +407,112 @@ void UHMVRGameInstance::ShowLoginWidget()
 		return;
 	}
 
-	if (UWorld* World = GetWorld())
+	UWorld* World = GetWorld();
+	if (!World) return;
+
+	World->GetTimerManager().ClearTimer(ShowLoginWidgetRetryHandle);
+
+	// Render target — the widget is drawn into this each frame.
+	// ClearColor set to the panel background blue so the stereo layer shows something
+	// even if DrawWidget clears to transparent before the widget renders.
+	LoginWidgetRT = NewObject<UTextureRenderTarget2D>(this);
+	LoginWidgetRT->bAutoGenerateMips = false;
+	LoginWidgetRT->RenderTargetFormat = RTF_RGBA8;
+	LoginWidgetRT->ClearColor = FLinearColor(0.1f, 0.2f, 0.6f, 1.0f);
+	LoginWidgetRT->InitAutoFormat(1024, 768);
+	LoginWidgetRT->UpdateResourceImmediate(true);
+
+	// Create the UMG widget — AddToViewport so it stays in the input stack
+	// (invisible in the VR headset, but receives focus/keyboard events)
+	LoginWidgetInstance = CreateWidget<UHMVRLoginWidget>(PC, UHMVRLoginWidget::StaticClass());
+	if (LoginWidgetInstance)
 	{
-		World->GetTimerManager().ClearTimer(ShowLoginWidgetRetryHandle);
+		LoginWidgetInstance->AddToViewport(-100);
 	}
 
-	UHMVRLoginWidget* Widget = CreateWidget<UHMVRLoginWidget>(PC, UHMVRLoginWidget::StaticClass());
-	if (Widget)
+	// Stereo compositor overlay quad — submitted directly to the Quest runtime,
+	// displayed correctly in both eyes without going through the 3D render pipeline.
+	// Spawn at origin then SetRelativeLocation on the component directly — this is
+	// the same pattern confirmed working in the May-19 session (triggers MarkStereoLayerDirty).
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AActor* LayerActor = World->SpawnActor<AActor>(
+		AActor::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
+	if (LayerActor)
 	{
-		Widget->AddToViewport();
+		UStereoLayerComponent* StereoComp =
+			NewObject<UStereoLayerComponent>(LayerActor, TEXT("LoginStereoLayer"));
+		StereoComp->SetTexture(LoginWidgetRT);
+		StereoComp->SetQuadSize(FVector2D(80.f, 60.f)); // 80 x 60 cm panel
+		// StereoLayerType stays SLT_FaceLocked (constructor default) — confirmed visible.
+		// bLiveTexture=false: compositor copies the RT into its own swapchain buffer, avoiding
+		// a race between DrawWidget writing and the compositor reading the same texture.
+		StereoComp->bLiveTexture = false;
+		StereoComp->SetPriority(1);
+		LayerActor->SetRootComponent(StereoComp);
+		StereoComp->RegisterComponent();
+		// FaceLocked uses HMD-relative space: (150,0,0) = 150cm directly in front of the user.
+		StereoComp->SetRelativeLocation(FVector(150.f, 0.f, 0.f));
+		LoginStereoLayer = StereoComp;
 	}
+
+	// Widget renderer — renders UMG widget tree into the RT on a timer
+	LoginWidgetRenderer = MakeShared<FWidgetRenderer>(true, false);
+	UpdateLoginWidgetRT();
+
+	World->GetTimerManager().SetTimer(
+		LoginWidgetUpdateTimerHandle,
+		this,
+		&UHMVRGameInstance::UpdateLoginWidgetRT,
+		1.f / 30.f,
+		true
+	);
+
+	UE_LOG(LogTemp, Log, TEXT("HMVRGameInstance: Login stereo layer created (1024x768, face-locked 150cm, bLiveTexture=false)"));
+}
+
+void UHMVRGameInstance::UpdateLoginWidgetRT()
+{
+	if (!LoginWidgetRT || !LoginWidgetInstance || !LoginWidgetRenderer.IsValid()) return;
+
+	LoginWidgetRenderer->DrawWidget(
+		LoginWidgetRT,
+		LoginWidgetInstance->TakeWidget(),
+		FVector2D(1024.f, 768.f),
+		1.f / 30.f
+	);
+
+	// With bLiveTexture=false, notify the compositor to copy the updated RT into its swapchain
+	if (LoginStereoLayer.IsValid())
+	{
+		LoginStereoLayer->MarkStereoLayerDirty();
+	}
+}
+
+void UHMVRGameInstance::TearDownLoginWidget()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(LoginWidgetUpdateTimerHandle);
+	}
+
+	if (LoginWidgetInstance)
+	{
+		LoginWidgetInstance->RemoveFromParent();
+		LoginWidgetInstance = nullptr;
+	}
+
+	if (LoginStereoLayer.IsValid())
+	{
+		if (AActor* Owner = LoginStereoLayer->GetOwner())
+		{
+			Owner->Destroy();
+		}
+		LoginStereoLayer.Reset();
+	}
+
+	LoginWidgetRT = nullptr;
+	LoginWidgetRenderer.Reset();
 }
 
 bool UHMVRGameInstance::HasSavedCredentials() const

@@ -12,6 +12,9 @@
 #include "HMVRGameInstance.generated.h"
 
 class FGameLiftServerSDKModule; // incomplete type; only used as pointer — no header needed
+class UStereoLayerComponent;
+class UTextureRenderTarget2D;
+class FWidgetRenderer;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnAutoLoginComplete, bool, bSuccess, const FString&, ErrorMessage);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnLoginResult,      bool, bSuccess, const FString&, ErrorMessage);
@@ -160,6 +163,8 @@ protected:
 	// UI flow
 	void HandleAutoLoginResult(bool bSuccess, const FString& ErrorMessage);
 	void ShowLoginWidget();
+	void UpdateLoginWidgetRT();
+	void TearDownLoginWidget();
 
 	// Matchmaking callbacks
 	void OnMatchmakingSuccess(const FString& ServerAddress, int32 Port, const FString& SessionId);
@@ -217,6 +222,17 @@ private:
 
 	// Login widget retry — defers ShowLoginWidget until PlayerController is spawned
 	FTimerHandle ShowLoginWidgetRetryHandle;
+
+	// Stereo layer login widget (both-eye VR display via compositor overlay)
+	UPROPERTY()
+	UTextureRenderTarget2D* LoginWidgetRT = nullptr;
+
+	UPROPERTY()
+	UHMVRLoginWidget* LoginWidgetInstance = nullptr;
+
+	TWeakObjectPtr<UStereoLayerComponent> LoginStereoLayer;
+	TSharedPtr<FWidgetRenderer> LoginWidgetRenderer;
+	FTimerHandle LoginWidgetUpdateTimerHandle;
 
 	// Session API base URL (POST /matchmaking/start, GET /matchmaking/status/{id}, DELETE /matchmaking/cancel/{id})
 	const FString SessionApiBaseUrl = TEXT("https://fhjoxyk9x5.execute-api.eu-west-1.amazonaws.com/dev");

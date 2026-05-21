@@ -44,7 +44,12 @@ void UHMVRLoginWidget::BuildWidgetTree()
 	WidgetTree->RootWidget = Root;
 
 	UBorder* Background = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Background"));
-	Background->SetBrushColor(FLinearColor(0.05f, 0.05f, 0.1f, 1.0f));
+	// RoundedBox draws a solid filled quad without needing a texture resource —
+	// SetBrushColor alone only tints a null brush (transparent), which is invisible.
+	FSlateBrush BackgroundBrush;
+	BackgroundBrush.DrawAs = ESlateBrushDrawType::RoundedBox;
+	BackgroundBrush.TintColor = FSlateColor(FLinearColor(0.1f, 0.2f, 0.6f, 1.0f));
+	Background->SetBrush(BackgroundBrush);
 	UOverlaySlot* BgSlot = Root->AddChildToOverlay(Background);
 	BgSlot->SetHorizontalAlignment(HAlign_Fill);
 	BgSlot->SetVerticalAlignment(VAlign_Fill);
@@ -61,7 +66,7 @@ void UHMVRLoginWidget::BuildWidgetTree()
 	// Title
 	UTextBlock* Title = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("Title"));
 	Title->SetText(FText::FromString(TEXT("HyperMage VR")));
-	Title->SetColorAndOpacity(FSlateColor(FLinearColor(0.4f, 0.8f, 1.0f)));
+	Title->SetColorAndOpacity(FSlateColor(FLinearColor::White));
 	FSlateFontInfo TitleFont = Title->GetFont();
 	TitleFont.Size = 36;
 	Title->SetFont(TitleFont);

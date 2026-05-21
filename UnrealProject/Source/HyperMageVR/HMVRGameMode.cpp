@@ -11,6 +11,9 @@
 #include "GameFramework/PlayerState.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
+#include "Engine/StaticMeshActor.h"
+#include "Engine/DirectionalLight.h"
+#include "Engine/SkyLight.h"
 #include "EngineUtils.h"
 #include "TimerManager.h"
 
@@ -66,6 +69,42 @@ void AHMVRGameMode::BeginPlay()
 
 	UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Registered %d interactables (%d persistent, loading state)"),
 		RegisteredInteractables.Num(), PersistentCount);
+
+	// Spawn a directional light (sun) + sky light so the world isn't pitch black in VR
+	ADirectionalLight* Sun = GetWorld()->SpawnActor<ADirectionalLight>(
+		ADirectionalLight::StaticClass(),
+		FVector(0.f, 0.f, 1000.f),
+		FRotator(-45.f, 45.f, 0.f)
+	);
+	UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Sun light spawned: %s"), Sun ? TEXT("OK") : TEXT("FAILED"));
+
+	GetWorld()->SpawnActor<ASkyLight>(
+		ASkyLight::StaticClass(),
+		FVector::ZeroVector,
+		FRotator::ZeroRotator
+	);
+
+	// Spawn a floor plane so VR player has visible geometry and spatial orientation
+	UStaticMesh* PlaneMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane"));
+	UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Floor mesh load: %s"), PlaneMesh ? TEXT("OK") : TEXT("NOT COOKED"));
+	if (PlaneMesh)
+	{
+		FActorSpawnParameters FloorSpawnParams;
+		FloorSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AStaticMeshActor* Floor = GetWorld()->SpawnActor<AStaticMeshActor>(
+			AStaticMeshActor::StaticClass(),
+			FVector::ZeroVector,
+			FRotator::ZeroRotator,
+			FloorSpawnParams
+		);
+		if (Floor)
+		{
+			Floor->GetStaticMeshComponent()->SetStaticMesh(PlaneMesh);
+			Floor->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+			Floor->SetActorScale3D(FVector(20.f, 20.f, 1.f));
+			UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Floor plane spawned at origin, scale 20x20m"));
+		}
+	}
 }
 
 void AHMVRGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
