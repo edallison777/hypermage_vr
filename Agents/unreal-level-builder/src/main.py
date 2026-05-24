@@ -1,12 +1,15 @@
 """UnrealLevelBuilderAgent — LevelPlan / ScenePlan → live UE5 editor via UnrealBridge.
 
-Phase 9: Real HTTP tools that call the UnrealBridge FastAPI service running on the dev PC.
-  - get_bridge_status:      GET  {bridge}/health   — checks UE5 reachability
-  - spawn_actor:            POST {bridge}/actor/create
-  - set_actor_property:     POST {bridge}/actor/set-property
-  - run_console_command:    POST {bridge}/console
-  - save_level:             POST {bridge}/level/save
-  - build_scene_from_plan:  POST {bridge}/scene-plan/build — full ScenePlan → blockout geometry
+Phase 20: Real HTTP tools that call the UnrealBridge FastAPI service running on the dev PC.
+  - get_bridge_status:           GET  {bridge}/health
+  - spawn_actor:                 POST {bridge}/actor/create
+  - set_actor_property:          POST {bridge}/actor/set-property
+  - run_console_command:         POST {bridge}/console
+  - save_level:                  POST {bridge}/level/save
+  - build_arena_from_sceneplan:  POST {bridge}/scene-plan/build-arena  ← PRIMARY TOOL
+      Creates level + room geometry + lighting + all interactables in one call.
+  - build_scene_from_plan:       POST {bridge}/scene-plan/build (blockout only, legacy)
+  - convert_sceneplan_to_map:    POST {bridge}/scene-plan/build-full (no room creation)
 
 Bridge URL read from SSM /hypermage/unreal-bridge-url.
 All tools skip gracefully (status='skipped') when the bridge is not configured or reachable.
@@ -499,6 +502,45 @@ def convert_sceneplan_to_map(scene_plan_json: str, map_name: str = "GeneratedMap
     })
 
 
+@tool
+def build_arena_from_sceneplan(scene_plan_json: str, map_name: str = "HMVRArena",
+                                room_margin: float = 500.0) -> str:
+    """PRIMARY TOOL — full pipeline from ScenePlan to playable UE5 level in one call.
+
+    1. Creates a new level at /Game/Maps/{map_name}
+    2. Generates room geometry (floor, 4 walls, ceiling) sized to zone extents + margin
+    3. Places DirectionalLight + SkyLight
+    4. Spawns zone blockout cubes and PlayerStart actors
+    5. Applies atmosphere console commands from scene_plan.atmosphere.lighting_mood
+    6. Places glTF/StaticMesh actors from asset_sources[]
+    7. Creates TriggerVolume actors for gm_hooks[]
+    8. Spawns all interactable actors from each zone's interactables[]:
+         - artefact     → HMVRArtifact  (ArtifactId, bGrantsAbility, AbilityId)
+         - machinery    → HMVRMachinery (RequiredKeyId, TriggerDelay)
+         - creature     → HMVRCreature  (MaxHealth, DetectionRadius, AttackDamage)
+         - environmental → HMVREnvironmental (TriggerRadius, bAutoTrigger)
+    9. Saves the level
+
+    Use this instead of convert_sceneplan_to_map when building a fresh arena.
+    Returns {status, level_asset_path, room_pieces, zones_built, player_starts,
+             interactables_spawned, actors, errors}.
+    """
+    url = _get_bridge_url()
+    if not url:
+        return _skip("Bridge not configured. Run scripts/unreal-bridge/start.sh --ngrok.")
+    try:
+        result = _bridge_post("/scene-plan/build-arena", {
+            "scene_plan_json": scene_plan_json,
+            "map_name":        map_name,
+            "room_margin":     room_margin,
+        })
+        return json.dumps(result)
+    except urllib.error.HTTPError as exc:
+        return json.dumps({"status": "error", "error": f"HTTP {exc.code}: {exc.read().decode()}"})
+    except Exception as exc:
+        return json.dumps({"status": "error", "error": str(exc)})
+
+
 # ── Entrypoint ────────────────────────────────────────────────────────────────
 
 @app.entrypoint
@@ -512,6 +554,7 @@ async def invoke(payload, context):
             run_console_command, save_level, build_scene_from_plan,
             generate_blockout_geometry, convert_levelplan_to_map,
             convert_sceneplan_to_map, apply_atmosphere,
+            build_arena_from_sceneplan,
         ],
         system_prompt=SYSTEM_PROMPT,
     )

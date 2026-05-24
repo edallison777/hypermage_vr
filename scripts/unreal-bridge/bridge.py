@@ -38,8 +38,8 @@ log = logging.getLogger("unreal-bridge")
 
 UE5_RC_URL = "http://localhost:30010"  # UE5 Remote Control HTTP API
 
-app = FastAPI(title="UnrealBridge", version="1.0.0",
-              description="FastAPI wrapper for UE5 Remote Control — Phase 9")
+app = FastAPI(title="UnrealBridge", version="2.0.0",
+              description="FastAPI wrapper for UE5 Remote Control — Phase 20")
 
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
@@ -68,6 +68,10 @@ class ConsoleCommandRequest(BaseModel):
     command: str
 
 
+class NewLevelRequest(BaseModel):
+    asset_path: str = "/Game/Maps/HMVRArena"
+
+
 class ScenePlanRequest(BaseModel):
     scene_plan_json: str
     map_name:        str = "NewMap"
@@ -76,6 +80,12 @@ class ScenePlanRequest(BaseModel):
 class ScenePlanFullRequest(BaseModel):
     scene_plan_json: str
     map_name:        str = "GeneratedMap"
+
+
+class BuildArenaRequest(BaseModel):
+    scene_plan_json: str
+    map_name:        str = "HMVRArena"
+    room_margin:     float = 500.0   # extra cm around zone extents
 
 
 # ── UE5 Remote Control helpers ────────────────────────────────────────────────
@@ -124,6 +134,368 @@ async def ue5_reachable() -> bool:
         return False
 
 
+async def _spawn_actor(actor_class: str, label: str,
+                       x: float, y: float, z: float,
+                       scale_x: float = 1.0, scale_y: float = 1.0, scale_z: float = 1.0,
+                       yaw: float = 0.0) -> str:
+    """Spawn an actor and return its object path."""
+    result = await rc_call(
+        "/Script/EditorScriptingUtilities.Default__EditorActorSubsystem",
+        "SpawnActorFromClass",
+        {
+            "ActorClass": actor_class,
+            "SpawnTransform": {
+                "Rotation":    {"X": 0.0, "Y": yaw, "Z": 0.0, "W": 1.0},
+                "Translation": {"X": x, "Y": y, "Z": z},
+                "Scale3D":     {"X": scale_x, "Y": scale_y, "Z": scale_z},
+            },
+        },
+    )
+    actor_path = result.get("ActorObject", {}).get("ObjectPath", "")
+    if actor_path and label:
+        try:
+            await rc_call(actor_path, "SetActorLabel", {"NewActorLabel": label})
+        except Exception:
+            pass
+    return actor_path
+
+
+# ── Arena-building helpers ────────────────────────────────────────────────────
+
+# Cube BasicShape is 100 × 100 × 100 cm at scale (1,1,1).
+# Scale multiplier = desired_cm / 100.
+
+def _cube_scale(cm: float) -> float:
+    return max(cm / 100.0, 0.05)
+
+
+def _compute_arena_bounds(plan: dict, margin: float) -> dict:
+    """Derive arena dimensions from zone extents + margin."""
+    min_x = min_y =  1e9
+    max_x = max_y = -1e9
+    max_z = 0.0
+    for zone in plan.get("zones", []):
+        b  = zone.get("bounds", {})
+        c  = b.get("center",  {})
+        e  = b.get("extents", {})
+        cx = float(c.get("x", 0));  cy = float(c.get("y", 0))
+        ex = float(e.get("x", 500)); ey = float(e.get("y", 500))
+        ez = float(e.get("z", 300))
+        min_x = min(min_x, cx - ex); max_x = max(max_x, cx + ex)
+        min_y = min(min_y, cy - ey); max_y = max(max_y, cy + ey)
+        max_z = max(max_z, ez)
+    if min_x == 1e9:  # no zones — use sensible default
+        min_x, min_y, max_x, max_y, max_z = -1500, -1500, 1500, 1500, 400
+    min_x -= margin; min_y -= margin
+    max_x += margin; max_y += margin
+    height = max(max_z + margin, 500.0)
+    return {
+        "min_x": min_x, "min_y": min_y, "max_x": max_x, "max_y": max_y,
+        "cx":  (min_x + max_x) / 2,
+        "cy":  (min_y + max_y) / 2,
+        "width":  max_x - min_x,
+        "depth":  max_y - min_y,
+        "height": height,
+    }
+
+
+async def _spawn_room_geometry(b: dict, spawned: list, errors: list) -> None:
+    """Spawn floor + 4 walls + ceiling + DirectionalLight + SkyLight."""
+    cx, cy   = b["cx"], b["cy"]
+    w, d, h  = b["width"], b["depth"], b["height"]
+    wall_t   = 30.0  # cm wall thickness
+
+    room_pieces = [
+        # label,     x,           y,           z,       sx,           sy,           sz
+        ("Floor",   cx,          cy,           -10,     _cube_scale(w), _cube_scale(d), _cube_scale(20)),
+        ("Ceiling", cx,          cy,           h+10,    _cube_scale(w), _cube_scale(d), _cube_scale(20)),
+        ("Wall_N",  cx,          cy+d/2+wall_t/2, h/2, _cube_scale(w+wall_t*2), _cube_scale(wall_t), _cube_scale(h)),
+        ("Wall_S",  cx,          cy-d/2-wall_t/2, h/2, _cube_scale(w+wall_t*2), _cube_scale(wall_t), _cube_scale(h)),
+        ("Wall_E",  cx+w/2+wall_t/2, cy,      h/2,     _cube_scale(wall_t), _cube_scale(d), _cube_scale(h)),
+        ("Wall_W",  cx-w/2-wall_t/2, cy,      h/2,     _cube_scale(wall_t), _cube_scale(d), _cube_scale(h)),
+    ]
+
+    for label, x, y, z, sx, sy, sz in room_pieces:
+        try:
+            actor_path = await _spawn_actor(
+                "/Script/Engine.StaticMeshActor", f"Room_{label}",
+                x, y, z, sx, sy, sz,
+            )
+            if actor_path:
+                try:
+                    await rc_set_property(actor_path, "StaticMesh",
+                                          "/Engine/BasicShapes/Cube.Cube")
+                except Exception:
+                    pass
+            spawned.append({"type": "room_geometry", "label": label, "actor_path": actor_path})
+        except Exception as exc:
+            errors.append({"type": "room_geometry", "label": label, "error": str(exc)})
+
+    # Directional light — overhead sun angle
+    try:
+        light_path = await _spawn_actor(
+            "/Script/Engine.DirectionalLight", "Sun",
+            cx, cy, h + 500, yaw=-45.0,
+        )
+        spawned.append({"type": "lighting", "label": "Sun", "actor_path": light_path})
+    except Exception as exc:
+        errors.append({"type": "lighting", "label": "Sun", "error": str(exc)})
+
+    # Sky light for ambient fill
+    try:
+        sky_path = await _spawn_actor(
+            "/Script/Engine.SkyLight", "SkyLight",
+            cx, cy, h + 200,
+        )
+        spawned.append({"type": "lighting", "label": "SkyLight", "actor_path": sky_path})
+    except Exception as exc:
+        errors.append({"type": "lighting", "label": "SkyLight", "error": str(exc)})
+
+
+# ── Interactable spawning ─────────────────────────────────────────────────────
+
+# Maps ScenePlan interactable types to UE5 C++ actor class paths.
+INTERACTABLE_CLASS = {
+    "creature":      "/Script/HyperMageVR.HMVRCreature",
+    "machinery":     "/Script/HyperMageVR.HMVRMachinery",
+    "artefact":      "/Script/HyperMageVR.HMVRArtifact",
+    "environmental": "/Script/HyperMageVR.HMVREnvironmental",
+}
+
+
+async def _set_interactable_props(actor_path: str, obj: dict, obj_type: str) -> None:
+    """Set type-specific UPROPERTY values on a freshly spawned interactable."""
+    props: dict[str, object] = {}
+
+    if obj_type == "artefact":
+        if obj.get("artefact_id"):
+            props["ArtifactId"] = obj["artefact_id"]
+        if obj.get("grants_ability"):
+            props["bGrantsAbility"] = True
+            props["AbilityId"]      = obj["grants_ability"]
+
+    elif obj_type == "machinery":
+        if obj.get("required_key_id"):
+            props["bRequiresKey"]  = True
+            props["RequiredKeyId"] = obj["required_key_id"]
+        if obj.get("unlock_time") is not None:
+            props["TriggerDelay"] = float(obj["unlock_time"])
+
+    elif obj_type == "creature":
+        if obj.get("health") is not None:
+            props["MaxHealth"] = float(obj["health"])
+        if obj.get("patrol_radius") is not None:
+            props["DetectionRadius"] = float(obj["patrol_radius"])
+        if obj.get("attack_damage") is not None:
+            props["AttackDamage"] = float(obj["attack_damage"])
+
+    elif obj_type == "environmental":
+        if obj.get("trigger_radius") is not None:
+            props["TriggerRadius"] = float(obj["trigger_radius"])
+        if obj.get("auto_trigger") is not None:
+            props["bAutoTrigger"] = bool(obj["auto_trigger"])
+        if obj.get("event_duration") is not None:
+            props["EventSequenceDuration"] = float(obj["event_duration"])
+
+    # Set object_id on the InteractableComponent for world-state persistence
+    if obj.get("id"):
+        try:
+            await rc_set_property(
+                f"{actor_path}.Interactable", "ObjectId", obj["id"]
+            )
+        except Exception:
+            pass
+
+    for prop, val in props.items():
+        try:
+            await rc_set_property(actor_path, prop, val)
+        except Exception:
+            pass
+
+
+async def _spawn_interactables_for_zones(plan: dict, spawned: list, errors: list) -> int:
+    """Spawn all interactable actors from every zone's interactables[] array."""
+    count = 0
+    for zone in plan.get("zones", []):
+        for obj in zone.get("interactables", []):
+            obj_type = obj.get("type", "").lower()
+            actor_class = INTERACTABLE_CLASS.get(obj_type)
+            if not actor_class:
+                errors.append({"type": "interactable", "id": obj.get("id"),
+                                "error": f"Unknown interactable type: {obj_type}"})
+                continue
+
+            pos   = obj.get("position", {})
+            x     = float(pos.get("x", 0))
+            y     = float(pos.get("y", 0))
+            z     = float(pos.get("z", 100))
+            label = f"{obj_type.capitalize()}_{obj.get('id', str(count))[:24]}"
+
+            try:
+                actor_path = await _spawn_actor(actor_class, label, x, y, z)
+                if actor_path:
+                    await _set_interactable_props(actor_path, obj, obj_type)
+                spawned.append({
+                    "type":       "interactable",
+                    "subtype":    obj_type,
+                    "label":      label,
+                    "id":         obj.get("id"),
+                    "actor_path": actor_path,
+                })
+                count += 1
+                log.info(f"  spawned {obj_type} '{label}' at ({x},{y},{z})")
+            except Exception as exc:
+                errors.append({"type": "interactable", "label": label, "error": str(exc)})
+
+    return count
+
+
+# ── Core scene-plan build logic (shared by build-full and build-arena) ────────
+
+async def _execute_scene_plan_build(plan: dict, spawned: list, errors: list) -> dict:
+    """
+    Zones + PlayerStarts + atmosphere + asset_sources + gm_hooks + interactables.
+    Returns summary counts.
+    """
+    ZONE_TYPE_SUFFIX = {
+        "exploration": "EX", "ritual": "RT", "social": "SO",
+        "sanctuary": "SA", "cyberspace": "CS", "narrative": "NA",
+        "combat": "CB", "objective": "OB", "spawn": "SP", "transition": "TR",
+    }
+
+    assets_placed   = 0
+    hooks_wired     = 0
+    atmosphere_cmds = []
+
+    # 1. Zone blockouts
+    for zone in plan.get("zones", []):
+        bounds  = zone.get("bounds", {})
+        center  = bounds.get("center",  {})
+        extents = bounds.get("extents", {})
+        suffix  = ZONE_TYPE_SUFFIX.get(zone.get("type", ""), "ZN")
+        label   = f"{suffix}_{zone.get('name', zone.get('id', 'Zone'))[:24]}"
+        try:
+            actor_path = await _spawn_actor(
+                "/Script/Engine.StaticMeshActor", label,
+                float(center.get("x", 0)),
+                float(center.get("y", 0)),
+                float(center.get("z", 0)),
+                max(float(extents.get("x", 100)) / 50.0, 0.1),
+                max(float(extents.get("y", 100)) / 50.0, 0.1),
+                max(float(extents.get("z", 100)) / 50.0, 0.1),
+            )
+            if actor_path:
+                try:
+                    await rc_set_property(actor_path, "StaticMesh",
+                                          "/Engine/BasicShapes/Cube.Cube")
+                except Exception:
+                    pass
+            spawned.append({"type": "zone", "label": label, "actor_path": actor_path})
+        except Exception as exc:
+            errors.append({"type": "zone", "label": label, "error": str(exc)})
+
+    # 2. PlayerStarts
+    for i, spawn in enumerate(plan.get("participant_spawns", [])):
+        pos   = spawn.get("position", {})
+        rot   = spawn.get("rotation", {})
+        label = f"PlayerStart_{i + 1}_{spawn.get('role', 'player')}"
+        try:
+            actor_path = await _spawn_actor(
+                "/Script/Engine.PlayerStart", label,
+                float(pos.get("x", 0)),
+                float(pos.get("y", 0)),
+                float(pos.get("z", 100)),
+                yaw=float(rot.get("yaw", 0)),
+            )
+            spawned.append({"type": "player_start", "label": label, "actor_path": actor_path})
+        except Exception as exc:
+            errors.append({"type": "player_start", "label": label, "error": str(exc)})
+
+    # 3. Atmosphere console commands
+    lighting_mood = plan.get("atmosphere", {}).get("lighting_mood", "").lower()
+    if lighting_mood:
+        if "neon" in lighting_mood or "cyber" in lighting_mood:
+            atm_cmds = ["r.Atmosphere 0", "r.BloomIntensity 2.0",
+                        "r.AmbientOcclusion.Intensity 1.5", "r.VignetteIntensity 0.8"]
+        elif "dark" in lighting_mood or "dramatic" in lighting_mood:
+            atm_cmds = ["r.Atmosphere 1", "r.BloomIntensity 1.5", "r.VignetteIntensity 1.0"]
+        elif "golden" in lighting_mood or "warm" in lighting_mood:
+            atm_cmds = ["r.Atmosphere 1", "r.BloomIntensity 1.2", "r.VignetteIntensity 0.3"]
+        else:
+            atm_cmds = ["r.Atmosphere 1", "r.BloomIntensity 1.0", "r.VignetteIntensity 0.3"]
+        for cmd in atm_cmds:
+            try:
+                await rc_call("/Script/UnrealEd.Default__EditorLevelLibrary",
+                              "ExecuteConsoleCommand", {"Command": cmd},
+                              generate_transaction=False)
+                atmosphere_cmds.append(cmd)
+            except Exception as exc:
+                errors.append({"type": "atmosphere_cmd", "cmd": cmd, "error": str(exc)})
+
+    # 4. Asset sources
+    for asset in plan.get("asset_sources", []):
+        asset_id = asset.get("asset_id", "")
+        pos      = asset.get("position", {"x": 0, "y": 0, "z": 0})
+        if not asset_id:
+            continue
+        label = f"Asset_{asset_id[:24]}"
+        try:
+            actor_path = await _spawn_actor(
+                "/Script/Engine.StaticMeshActor", label,
+                float(pos.get("x", 0)), float(pos.get("y", 0)), float(pos.get("z", 0)),
+            )
+            if actor_path:
+                try:
+                    await rc_set_property(actor_path, "StaticMesh",
+                                          f"/Game/Assets/{asset_id}.{asset_id}")
+                except Exception:
+                    pass
+            assets_placed += 1
+            spawned.append({"type": "asset", "label": label, "actor_path": actor_path})
+        except Exception as exc:
+            errors.append({"type": "asset", "asset_id": asset_id, "error": str(exc)})
+
+    # 5. GM hook TriggerVolumes
+    zones = plan.get("zones", [])
+    first_center = {"x": 0, "y": 0, "z": 100}
+    if zones:
+        b = zones[0].get("bounds", {})
+        first_center = b.get("center", first_center)
+    for hook in plan.get("gm_hooks", []):
+        hook_id = hook.get("id", "")
+        if not hook_id:
+            continue
+        label = f"Hook_{hook_id[:28]}"
+        try:
+            actor_path = await _spawn_actor(
+                "/Script/Engine.TriggerVolume", label,
+                float(first_center.get("x", 0)),
+                float(first_center.get("y", 0)),
+                float(first_center.get("z", 100)),
+                2.0, 2.0, 2.0,
+            )
+            if actor_path:
+                try:
+                    await rc_set_property(actor_path, "Tags", [hook_id])
+                except Exception:
+                    pass
+            hooks_wired += 1
+            spawned.append({"type": "hook_trigger", "label": label, "actor_path": actor_path})
+        except Exception as exc:
+            errors.append({"type": "hook_trigger", "hook_id": hook_id, "error": str(exc)})
+
+    # 6. Interactables (Phase 20)
+    interactables_spawned = await _spawn_interactables_for_zones(plan, spawned, errors)
+
+    return {
+        "assets_placed":          assets_placed,
+        "hooks_wired":            hooks_wired,
+        "interactables_spawned":  interactables_spawned,
+        "atmosphere_applied":     len(atmosphere_cmds) > 0,
+        "atmosphere_mood":        lighting_mood,
+    }
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -133,35 +505,35 @@ async def health():
     return {"status": "ok", "ue5_reachable": ue5_up, "ue5_rc_url": UE5_RC_URL}
 
 
+@app.post("/level/new")
+async def new_level(req: NewLevelRequest):
+    """Create and open a new empty level at the given asset path (e.g. /Game/Maps/HMVRArena)."""
+    log.info(f"new_level path={req.asset_path}")
+    try:
+        await rc_call(
+            "/Script/UnrealEd.Default__EditorLevelLibrary",
+            "NewLevel",
+            {"AssetPath": req.asset_path},
+            generate_transaction=False,
+        )
+        return {"status": "ok", "asset_path": req.asset_path}
+    except httpx.ConnectError:
+        raise HTTPException(503, "UE5 Remote Control not reachable")
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+
 @app.post("/actor/create")
 async def create_actor(req: SpawnActorRequest):
-    """Spawn an actor in the currently open UE5 level.
-    Returns the spawned actor's object path."""
+    """Spawn an actor in the currently open UE5 level."""
     log.info(f"spawn_actor class={req.actor_class} label={req.label} pos=({req.x},{req.y},{req.z})")
     try:
-        result = await rc_call(
-            "/Script/EditorScriptingUtilities.Default__EditorActorSubsystem",
-            "SpawnActorFromClass",
-            {
-                "ActorClass": req.actor_class,
-                "SpawnTransform": {
-                    "Rotation":    {"X": req.pitch, "Y": req.yaw, "Z": req.roll, "W": 1.0},
-                    "Translation": {"X": req.x,     "Y": req.y,   "Z": req.z},
-                    "Scale3D":     {"X": req.scale_x, "Y": req.scale_y, "Z": req.scale_z},
-                },
-            },
+        actor_path = await _spawn_actor(
+            req.actor_class, req.label,
+            req.x, req.y, req.z,
+            req.scale_x, req.scale_y, req.scale_z,
+            req.yaw,
         )
-        actor_path = result.get("ActorObject", {}).get("ObjectPath", "")
-
-        # Apply label if given
-        if req.label and actor_path:
-            try:
-                await rc_call(actor_path, "SetActorLabel",
-                               {"NewActorLabel": req.label})
-            except Exception:
-                pass  # label is best-effort
-
-        log.info(f"  spawned → {actor_path}")
         return {"status": "ok", "actor_path": actor_path, "label": req.label}
     except httpx.ConnectError:
         raise HTTPException(503, "UE5 Remote Control not reachable — is UE5 open with Remote Control enabled?")
@@ -189,8 +561,7 @@ async def save_level():
     log.info("save_level")
     try:
         await rc_call("/Script/UnrealEd.Default__EditorLevelLibrary",
-                      "SaveCurrentLevel",
-                      generate_transaction=False)
+                      "SaveCurrentLevel", generate_transaction=False)
         return {"status": "ok", "message": "Level saved"}
     except httpx.ConnectError:
         raise HTTPException(503, "UE5 not reachable")
@@ -216,102 +587,17 @@ async def console_command(req: ConsoleCommandRequest):
 
 @app.post("/scene-plan/build")
 async def build_scene_from_plan(req: ScenePlanRequest):
-    """Parse a ScenePlan JSON and spawn blockout geometry for each zone.
-    Zones become colour-coded cube actors at the zone's bounds.center, scaled to bounds.extents.
-    Also places PlayerStart actors at participant_spawns."""
+    """Parse a ScenePlan JSON and spawn blockout geometry + PlayerStarts."""
     log.info(f"build_scene map={req.map_name}")
-
     try:
         plan = json.loads(req.scene_plan_json)
     except json.JSONDecodeError as exc:
         raise HTTPException(400, f"Invalid ScenePlan JSON: {exc}")
 
-    ZONE_TYPE_SUFFIX = {
-        "exploration": "EX", "ritual": "RT", "social": "SO",
-        "sanctuary": "SA", "cyberspace": "CS", "narrative": "NA",
-        "combat": "CB", "objective": "OB", "spawn": "SP", "transition": "TR",
-    }
+    spawned: list = []
+    errors:  list = []
+    counts = await _execute_scene_plan_build(plan, spawned, errors)
 
-    spawned = []
-    errors  = []
-
-    # 1. Blockout cubes for each zone
-    for zone in plan.get("zones", []):
-        bounds  = zone.get("bounds", {})
-        center  = bounds.get("center", {})
-        extents = bounds.get("extents", {})
-        suffix  = ZONE_TYPE_SUFFIX.get(zone.get("type", ""), "ZN")
-        label   = f"{suffix}_{zone.get('name', zone.get('id', 'Zone'))[:24]}"
-
-        try:
-            result = await rc_call(
-                "/Script/EditorScriptingUtilities.Default__EditorActorSubsystem",
-                "SpawnActorFromClass",
-                {
-                    "ActorClass": "/Script/Engine.StaticMeshActor",
-                    "SpawnTransform": {
-                        "Rotation":    {"X": 0, "Y": 0, "Z": 0, "W": 1},
-                        "Translation": {
-                            "X": float(center.get("x", 0)),
-                            "Y": float(center.get("y", 0)),
-                            "Z": float(center.get("z", 0)),
-                        },
-                        "Scale3D": {
-                            "X": max(float(extents.get("x", 100)) / 50.0, 0.1),
-                            "Y": max(float(extents.get("y", 100)) / 50.0, 0.1),
-                            "Z": max(float(extents.get("z", 100)) / 50.0, 0.1),
-                        },
-                    },
-                },
-            )
-            actor_path = result.get("ActorObject", {}).get("ObjectPath", "")
-            if actor_path:
-                # Set cube mesh and label
-                try:
-                    await rc_set_property(actor_path, "StaticMesh",
-                                          "/Engine/BasicShapes/Cube.Cube")
-                    await rc_call(actor_path, "SetActorLabel",
-                                   {"NewActorLabel": label})
-                except Exception:
-                    pass
-            spawned.append({"type": "zone", "label": label, "actor_path": actor_path})
-        except Exception as exc:
-            errors.append({"type": "zone", "label": label, "error": str(exc)})
-
-    # 2. PlayerStart actors at participant spawns
-    for i, spawn in enumerate(plan.get("participant_spawns", [])):
-        pos   = spawn.get("position", {})
-        rot   = spawn.get("rotation", {})
-        label = f"PlayerStart_{i + 1}_{spawn.get('role', 'player')}"
-        try:
-            result = await rc_call(
-                "/Script/EditorScriptingUtilities.Default__EditorActorSubsystem",
-                "SpawnActorFromClass",
-                {
-                    "ActorClass": "/Script/Engine.PlayerStart",
-                    "SpawnTransform": {
-                        "Rotation":    {"X": float(rot.get("pitch", 0)),
-                                        "Y": float(rot.get("yaw", 0)),
-                                        "Z": float(rot.get("roll", 0)), "W": 1},
-                        "Translation": {"X": float(pos.get("x", 0)),
-                                        "Y": float(pos.get("y", 0)),
-                                        "Z": float(pos.get("z", 100))},
-                        "Scale3D":     {"X": 1, "Y": 1, "Z": 1},
-                    },
-                },
-            )
-            actor_path = result.get("ActorObject", {}).get("ObjectPath", "")
-            if actor_path:
-                try:
-                    await rc_call(actor_path, "SetActorLabel",
-                                   {"NewActorLabel": label})
-                except Exception:
-                    pass
-            spawned.append({"type": "player_start", "label": label, "actor_path": actor_path})
-        except Exception as exc:
-            errors.append({"type": "player_start", "label": label, "error": str(exc)})
-
-    # 3. Save level
     try:
         await rc_call("/Script/UnrealEd.Default__EditorLevelLibrary",
                       "SaveCurrentLevel", generate_transaction=False)
@@ -319,226 +605,28 @@ async def build_scene_from_plan(req: ScenePlanRequest):
         errors.append({"type": "save", "error": str(exc)})
 
     return {
-        "status":        "ok" if not errors else "partial",
-        "scene_name":    plan.get("name"),
-        "actors_spawned": len(spawned),
-        "actors":        spawned,
-        "errors":        errors,
+        "status":      "ok" if not errors else "partial",
+        "scene_name":  plan.get("name"),
+        "actors":      spawned,
+        "errors":      errors,
+        **counts,
     }
 
 
 @app.post("/scene-plan/build-full")
 async def build_scene_full(req: ScenePlanFullRequest):
-    """Full ScenePlan → UE5 map: zones + spawns + atmosphere + asset_sources + gm_hook TriggerVolumes.
-    Superset of /scene-plan/build."""
+    """Full ScenePlan → UE5 map: zones + spawns + atmosphere + assets + hooks + interactables.
+    Operates on the currently open level."""
     log.info(f"build_scene_full map={req.map_name}")
-
     try:
         plan = json.loads(req.scene_plan_json)
     except json.JSONDecodeError as exc:
         raise HTTPException(400, f"Invalid ScenePlan JSON: {exc}")
 
-    ZONE_TYPE_SUFFIX = {
-        "exploration": "EX", "ritual": "RT", "social": "SO",
-        "sanctuary": "SA", "cyberspace": "CS", "narrative": "NA",
-        "combat": "CB", "objective": "OB", "spawn": "SP", "transition": "TR",
-    }
+    spawned: list = []
+    errors:  list = []
+    counts = await _execute_scene_plan_build(plan, spawned, errors)
 
-    spawned           = []
-    errors            = []
-    assets_placed     = 0
-    hooks_wired       = 0
-    atmosphere_cmds   = []
-
-    # ── 1. Zone blockouts ───────────────────────────────────────────────────────
-    for zone in plan.get("zones", []):
-        bounds  = zone.get("bounds", {})
-        center  = bounds.get("center", {})
-        extents = bounds.get("extents", {})
-        suffix  = ZONE_TYPE_SUFFIX.get(zone.get("type", ""), "ZN")
-        label   = f"{suffix}_{zone.get('name', zone.get('id', 'Zone'))[:24]}"
-        try:
-            result = await rc_call(
-                "/Script/EditorScriptingUtilities.Default__EditorActorSubsystem",
-                "SpawnActorFromClass",
-                {
-                    "ActorClass": "/Script/Engine.StaticMeshActor",
-                    "SpawnTransform": {
-                        "Rotation":    {"X": 0, "Y": 0, "Z": 0, "W": 1},
-                        "Translation": {
-                            "X": float(center.get("x", 0)),
-                            "Y": float(center.get("y", 0)),
-                            "Z": float(center.get("z", 0)),
-                        },
-                        "Scale3D": {
-                            "X": max(float(extents.get("x", 100)) / 50.0, 0.1),
-                            "Y": max(float(extents.get("y", 100)) / 50.0, 0.1),
-                            "Z": max(float(extents.get("z", 100)) / 50.0, 0.1),
-                        },
-                    },
-                },
-            )
-            actor_path = result.get("ActorObject", {}).get("ObjectPath", "")
-            if actor_path:
-                try:
-                    await rc_set_property(actor_path, "StaticMesh",
-                                          "/Engine/BasicShapes/Cube.Cube")
-                    await rc_call(actor_path, "SetActorLabel",
-                                   {"NewActorLabel": label})
-                except Exception:
-                    pass
-            spawned.append({"type": "zone", "label": label, "actor_path": actor_path})
-        except Exception as exc:
-            errors.append({"type": "zone", "label": label, "error": str(exc)})
-
-    # ── 2. PlayerStarts ────────────────────────────────────────────────────────
-    for i, spawn in enumerate(plan.get("participant_spawns", [])):
-        pos   = spawn.get("position", {})
-        rot   = spawn.get("rotation", {})
-        label = f"PlayerStart_{i + 1}_{spawn.get('role', 'player')}"
-        try:
-            result = await rc_call(
-                "/Script/EditorScriptingUtilities.Default__EditorActorSubsystem",
-                "SpawnActorFromClass",
-                {
-                    "ActorClass": "/Script/Engine.PlayerStart",
-                    "SpawnTransform": {
-                        "Rotation":    {"X": float(rot.get("pitch", 0)),
-                                        "Y": float(rot.get("yaw", 0)),
-                                        "Z": float(rot.get("roll", 0)), "W": 1},
-                        "Translation": {"X": float(pos.get("x", 0)),
-                                        "Y": float(pos.get("y", 0)),
-                                        "Z": float(pos.get("z", 100))},
-                        "Scale3D":     {"X": 1, "Y": 1, "Z": 1},
-                    },
-                },
-            )
-            actor_path = result.get("ActorObject", {}).get("ObjectPath", "")
-            if actor_path:
-                try:
-                    await rc_call(actor_path, "SetActorLabel",
-                                   {"NewActorLabel": label})
-                except Exception:
-                    pass
-            spawned.append({"type": "player_start", "label": label, "actor_path": actor_path})
-        except Exception as exc:
-            errors.append({"type": "player_start", "label": label, "error": str(exc)})
-
-    # ── 3. Atmosphere console commands ─────────────────────────────────────────
-    atmosphere    = plan.get("atmosphere", {})
-    lighting_mood = atmosphere.get("lighting_mood", "").lower()
-    if lighting_mood:
-        if "neon" in lighting_mood or "cyber" in lighting_mood:
-            atm_cmds = [
-                "r.Atmosphere 0", "r.SkySphere.Intensity 0", "r.Fog 0",
-                "r.AmbientOcclusion.Intensity 1.5", "r.BloomIntensity 2.0", "r.VignetteIntensity 0.8",
-            ]
-        elif "dark" in lighting_mood or "dramatic" in lighting_mood:
-            atm_cmds = [
-                "r.Atmosphere 1", "r.Fog 1",
-                "r.BloomIntensity 1.5", "r.VignetteIntensity 1.0",
-            ]
-        elif "golden" in lighting_mood or "warm" in lighting_mood:
-            atm_cmds = [
-                "r.Atmosphere 1", "r.Fog 1",
-                "r.BloomIntensity 1.2", "r.VignetteIntensity 0.3",
-            ]
-        else:
-            atm_cmds = ["r.Atmosphere 1", "r.BloomIntensity 1.0", "r.VignetteIntensity 0.3"]
-
-        for cmd in atm_cmds:
-            try:
-                await rc_call(
-                    "/Script/UnrealEd.Default__EditorLevelLibrary",
-                    "ExecuteConsoleCommand",
-                    {"Command": cmd},
-                    generate_transaction=False,
-                )
-                atmosphere_cmds.append(cmd)
-            except Exception as exc:
-                errors.append({"type": "atmosphere_cmd", "cmd": cmd, "error": str(exc)})
-
-    # ── 4. Asset sources (StaticMeshActor per asset) ───────────────────────────
-    for asset in plan.get("asset_sources", []):
-        asset_id = asset.get("asset_id", "")
-        pos      = asset.get("position", {"x": 0, "y": 0, "z": 0})
-        if not asset_id:
-            continue
-        label = f"Asset_{asset_id[:24]}"
-        try:
-            result = await rc_call(
-                "/Script/EditorScriptingUtilities.Default__EditorActorSubsystem",
-                "SpawnActorFromClass",
-                {
-                    "ActorClass": "/Script/Engine.StaticMeshActor",
-                    "SpawnTransform": {
-                        "Rotation":    {"X": 0, "Y": 0, "Z": 0, "W": 1},
-                        "Translation": {
-                            "X": float(pos.get("x", 0)),
-                            "Y": float(pos.get("y", 0)),
-                            "Z": float(pos.get("z", 0)),
-                        },
-                        "Scale3D": {"X": 1, "Y": 1, "Z": 1},
-                    },
-                },
-            )
-            actor_path = result.get("ActorObject", {}).get("ObjectPath", "")
-            if actor_path:
-                try:
-                    await rc_set_property(
-                        actor_path, "StaticMesh",
-                        f"/Game/Assets/{asset_id}.{asset_id}"
-                    )
-                    await rc_call(actor_path, "SetActorLabel", {"NewActorLabel": label})
-                except Exception:
-                    pass
-            assets_placed += 1
-            spawned.append({"type": "asset", "label": label, "actor_path": actor_path})
-        except Exception as exc:
-            errors.append({"type": "asset", "asset_id": asset_id, "error": str(exc)})
-
-    # ── 5. GM hook TriggerVolumes ──────────────────────────────────────────────
-    zones       = plan.get("zones", [])
-    first_zone_center = {"x": 0, "y": 0, "z": 100}
-    if zones:
-        b = zones[0].get("bounds", {})
-        first_zone_center = b.get("center", first_zone_center)
-
-    for hook in plan.get("gm_hooks", []):
-        hook_id = hook.get("id", "")
-        if not hook_id:
-            continue
-        label = f"Hook_{hook_id[:28]}"
-        try:
-            result = await rc_call(
-                "/Script/EditorScriptingUtilities.Default__EditorActorSubsystem",
-                "SpawnActorFromClass",
-                {
-                    "ActorClass": "/Script/Engine.TriggerVolume",
-                    "SpawnTransform": {
-                        "Rotation":    {"X": 0, "Y": 0, "Z": 0, "W": 1},
-                        "Translation": {
-                            "X": float(first_zone_center.get("x", 0)),
-                            "Y": float(first_zone_center.get("y", 0)),
-                            "Z": float(first_zone_center.get("z", 100)),
-                        },
-                        "Scale3D": {"X": 2, "Y": 2, "Z": 2},
-                    },
-                },
-            )
-            actor_path = result.get("ActorObject", {}).get("ObjectPath", "")
-            if actor_path:
-                try:
-                    await rc_call(actor_path, "SetActorLabel", {"NewActorLabel": label})
-                    await rc_set_property(actor_path, "Tags", [hook_id])
-                except Exception:
-                    pass
-            hooks_wired += 1
-            spawned.append({"type": "hook_trigger", "label": label, "actor_path": actor_path})
-        except Exception as exc:
-            errors.append({"type": "hook_trigger", "hook_id": hook_id, "error": str(exc)})
-
-    # ── 6. Save level ──────────────────────────────────────────────────────────
     try:
         await rc_call("/Script/UnrealEd.Default__EditorLevelLibrary",
                       "SaveCurrentLevel", generate_transaction=False)
@@ -546,16 +634,80 @@ async def build_scene_full(req: ScenePlanFullRequest):
         errors.append({"type": "save", "error": str(exc)})
 
     return {
-        "status":             "ok" if not errors else "partial",
-        "scene_name":         plan.get("name", ""),
-        "map_name":           req.map_name,
-        "actors_spawned":     len([s for s in spawned if s["type"] in ("zone", "player_start")]),
-        "assets_placed":      assets_placed,
-        "hooks_wired":        hooks_wired,
-        "atmosphere_applied": len(atmosphere_cmds) > 0,
-        "atmosphere_mood":    lighting_mood,
-        "actors":             spawned,
-        "errors":             errors,
+        "status":         "ok" if not errors else "partial",
+        "scene_name":     plan.get("name", ""),
+        "map_name":       req.map_name,
+        "actors_spawned": len([s for s in spawned if s["type"] in ("zone", "player_start")]),
+        "actors":         spawned,
+        "errors":         errors,
+        **counts,
+    }
+
+
+@app.post("/scene-plan/build-arena")
+async def build_arena(req: BuildArenaRequest):
+    """
+    Full pipeline: create a new named level → room geometry + lighting →
+    zones + spawns + atmosphere + assets + hooks + interactables → save.
+
+    This is the single call the UnrealLevelBuilder agent makes to turn a
+    ScenePlan into a playable UE5 level from scratch.
+    """
+    log.info(f"build_arena map={req.map_name}")
+    try:
+        plan = json.loads(req.scene_plan_json)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(400, f"Invalid ScenePlan JSON: {exc}")
+
+    spawned: list = []
+    errors:  list = []
+    asset_path = f"/Game/Maps/{req.map_name}"
+
+    # 1. Create + open a new level
+    try:
+        await rc_call(
+            "/Script/UnrealEd.Default__EditorLevelLibrary",
+            "NewLevel",
+            {"AssetPath": asset_path},
+            generate_transaction=False,
+        )
+        log.info(f"  created level {asset_path}")
+    except Exception as exc:
+        raise HTTPException(500, f"NewLevel failed: {exc}")
+
+    # 2. Room geometry + lighting derived from zone extents
+    bounds = _compute_arena_bounds(plan, req.room_margin)
+    await _spawn_room_geometry(bounds, spawned, errors)
+
+    # 3. Zones, spawns, atmosphere, assets, hooks, interactables
+    counts = await _execute_scene_plan_build(plan, spawned, errors)
+
+    # 4. Save
+    try:
+        await rc_call("/Script/UnrealEd.Default__EditorLevelLibrary",
+                      "SaveCurrentLevel", generate_transaction=False)
+    except Exception as exc:
+        errors.append({"type": "save", "error": str(exc)})
+
+    room_geo    = [s for s in spawned if s["type"] == "room_geometry"]
+    lights      = [s for s in spawned if s["type"] == "lighting"]
+    zones_built = [s for s in spawned if s["type"] == "zone"]
+    starts      = [s for s in spawned if s["type"] == "player_start"]
+    interacts   = [s for s in spawned if s["type"] == "interactable"]
+
+    return {
+        "status":                "ok" if not errors else "partial",
+        "level_asset_path":      asset_path,
+        "scene_name":            plan.get("name", ""),
+        "room_pieces":           len(room_geo),
+        "lights":                len(lights),
+        "zones_built":           len(zones_built),
+        "player_starts":         len(starts),
+        "interactables_spawned": len(interacts),
+        "arena_bounds_cm":       bounds,
+        "actors":                spawned,
+        "errors":                errors,
+        **{k: v for k, v in counts.items() if k != "interactables_spawned"},
     }
 
 
