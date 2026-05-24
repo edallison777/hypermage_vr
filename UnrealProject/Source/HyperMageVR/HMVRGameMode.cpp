@@ -326,9 +326,9 @@ bool AHMVRGameMode::ValidateJWTToken(const FString& Token, FString& OutPlayerId,
 	return true;
 }
 
+#if !WITH_GAMELIFT
 void AHMVRGameMode::InitializeGameLift()
 {
-#if !WITH_GAMELIFT
 	// No-op on client builds
 }
 void AHMVRGameMode::ReportServerHealth() {}
