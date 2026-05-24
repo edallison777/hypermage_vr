@@ -64,9 +64,16 @@ fi
 
 BUILD_KEY="builds/latest/HyperMageVRServer.zip"
 if ! aws s3 ls "s3://$S3_BUCKET/$BUILD_KEY" --region "$AWS_REGION" >/dev/null 2>&1; then
-  echo "ERROR: No existing build found at s3://$S3_BUCKET/$BUILD_KEY" >&2
-  echo "       Run 02-compile-server.sh first to create cooked content." >&2
-  exit 1
+  echo "builds/latest/ missing — checking builds/archive/ for most recent backup..."
+  ARCHIVE_KEY=$(aws s3 ls "s3://$S3_BUCKET/builds/archive/" --region "$AWS_REGION" --recursive \
+    | grep "HyperMageVRServer.zip" | sort | tail -1 | awk '{print $4}')
+  if [[ -z "$ARCHIVE_KEY" ]]; then
+    echo "ERROR: No build in builds/latest/ or builds/archive/. Run 02-compile-server.sh first." >&2
+    exit 1
+  fi
+  echo "Restoring from archive: $ARCHIVE_KEY"
+  aws s3 cp "s3://$S3_BUCKET/$ARCHIVE_KEY" "s3://$S3_BUCKET/$BUILD_KEY" --region "$AWS_REGION"
+  echo "Restored to builds/latest/."
 fi
 
 # ── Find or launch warm instance ──────────────────────────────────────────────
@@ -275,6 +282,12 @@ aws s3 cp /build/output/HyperMageVRServer.zip \
   "s3://${S3_BUCKET}/builds/latest/HyperMageVRServer.zip" \
   --region "${AWS_REGION}"
 echo "ok" | aws s3 cp - "s3://${S3_BUCKET}/builds/latest/compile-success.txt" --region "${AWS_REGION}"
+
+ARCHIVE_TS=\$(date +%Y%m%d-%H%M%S)
+echo "Archiving to builds/archive/\${ARCHIVE_TS}/..."
+aws s3 cp "s3://${S3_BUCKET}/builds/latest/HyperMageVRServer.zip" \
+  "s3://${S3_BUCKET}/builds/archive/\${ARCHIVE_TS}/HyperMageVRServer.zip" \
+  --region "${AWS_REGION}"
 
 echo "=== Hotpatch complete ==="
 aws s3 ls "s3://${S3_BUCKET}/builds/latest/"

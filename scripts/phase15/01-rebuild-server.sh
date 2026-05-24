@@ -66,9 +66,17 @@ SUBNET_ID=$(aws ec2 describe-subnets \
   --query 'Subnets[0].SubnetId' \
   --output text)
 
+REBUILD_INSTANCE_TYPE="${REBUILD_INSTANCE_TYPE:-}"
+INSTANCE_TYPE_ARG=""
+if [[ -n "$REBUILD_INSTANCE_TYPE" ]]; then
+  INSTANCE_TYPE_ARG="--instance-type $REBUILD_INSTANCE_TYPE"
+  echo "Instance type override: $REBUILD_INSTANCE_TYPE"
+fi
+
 INSTANCE_ID=$(aws ec2 run-instances \
   --region "$AWS_REGION" \
   --launch-template "LaunchTemplateId=$LAUNCH_TEMPLATE_ID,Version=\$Latest" \
+  $INSTANCE_TYPE_ARG \
   --subnet-id "$SUBNET_ID" \
   --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=hypermage-vr-phase15-rebuild},{Key=Phase,Value=15}]' \
   --query 'Instances[0].InstanceId' \
@@ -248,6 +256,12 @@ zip -r /build/output/HyperMageVRServer.zip .
 echo "Uploading to S3..."
 aws s3 cp /build/output/HyperMageVRServer.zip \
   "s3://${S3_BUCKET}/builds/latest/HyperMageVRServer.zip" \
+  --region "${AWS_REGION}"
+
+ARCHIVE_TS=\$(date +%Y%m%d-%H%M%S)
+echo "Archiving to builds/archive/\${ARCHIVE_TS}/..."
+aws s3 cp "s3://${S3_BUCKET}/builds/latest/HyperMageVRServer.zip" \
+  "s3://${S3_BUCKET}/builds/archive/\${ARCHIVE_TS}/HyperMageVRServer.zip" \
   --region "${AWS_REGION}"
 
 echo "=== Phase 15 server rebuild complete ==="

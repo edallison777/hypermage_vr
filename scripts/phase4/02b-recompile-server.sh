@@ -47,8 +47,16 @@ fi
 BUILD_KEY="builds/latest/HyperMageVRServer.zip"
 echo "Checking s3://$S3_BUCKET/$BUILD_KEY ..."
 if ! aws s3 ls "s3://$S3_BUCKET/$BUILD_KEY" --region "$AWS_REGION" >/dev/null 2>&1; then
-  echo "ERROR: No existing build found. Run 02-compile-server.sh first." >&2
-  exit 1
+  echo "builds/latest/ missing — checking builds/archive/ for most recent backup..."
+  ARCHIVE_KEY=$(aws s3 ls "s3://$S3_BUCKET/builds/archive/" --region "$AWS_REGION" --recursive \
+    | grep "HyperMageVRServer.zip" | sort | tail -1 | awk '{print $4}')
+  if [[ -z "$ARCHIVE_KEY" ]]; then
+    echo "ERROR: No build in builds/latest/ or builds/archive/. Run 01-rebuild-server.sh first." >&2
+    exit 1
+  fi
+  echo "Restoring from archive: $ARCHIVE_KEY"
+  aws s3 cp "s3://$S3_BUCKET/$ARCHIVE_KEY" "s3://$S3_BUCKET/$BUILD_KEY" --region "$AWS_REGION"
+  echo "Restored to builds/latest/."
 fi
 echo "Existing build found — will reuse cooked content."
 
@@ -215,6 +223,12 @@ zip -r /build/output/HyperMageVRServer.zip .
 echo "Uploading to S3..."
 aws s3 cp /build/output/HyperMageVRServer.zip \
   "s3://${S3_BUCKET}/builds/latest/HyperMageVRServer.zip" \
+  --region "${AWS_REGION}"
+
+ARCHIVE_TS=\$(date +%Y%m%d-%H%M%S)
+echo "Archiving to builds/archive/\${ARCHIVE_TS}/..."
+aws s3 cp "s3://${S3_BUCKET}/builds/latest/HyperMageVRServer.zip" \
+  "s3://${S3_BUCKET}/builds/archive/\${ARCHIVE_TS}/HyperMageVRServer.zip" \
   --region "${AWS_REGION}"
 
 echo "=== Recompile complete ==="
