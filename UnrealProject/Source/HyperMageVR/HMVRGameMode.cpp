@@ -573,12 +573,14 @@ void AHMVRGameMode::OnPlayerLeft(AController* ExitingPlayer)
 	}
 
 #if WITH_GAMELIFT
-	// When the last player leaves, terminate the game session so GameLift can
-	// reclaim the server process for new FlexMatch placements.
+	// When the last player leaves, signal ProcessEnding so GameLift reclaims this
+	// server process and FlexMatch can place the next session. The process then
+	// exits and GameLift spins up a fresh one (SDK 4.x has no TerminateGameSession).
 	if (GetCurrentPlayerCount() == 0 && bGameLiftInitialized && GameLiftSdkModule)
 	{
-		UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Last player left — terminating game session"));
-		GameLiftSdkModule->TerminateGameSession();
+		UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Last player left — calling ProcessEnding"));
+		GameLiftSdkModule->ProcessEnding();
+		FPlatformMisc::RequestExit(false);
 	}
 #endif
 }
