@@ -571,6 +571,16 @@ void AHMVRGameMode::OnPlayerLeft(AController* ExitingPlayer)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("HMVRGameMode: Player left but no session found"));
 	}
+
+#if WITH_GAMELIFT
+	// When the last player leaves, terminate the game session so GameLift can
+	// reclaim the server process for new FlexMatch placements.
+	if (GetCurrentPlayerCount() == 0 && bGameLiftInitialized && GameLiftSdkModule)
+	{
+		UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Last player left — terminating game session"));
+		GameLiftSdkModule->TerminateGameSession();
+	}
+#endif
 }
 
 void AHMVRGameMode::GrantRewardToPlayer(APlayerController* Player, const FString& RewardId)
