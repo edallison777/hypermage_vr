@@ -200,6 +200,19 @@ for f in Source/HyperMageVR/HMVRPlayerState.h Source/HyperMageVR/AwsSigV4.h Sour
   fi
 done
 
+# Patch Target.cs files for UE5.3 AMI compatibility.
+# The project is set to UE5.7 (BuildSettingsVersion.V6 / EngineIncludeOrderVersion.Latest)
+# but this AMI only has UE5.3 (max V4). Patch in-place on the build instance only —
+# the source files on GitHub remain UE5.7-compatible.
+echo "--- Patching Target.cs files for UE5.3 AMI ---"
+for f in Source/HyperMageVR.Target.cs Source/HyperMageVRServer.Target.cs Source/HyperMageVREditor.Target.cs; do
+  if [[ -f "\$f" ]]; then
+    sed -i 's/BuildSettingsVersion\.V[5-9]/BuildSettingsVersion.V4/g' "\$f"
+    sed -i 's/EngineIncludeOrderVersion\.Latest/EngineIncludeOrderVersion.Unreal5_3/g' "\$f"
+    echo "  Patched: \$f"
+  fi
+done
+
 chown -R ec2-user:ec2-user /build/workspace /build/output
 
 SUDO_UAT="sudo -u ec2-user env HOME=/home/ec2-user PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin UE5_ROOT=/opt/UnrealEngine DOTNET_CLI_HOME=/home/ec2-user DOTNET_NOLOGO=1 /opt/UnrealEngine/Engine/Build/BatchFiles/RunUAT.sh"
