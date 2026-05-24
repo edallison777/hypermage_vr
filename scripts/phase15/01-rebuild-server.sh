@@ -213,6 +213,24 @@ for f in Source/HyperMageVR.Target.cs Source/HyperMageVRServer.Target.cs Source/
   fi
 done
 
+# Disable client-only plugins that are not installed on the AMI.
+# OculusXR / OpenXR / AndroidPermission are VR/mobile client plugins — the dedicated
+# server doesn't need them and the AMI doesn't have them.
+echo "--- Disabling client-only plugins for server build ---"
+python3 -c "
+import json, sys
+CLIENT_ONLY = {'OculusXR', 'OpenXR', 'OpenXRHandTracking', 'AndroidPermission'}
+with open('HyperMageVR.uproject', 'r') as f:
+    data = json.load(f)
+for plugin in data.get('Plugins', []):
+    if plugin.get('Name') in CLIENT_ONLY and plugin.get('Enabled', False):
+        plugin['Enabled'] = False
+        print('  Disabled: ' + plugin['Name'])
+with open('HyperMageVR.uproject', 'w') as f:
+    json.dump(data, f, indent='\t')
+print('uproject patched.')
+"
+
 chown -R ec2-user:ec2-user /build/workspace /build/output
 
 SUDO_UAT="sudo -u ec2-user env HOME=/home/ec2-user PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin UE5_ROOT=/opt/UnrealEngine DOTNET_CLI_HOME=/home/ec2-user DOTNET_NOLOGO=1 /opt/UnrealEngine/Engine/Build/BatchFiles/RunUAT.sh"
