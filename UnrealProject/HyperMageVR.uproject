@@ -45,10 +45,28 @@
 		{
 			"Name": "GameLiftServerSDK",
 			"Enabled": true,
-			"WhitelistTargets": ["Server"]
+			"TargetAllowList": [
+				"Server"
+			]
 		},
 		{
 			"Name": "Bridge",
+			"Enabled": false
+		},
+		{
+			"Name": "RemoteControl",
+			"Enabled": false
+		},
+		{
+			"Name": "RemoteControlInterception",
+			"Enabled": false
+		},
+		{
+			"Name": "PythonScriptPlugin",
+			"Enabled": false
+		},
+		{
+			"Name": "EditorScriptingUtilities",
 			"Enabled": false
 		}
 	],
