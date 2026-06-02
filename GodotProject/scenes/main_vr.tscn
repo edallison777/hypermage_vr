@@ -1,6 +1,9 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://scripts/vr_main.gd" id="Script_1"]
+[ext_resource type="Script" path="res://scripts/aws_cognito.gd" id="Script_cognito"]
+[ext_resource type="Script" path="res://scripts/matchmaking_client.gd" id="Script_matchmaking"]
+[ext_resource type="Script" path="res://scripts/game_network.gd" id="Script_network"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 
@@ -47,3 +50,20 @@ tracker = "left_hand"
 
 [node name="RightController" type="XRController3D" parent="XROrigin3D"]
 tracker = "right_hand"
+
+[node name="StatusLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, -1.5)
+text = "Initializing..."
+font_size = 64
+pixel_size = 0.003
+modulate = Color(1, 1, 0.2, 1)
+outline_size = 6
+
+[node name="CognitoAuth" type="Node" parent="."]
+script = ExtResource("Script_cognito")
+
+[node name="MatchmakingClient" type="Node" parent="."]
+script = ExtResource("Script_matchmaking")
+
+[node name="GameNetwork" type="Node" parent="."]
+script = ExtResource("Script_network")

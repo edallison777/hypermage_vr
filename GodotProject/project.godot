@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="HyperMageVR_Godot"
-run/main_scene="res://scenes/generated/wizards-tower.tscn"
+run/main_scene="res://scenes/main_vr.tscn"
 config/features=PackedStringArray("4.6", "Mobile")
 
 [rendering]
