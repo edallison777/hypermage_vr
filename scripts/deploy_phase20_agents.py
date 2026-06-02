@@ -41,6 +41,11 @@ AGENTS = [
         "config":     AGENTS_DIR / "conversation-level-designer" / ".bedrock_agentcore.yaml",
         "agent_name": "ConversationLevelDesigner_Agent",
     },
+    {
+        "label":      "UnrealLevelBuilder (build_arena_from_sceneplan + model ID fix)",
+        "config":     AGENTS_DIR / "unreal-level-builder" / ".bedrock_agentcore.yaml",
+        "agent_name": "UnrealLevelBuilder_Agent",
+    },
 ]
 
 

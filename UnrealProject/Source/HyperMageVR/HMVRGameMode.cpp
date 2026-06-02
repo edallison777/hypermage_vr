@@ -12,6 +12,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
 #include "Engine/StaticMeshActor.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/SkyLight.h"
 #include "EngineUtils.h"
@@ -103,6 +104,35 @@ void AHMVRGameMode::BeginPlay()
 			Floor->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
 			Floor->SetActorScale3D(FVector(20.f, 20.f, 1.f));
 			UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Floor plane spawned at origin, scale 20x20m"));
+		}
+	}
+
+	// Pink vase — proof that code-authored geometry works end-to-end
+	UStaticMesh* SphereMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	if (SphereMesh)
+	{
+		FActorSpawnParameters VaseParams;
+		VaseParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AStaticMeshActor* PinkVase = GetWorld()->SpawnActor<AStaticMeshActor>(
+			AStaticMeshActor::StaticClass(),
+			FVector(0.f, 200.f, 50.f),
+			FRotator::ZeroRotator,
+			VaseParams
+		);
+		if (PinkVase)
+		{
+			PinkVase->GetStaticMeshComponent()->SetStaticMesh(SphereMesh);
+			PinkVase->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+			UMaterialInterface* BaseMat = LoadObject<UMaterialInterface>(nullptr,
+				TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+			if (BaseMat)
+			{
+				UMaterialInstanceDynamic* PinkMat = UMaterialInstanceDynamic::Create(BaseMat, PinkVase);
+				PinkMat->SetVectorParameterValue(FName("Color"), FLinearColor(1.f, 0.f, 0.5f, 1.f));
+				PinkVase->GetStaticMeshComponent()->SetMaterial(0, PinkMat);
+			}
+			PinkVase->SetActorScale3D(FVector(0.5f));
+			UE_LOG(LogTemp, Log, TEXT("HMVRGameMode: Pink vase spawned at (0, 200, 50)"));
 		}
 	}
 }

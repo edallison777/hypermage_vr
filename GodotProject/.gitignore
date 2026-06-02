@@ -1,0 +1,15 @@
+# Godot cache
+.godot/
+*.import
+
+# Generated scene output (produced by sceneplan_to_tscn.py — not committed)
+scenes/generated/
+
+# Android build artefacts
+export/
+android/
+*.apk
+*.aab
+
+# Editor metadata
+.mono/

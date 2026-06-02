@@ -14,7 +14,7 @@ from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
 app = BedrockAgentCoreApp()
 
-MODEL_ID = "eu.anthropic.claude-sonnet-4-20250514-v1:0"
+MODEL_ID = "eu.anthropic.claude-sonnet-4-6"
 REGION = os.environ.get("AWS_REGION", "eu-west-1")
 DYNAMODB_TABLE = "hypermage-vr-interaction-events-dev"
 S3_BUCKET = "hypermage-vr-unreal-build-artifacts-dev"

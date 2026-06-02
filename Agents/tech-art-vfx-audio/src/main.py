@@ -28,7 +28,7 @@ from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
 app = BedrockAgentCoreApp()
 
-MODEL_ID    = "eu.anthropic.claude-sonnet-4-20250514-v1:0"
+MODEL_ID    = "eu.anthropic.claude-sonnet-4-6"
 AWS_REGION  = os.environ.get("AWS_DEFAULT_REGION", "eu-west-1")
 S3_BUCKET   = os.environ.get("BUILD_S3_BUCKET", "hypermage-vr-unreal-build-artifacts-dev")
 AUDIO_TABLE = os.environ.get("AUDIO_ASSETS_TABLE", "hypermage-vr-audio-assets-dev")

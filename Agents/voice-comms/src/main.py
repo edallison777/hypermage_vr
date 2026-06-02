@@ -7,7 +7,7 @@ from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
 app = BedrockAgentCoreApp()
 
-MODEL_ID = "eu.anthropic.claude-sonnet-4-20250514-v1:0"
+MODEL_ID = "eu.anthropic.claude-sonnet-4-6"
 
 SYSTEM_PROMPT = """You are the VoiceCommsAgent, responsible for implementing party voice chat and player controls.
 

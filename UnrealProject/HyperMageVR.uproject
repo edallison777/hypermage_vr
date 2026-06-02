@@ -45,9 +45,7 @@
 		{
 			"Name": "GameLiftServerSDK",
 			"Enabled": true,
-			"TargetAllowList": [
-				"Server"
-			]
+			"WhitelistTargets": ["Server"]
 		},
 		{
 			"Name": "Bridge",

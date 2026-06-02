@@ -7,7 +7,7 @@ from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
 app = BedrockAgentCoreApp()
 
-MODEL_ID = "eu.anthropic.claude-sonnet-4-20250514-v1:0"
+MODEL_ID = "eu.anthropic.claude-sonnet-4-6"
 
 SYSTEM_PROMPT = """You are the GameplaySystemsAgent, responsible for implementing VR interactions, objective systems, and server-side reward emission.
 

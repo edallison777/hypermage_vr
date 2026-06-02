@@ -1,13 +1,15 @@
 {
     "name": "get-matchmaking-status",
-    "version": "1.0.0",
-    "description": "Lambda function to get FlexMatch matchmaking status",
+    "version": "2.0.0",
+    "description": "Lambda: poll ECS task status and resolve public IP for Godot matchmaking (G5)",
     "main": "index.js",
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1"
     },
     "dependencies": {
-        "@aws-sdk/client-gamelift": "^3.500.0"
+        "@aws-sdk/client-ecs": "^3.750.0",
+        "@aws-sdk/client-ec2": "^3.750.0",
+        "@aws-sdk/client-dynamodb": "^3.750.0"
     },
     "engines": {
         "node": ">=20.0.0"

@@ -1,0 +1,320 @@
+[gd_scene format=3]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
+albedo_color = Color(0.500, 0.500, 0.600, 1.000)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_2"]
+albedo_color = Color(0.425, 0.425, 0.510, 1.000)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_3"]
+albedo_color = Color(0.350, 0.350, 0.420, 1.000)
+
+[sub_resource type="BoxMesh" id="BoxMesh_4"]
+size = Vector3(4.0000, 0.3000, 5.0000)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_5"]
+size = Vector3(4.0000, 0.3000, 5.0000)
+
+[sub_resource type="BoxMesh" id="BoxMesh_6"]
+size = Vector3(4.0000, 0.3000, 5.0000)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_7"]
+size = Vector3(4.0000, 0.3000, 5.0000)
+
+[sub_resource type="BoxMesh" id="BoxMesh_8"]
+size = Vector3(4.0000, 3.0000, 0.3000)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_9"]
+size = Vector3(4.0000, 3.0000, 0.3000)
+
+[sub_resource type="BoxMesh" id="BoxMesh_10"]
+size = Vector3(4.0000, 3.0000, 0.3000)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_11"]
+size = Vector3(4.0000, 3.0000, 0.3000)
+
+[sub_resource type="BoxMesh" id="BoxMesh_12"]
+size = Vector3(0.3000, 3.0000, 5.0000)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_13"]
+size = Vector3(0.3000, 3.0000, 5.0000)
+
+[sub_resource type="BoxMesh" id="BoxMesh_14"]
+size = Vector3(0.3000, 3.0000, 5.0000)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_15"]
+size = Vector3(0.3000, 3.0000, 5.0000)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_16"]
+albedo_color = Color(0.900, 0.800, 0.100, 1.000)
+
+[sub_resource type="SphereMesh" id="SphereMesh_17"]
+radius = 0.1500
+height = 0.3000
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_18"]
+radius = 0.1500
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_19"]
+albedo_color = Color(0.400, 0.500, 0.600, 1.000)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_20"]
+top_radius = 0.3000
+bottom_radius = 0.3000
+height = 1.8000
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_21"]
+size = Vector3(0.6000, 1.8000, 0.6000)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_22"]
+albedo_color = Color(0.500, 0.400, 0.300, 1.000)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_23"]
+albedo_color = Color(0.425, 0.340, 0.255, 1.000)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_24"]
+albedo_color = Color(0.350, 0.280, 0.210, 1.000)
+
+[sub_resource type="BoxMesh" id="BoxMesh_25"]
+size = Vector3(3.0000, 0.3000, 5.0000)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_26"]
+size = Vector3(3.0000, 0.3000, 5.0000)
+
+[sub_resource type="BoxMesh" id="BoxMesh_27"]
+size = Vector3(3.0000, 0.3000, 5.0000)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_28"]
+size = Vector3(3.0000, 0.3000, 5.0000)
+
+[sub_resource type="BoxMesh" id="BoxMesh_29"]
+size = Vector3(3.0000, 3.0000, 0.3000)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_30"]
+size = Vector3(3.0000, 3.0000, 0.3000)
+
+[sub_resource type="BoxMesh" id="BoxMesh_31"]
+size = Vector3(3.0000, 3.0000, 0.3000)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_32"]
+size = Vector3(3.0000, 3.0000, 0.3000)
+
+[sub_resource type="BoxMesh" id="BoxMesh_33"]
+size = Vector3(0.3000, 3.0000, 5.0000)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_34"]
+size = Vector3(0.3000, 3.0000, 5.0000)
+
+[sub_resource type="BoxMesh" id="BoxMesh_35"]
+size = Vector3(0.3000, 3.0000, 5.0000)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_36"]
+size = Vector3(0.3000, 3.0000, 5.0000)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_37"]
+albedo_color = Color(0.700, 0.200, 0.200, 1.000)
+
+[sub_resource type="BoxMesh" id="BoxMesh_38"]
+size = Vector3(0.8000, 1.8000, 0.5000)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_39"]
+size = Vector3(0.8000, 1.8000, 0.5000)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_40"]
+albedo_color = Color(0.300, 0.600, 0.500, 1.000)
+
+[sub_resource type="BoxMesh" id="BoxMesh_41"]
+size = Vector3(1.0000, 1.0000, 1.0000)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_42"]
+size = Vector3(1.0000, 1.0000, 1.0000)
+
+[node name="Dungeon_Cell_Escape" type="Node3D"]
+
+[node name="SunLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, -0.5, 0, 0, 0, -1, 0.5, 0.866, 0, 0, 20, 0)
+light_energy = 0.5
+shadow_enabled = true
+
+[node name="PreviewCamera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.707, 0.707, 0, -0.707, 0.707, 0, 4, 8)
+current = true
+
+[node name="Zone_cell" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0000, 1.5000, 0.0000)
+
+[node name="Floor_cell" type="StaticBody3D" parent="Zone_cell"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0000, -1.3500, 0.0000)
+
+[node name="Mesh" type="MeshInstance3D" parent="Zone_cell/Floor_cell"]
+mesh = SubResource("BoxMesh_4")
+surface_material_override/0 = SubResource("StandardMaterial3D_1")
+
+[node name="Collision" type="CollisionShape3D" parent="Zone_cell/Floor_cell"]
+shape = SubResource("BoxShape3D_5")
+
+[node name="Ceiling_cell" type="StaticBody3D" parent="Zone_cell"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0000, 1.3500, 0.0000)
+
+[node name="Mesh" type="MeshInstance3D" parent="Zone_cell/Ceiling_cell"]
+mesh = SubResource("BoxMesh_6")
+surface_material_override/0 = SubResource("StandardMaterial3D_3")
+
+[node name="Collision" type="CollisionShape3D" parent="Zone_cell/Ceiling_cell"]
+shape = SubResource("BoxShape3D_7")
+
+[node name="WallN_cell" type="StaticBody3D" parent="Zone_cell"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0000, 0.0000, -2.3500)
+
+[node name="Mesh" type="MeshInstance3D" parent="Zone_cell/WallN_cell"]
+mesh = SubResource("BoxMesh_8")
+surface_material_override/0 = SubResource("StandardMaterial3D_2")
+
+[node name="Collision" type="CollisionShape3D" parent="Zone_cell/WallN_cell"]
+shape = SubResource("BoxShape3D_9")
+
+[node name="WallS_cell" type="StaticBody3D" parent="Zone_cell"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0000, 0.0000, 2.3500)
+
+[node name="Mesh" type="MeshInstance3D" parent="Zone_cell/WallS_cell"]
+mesh = SubResource("BoxMesh_10")
+surface_material_override/0 = SubResource("StandardMaterial3D_2")
+
+[node name="Collision" type="CollisionShape3D" parent="Zone_cell/WallS_cell"]
+shape = SubResource("BoxShape3D_11")
+
+[node name="WallE_cell" type="StaticBody3D" parent="Zone_cell"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.8500, 0.0000, 0.0000)
+
+[node name="Mesh" type="MeshInstance3D" parent="Zone_cell/WallE_cell"]
+mesh = SubResource("BoxMesh_12")
+surface_material_override/0 = SubResource("StandardMaterial3D_2")
+
+[node name="Collision" type="CollisionShape3D" parent="Zone_cell/WallE_cell"]
+shape = SubResource("BoxShape3D_13")
+
+[node name="WallW_cell" type="StaticBody3D" parent="Zone_cell"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.8500, 0.0000, 0.0000)
+
+[node name="Mesh" type="MeshInstance3D" parent="Zone_cell/WallW_cell"]
+mesh = SubResource("BoxMesh_14")
+surface_material_override/0 = SubResource("StandardMaterial3D_2")
+
+[node name="Collision" type="CollisionShape3D" parent="Zone_cell/WallW_cell"]
+shape = SubResource("BoxShape3D_15")
+
+[node name="Light_cell" type="OmniLight3D" parent="Zone_cell"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0000, 1.0500, 0.0000)
+omni_range = 4.500
+light_energy = 1.2
+
+[node name="Artefact_iron_key" type="Area3D" parent="Zone_cell"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.2000, -1.2000, -1.8000)
+
+[node name="Mesh" type="MeshInstance3D" parent="Zone_cell/Artefact_iron_key"]
+mesh = SubResource("SphereMesh_17")
+surface_material_override/0 = SubResource("StandardMaterial3D_16")
+
+[node name="Collision" type="CollisionShape3D" parent="Zone_cell/Artefact_iron_key"]
+shape = SubResource("SphereShape3D_18")
+
+[node name="Machine_cell_door" type="StaticBody3D" parent="Zone_cell"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0000, 0.4000, -2.3000)
+
+[node name="Mesh" type="MeshInstance3D" parent="Zone_cell/Machine_cell_door"]
+mesh = SubResource("CylinderMesh_20")
+surface_material_override/0 = SubResource("StandardMaterial3D_19")
+
+[node name="Collision" type="CollisionShape3D" parent="Zone_cell/Machine_cell_door"]
+shape = SubResource("BoxShape3D_21")
+
+[node name="Zone_guard_room" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0000, 1.5000, -6.0000)
+
+[node name="Floor_guard_room" type="StaticBody3D" parent="Zone_guard_room"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0000, -1.3500, 0.0000)
+
+[node name="Mesh" type="MeshInstance3D" parent="Zone_guard_room/Floor_guard_room"]
+mesh = SubResource("BoxMesh_25")
+surface_material_override/0 = SubResource("StandardMaterial3D_22")
+
+[node name="Collision" type="CollisionShape3D" parent="Zone_guard_room/Floor_guard_room"]
+shape = SubResource("BoxShape3D_26")
+
+[node name="Ceiling_guard_room" type="StaticBody3D" parent="Zone_guard_room"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0000, 1.3500, 0.0000)
+
+[node name="Mesh" type="MeshInstance3D" parent="Zone_guard_room/Ceiling_guard_room"]
+mesh = SubResource("BoxMesh_27")
+surface_material_override/0 = SubResource("StandardMaterial3D_24")
+
+[node name="Collision" type="CollisionShape3D" parent="Zone_guard_room/Ceiling_guard_room"]
+shape = SubResource("BoxShape3D_28")
+
+[node name="WallN_guard_room" type="StaticBody3D" parent="Zone_guard_room"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0000, 0.0000, -2.3500)
+
+[node name="Mesh" type="MeshInstance3D" parent="Zone_guard_room/WallN_guard_room"]
+mesh = SubResource("BoxMesh_29")
+surface_material_override/0 = SubResource("StandardMaterial3D_23")
+
+[node name="Collision" type="CollisionShape3D" parent="Zone_guard_room/WallN_guard_room"]
+shape = SubResource("BoxShape3D_30")
+
+[node name="WallS_guard_room" type="StaticBody3D" parent="Zone_guard_room"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0000, 0.0000, 2.3500)
+
+[node name="Mesh" type="MeshInstance3D" parent="Zone_guard_room/WallS_guard_room"]
+mesh = SubResource("BoxMesh_31")
+surface_material_override/0 = SubResource("StandardMaterial3D_23")
+
+[node name="Collision" type="CollisionShape3D" parent="Zone_guard_room/WallS_guard_room"]
+shape = SubResource("BoxShape3D_32")
+
+[node name="WallE_guard_room" type="StaticBody3D" parent="Zone_guard_room"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3500, 0.0000, 0.0000)
+
+[node name="Mesh" type="MeshInstance3D" parent="Zone_guard_room/WallE_guard_room"]
+mesh = SubResource("BoxMesh_33")
+surface_material_override/0 = SubResource("StandardMaterial3D_23")
+
+[node name="Collision" type="CollisionShape3D" parent="Zone_guard_room/WallE_guard_room"]
+shape = SubResource("BoxShape3D_34")
+
+[node name="WallW_guard_room" type="StaticBody3D" parent="Zone_guard_room"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.3500, 0.0000, 0.0000)
+
+[node name="Mesh" type="MeshInstance3D" parent="Zone_guard_room/WallW_guard_room"]
+mesh = SubResource("BoxMesh_35")
+surface_material_override/0 = SubResource("StandardMaterial3D_23")
+
+[node name="Collision" type="CollisionShape3D" parent="Zone_guard_room/WallW_guard_room"]
+shape = SubResource("BoxShape3D_36")
+
+[node name="Light_guard_room" type="OmniLight3D" parent="Zone_guard_room"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0000, 1.0500, 0.0000)
+omni_range = 4.500
+light_energy = 1.2
+
+[node name="Creature_sleeping_guard" type="CharacterBody3D" parent="Zone_guard_room"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5000, 0.3000, -1.0000)
+
+[node name="Mesh" type="MeshInstance3D" parent="Zone_guard_room/Creature_sleeping_guard"]
+mesh = SubResource("BoxMesh_38")
+surface_material_override/0 = SubResource("StandardMaterial3D_37")
+
+[node name="Collision" type="CollisionShape3D" parent="Zone_guard_room/Creature_sleeping_guard"]
+shape = SubResource("BoxShape3D_39")
+
+[node name="Env_exit_door" type="StaticBody3D" parent="Zone_guard_room"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0000, 0.0000, -2.2000)
+
+[node name="Mesh" type="MeshInstance3D" parent="Zone_guard_room/Env_exit_door"]
+mesh = SubResource("BoxMesh_41")
+surface_material_override/0 = SubResource("StandardMaterial3D_40")
+
+[node name="Collision" type="CollisionShape3D" parent="Zone_guard_room/Env_exit_door"]
+shape = SubResource("BoxShape3D_42")
+
+[node name="SpawnPoint_0_player" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0000, 0.0000, 1.0000)

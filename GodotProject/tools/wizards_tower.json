@@ -1,0 +1,81 @@
+{
+  "id": "wizards-tower",
+  "name": "Wizard's Tower",
+  "description": "A wizard's tower chamber filled with arcane artifacts.",
+  "scene_type": "exploration",
+  "platforms": ["vr"],
+  "atmosphere": {
+    "lighting_mood": "warm candlelight with arcane blue glow",
+    "time_of_day": "dusk",
+    "weather": "none",
+    "vfx_density": "medium",
+    "audio_palette": "crackling fire, arcane hum, distant thunder"
+  },
+  "zones": [
+    {
+      "id": "tower-chamber",
+      "name": "Tower Chamber",
+      "type": "exploration",
+      "bounds": {
+        "center": { "x": 0, "y": 0, "z": 175 },
+        "extents": { "x": 200, "y": 200, "z": 175 }
+      },
+      "interactables": [
+        {
+          "id": "spell_book",
+          "type": "artefact",
+          "position": { "x": 100, "y": -80, "z": 80 },
+          "behaviour": "Ancient spell book glowing with arcane energy. Pages flutter on their own.",
+          "audio_profile": "soft arcane hum, pages rustling",
+          "persistent": true
+        },
+        {
+          "id": "trapped_chest",
+          "type": "machinery",
+          "position": { "x": -120, "y": 100, "z": 15 },
+          "behaviour": "Ornate chest crackling with dark energy. Opens violently when touched.",
+          "trigger_radius": 60,
+          "audio_profile": "ominous deep hum, crack on trigger",
+          "persistent": true
+        },
+        {
+          "id": "crystal_ball",
+          "type": "artefact",
+          "position": { "x": 0, "y": 0, "z": 100 },
+          "behaviour": "A crystal ball on a central pedestal showing visions of distant lands.",
+          "audio_profile": "ethereal chiming",
+          "persistent": false
+        }
+      ]
+    },
+    {
+      "id": "tower-entrance",
+      "name": "Tower Entrance",
+      "type": "transition",
+      "bounds": {
+        "center": { "x": 0, "y": 350, "z": 150 },
+        "extents": { "x": 150, "y": 150, "z": 150 }
+      },
+      "interactables": [
+        {
+          "id": "tower_door",
+          "type": "environmental",
+          "position": { "x": 0, "y": 480, "z": 100 },
+          "behaviour": "Heavy oak door with an arcane lock. The only way in or out.",
+          "trigger_radius": 80,
+          "audio_profile": "heavy door creak, magical lock click",
+          "persistent": true
+        }
+      ]
+    }
+  ],
+  "participant_spawns": [
+    {
+      "position": { "x": 0, "y": -100, "z": 0 },
+      "rotation": { "pitch": 0, "yaw": 0, "roll": 0 },
+      "role": "player"
+    }
+  ],
+  "participant_capacity": { "min": 1, "max": 2, "recommended": 1 },
+  "tags": ["wizard", "fantasy", "exploration", "g4-test"]
+}

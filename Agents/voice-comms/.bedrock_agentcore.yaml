@@ -7,7 +7,7 @@ agents:
     entrypoint: C:/Users/j_e_a/OneDrive/Projects/Hypermage/Hypermage_VR/Agents/voice-comms/src/main.py
     deployment_type: container
     runtime_type: PYTHON_3_10
-    platform: linux/amd64
+    platform: linux/arm64
     container_runtime: null
     source_path: C:/Users/j_e_a/OneDrive/Projects/Hypermage/Hypermage_VR/Agents/voice-comms/src
     aws:

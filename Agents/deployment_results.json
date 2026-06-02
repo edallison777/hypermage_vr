@@ -66,12 +66,6 @@
     "status": "READY"
   },
   {
-    "agent": "UnrealLevelBuilder_Agent",
-    "agent_id": "UnrealLevelBuilder_Agent-rFwJdR9uPr",
-    "agent_arn": "arn:aws:bedrock-agentcore:eu-west-1:732231126129:runtime/UnrealLevelBuilder_Agent-rFwJdR9uPr",
-    "status": "READY"
-  },
-  {
     "agent": "WebPlatform_Agent",
     "agent_id": "WebPlatform_Agent-y8AKhy2ISX",
     "status": "deployed"
@@ -79,6 +73,11 @@
   {
     "agent": "ConversationLevelDesigner_Agent",
     "agent_id": "ConversationLevelDesigner_Agent-1ZShl1E6H5",
+    "status": "deployed"
+  },
+  {
+    "agent": "UnrealLevelBuilder_Agent",
+    "agent_id": "UnrealLevelBuilder_Agent-rFwJdR9uPr",
     "status": "deployed"
   }
 ]

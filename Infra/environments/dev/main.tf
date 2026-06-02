@@ -164,8 +164,18 @@ module "session_api" {
   # Cognito integration
   cognito_user_pool_arn = module.cognito.user_pool_arn
 
-  # FlexMatch integration — hardcoded until gamelift_fleet/flexmatch modules are enabled
+  # FlexMatch config name (kept for variable compatibility, no longer used by Lambdas)
   matchmaking_configuration_name = "${var.project_name}-dev"
+
+  # G5: ECS matchmaking — Godot dedicated server on Fargate
+  ecs_cluster_arn                = module.godot_server.ecs_cluster_arn
+  ecs_task_def_arn               = module.godot_server.ecs_task_def_arn
+  ecs_task_role_arn              = module.godot_server.ecs_task_role_arn
+  ecs_task_exec_role_arn         = module.godot_server.ecs_task_exec_role_arn
+  ecs_security_group_ids         = module.godot_server.security_group_id
+  ecs_subnet_ids                 = module.godot_server.subnet_ids
+  matchmaking_tickets_table_name = module.godot_server.matchmaking_tickets_table_name
+  matchmaking_tickets_table_arn  = module.godot_server.matchmaking_tickets_table_arn
 
   # DynamoDB integration
   dynamodb_table_arns        = module.dynamodb.all_table_arns
@@ -327,6 +337,36 @@ module "larp_integration" {
 output "larp_gm_event_url" {
   description = "HTTP endpoint for GM events (Phase 11b)"
   value       = module.larp_integration.gm_event_url
+}
+
+# Godot Server Module (G5)
+# ECR + ECS Fargate cluster for on-demand Godot dedicated game servers.
+# Also provisions the matchmaking-tickets DynamoDB table.
+# Zero idle cost — tasks run only during active game sessions.
+module "godot_server" {
+  source = "../../modules/godot-server"
+
+  project_name       = var.project_name
+  environment        = "dev"
+  aws_region         = var.aws_region
+  log_retention_days = 14
+
+  tags = { CostCenter = "Development", Owner = "DevOps Team" }
+}
+
+output "ecr_godot_server_uri" {
+  description = "ECR repository URI for Godot server image — used by deploy_g5.py"
+  value       = module.godot_server.ecr_repository_uri
+}
+
+output "ecs_godot_cluster_arn" {
+  description = "ECS cluster ARN for Godot dedicated servers (G5)"
+  value       = module.godot_server.ecs_cluster_arn
+}
+
+output "matchmaking_tickets_table" {
+  description = "DynamoDB matchmaking tickets table (G5)"
+  value       = module.godot_server.matchmaking_tickets_table_name
 }
 
 # World State Module (Phase 20)

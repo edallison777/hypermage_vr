@@ -24,7 +24,7 @@ from strands.models import BedrockModel
 
 app = BedrockAgentCoreApp()
 
-MODEL_ID    = "eu.anthropic.claude-sonnet-4-20250514-v1:0"
+MODEL_ID    = "eu.anthropic.claude-sonnet-4-6"
 AWS_REGION  = os.environ.get("AWS_DEFAULT_REGION", "eu-west-1")
 
 WEB_SCENES_TABLE       = os.environ.get("WEB_SCENES_TABLE", "hypermage-vr-web-scenes-dev")

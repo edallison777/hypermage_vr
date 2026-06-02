@@ -1,103 +1,130 @@
 /**
- * Get Matchmaking Status Lambda Function
- * Retrieves the status of a FlexMatch matchmaking ticket
+ * Get Matchmaking Status Lambda — G5
+ * Polls the ECS task state and resolves the server's public IP once running.
  */
 
-const { GameLiftClient, DescribeMatchmakingCommand } = require('@aws-sdk/client-gamelift');
+const { ECSClient, DescribeTasksCommand } = require('@aws-sdk/client-ecs');
+const { EC2Client, DescribeNetworkInterfacesCommand } = require('@aws-sdk/client-ec2');
+const { DynamoDBClient, GetItemCommand } = require('@aws-sdk/client-dynamodb');
 
-const gamelift = new GameLiftClient({ region: process.env.AWS_REGION });
-const LOG_LEVEL = process.env.LOG_LEVEL || 'INFO';
+const ecs = new ECSClient({ region: process.env.AWS_REGION });
+const ec2 = new EC2Client({ region: process.env.AWS_REGION });
+const dynamodb = new DynamoDBClient({ region: process.env.AWS_REGION });
 
-function log(level, message, data = {}) {
-    if (LOG_LEVEL === 'DEBUG' || level !== 'DEBUG') {
-        console.log(JSON.stringify({ level, message, ...data, timestamp: new Date().toISOString() }));
-    }
-}
+const SERVER_PORT = 7777;
 
 exports.handler = async (event) => {
-    log('INFO', 'Get matchmaking status request received', { event });
+    const ticketId = event.pathParameters?.ticketId;
+    if (!ticketId) {
+        return {
+            statusCode: 400,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'INVALID_REQUEST', message: 'ticketId is required' })
+        };
+    }
 
     try {
-        // Extract ticket ID from path parameters
-        const ticketId = event.pathParameters?.ticketId;
+        const dbResponse = await dynamodb.send(new GetItemCommand({
+            TableName: process.env.MATCHMAKING_TICKETS_TABLE,
+            Key: { ticketId: { S: ticketId } }
+        }));
 
-        if (!ticketId) {
-            return {
-                statusCode: 400,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    error: 'INVALID_REQUEST',
-                    message: 'ticketId is required'
-                })
-            };
-        }
-
-        log('DEBUG', 'Fetching matchmaking status', { ticketId });
-
-        // Describe matchmaking ticket
-        const command = new DescribeMatchmakingCommand({
-            TicketIds: [ticketId]
-        });
-
-        const response = await gamelift.send(command);
-
-        if (!response.TicketList || response.TicketList.length === 0) {
+        if (!dbResponse.Item) {
             return {
                 statusCode: 404,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    error: 'TICKET_NOT_FOUND',
-                    message: `Matchmaking ticket ${ticketId} not found`
-                })
+                body: JSON.stringify({ error: 'TICKET_NOT_FOUND', message: `Ticket ${ticketId} not found` })
             };
         }
 
-        const ticket = response.TicketList[0];
+        const taskArn = dbResponse.Item.taskArn.S;
+        const playerId = dbResponse.Item.playerId?.S || 'unknown';
 
-        log('INFO', 'Matchmaking status retrieved', {
-            ticketId,
-            status: ticket.Status
-        });
+        const taskResponse = await ecs.send(new DescribeTasksCommand({
+            cluster: process.env.ECS_CLUSTER_ARN,
+            tasks: [taskArn]
+        }));
 
-        // Build response based on ticket status
-        const responseBody = {
-            ticketId: ticket.TicketId,
-            status: ticket.Status,
-            statusReason: ticket.StatusReason,
-            statusMessage: ticket.StatusMessage,
-            startTime: ticket.StartTime,
-            endTime: ticket.EndTime,
-            estimatedWaitTime: ticket.EstimatedWaitTime
-        };
+        if (!taskResponse.tasks || taskResponse.tasks.length === 0) {
+            return {
+                statusCode: 200,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ticketId, status: 'FAILED', statusReason: 'Task not found in cluster' })
+            };
+        }
 
-        // Include game session connection info if match is complete
-        if (ticket.Status === 'COMPLETED' && ticket.GameSessionConnectionInfo) {
-            responseBody.gameSessionConnectionInfo = {
-                gameSessionArn: ticket.GameSessionConnectionInfo.GameSessionArn,
-                ipAddress: ticket.GameSessionConnectionInfo.IpAddress,
-                port: ticket.GameSessionConnectionInfo.Port,
-                matchedPlayerSessions: ticket.GameSessionConnectionInfo.MatchedPlayerSessions
+        const task = taskResponse.tasks[0];
+        const lastStatus = task.lastStatus;
+
+        console.log(JSON.stringify({ level: 'INFO', ticketId, taskArn, lastStatus }));
+
+        if (['DEPROVISIONING', 'STOPPING', 'STOPPED', 'DELETED'].includes(lastStatus)) {
+            return {
+                statusCode: 200,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ticketId, status: 'FAILED', statusReason: `Task ended: ${lastStatus}` })
+            };
+        }
+
+        if (lastStatus !== 'RUNNING') {
+            return {
+                statusCode: 200,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ticketId, status: 'SEARCHING', ecsStatus: lastStatus })
+            };
+        }
+
+        // Task is RUNNING — resolve public IP from ENI
+        const eniAttachment = task.attachments?.find(a => a.type === 'ElasticNetworkInterface');
+        if (!eniAttachment) {
+            return {
+                statusCode: 200,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ticketId, status: 'SEARCHING', statusReason: 'ENI not yet attached' })
+            };
+        }
+
+        const eniIdDetail = eniAttachment.details?.find(d => d.name === 'networkInterfaceId');
+        if (!eniIdDetail) {
+            return {
+                statusCode: 200,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ticketId, status: 'SEARCHING', statusReason: 'ENI ID not yet available' })
+            };
+        }
+
+        const eniResponse = await ec2.send(new DescribeNetworkInterfacesCommand({
+            NetworkInterfaceIds: [eniIdDetail.value]
+        }));
+
+        const publicIp = eniResponse.NetworkInterfaces?.[0]?.Association?.PublicIp;
+        if (!publicIp) {
+            return {
+                statusCode: 200,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ticketId, status: 'SEARCHING', statusReason: 'Public IP not yet assigned' })
             };
         }
 
         return {
             statusCode: 200,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(responseBody)
+            body: JSON.stringify({
+                ticketId,
+                status: 'COMPLETED',
+                gameSessionConnectionInfo: {
+                    ipAddress: publicIp,
+                    port: SERVER_PORT,
+                    matchedPlayerSessions: [{ playerId, playerSessionId: taskArn }]
+                }
+            })
         };
     } catch (error) {
-        log('ERROR', 'Failed to get matchmaking status', {
-            error: error.message,
-            stack: error.stack
-        });
-
+        console.error(JSON.stringify({ level: 'ERROR', message: error.message, stack: error.stack }));
         return {
             statusCode: 500,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                error: 'STATUS_FETCH_FAILED',
-                message: error.message
-            })
+            body: JSON.stringify({ error: 'STATUS_FETCH_FAILED', message: error.message })
         };
     }
 };

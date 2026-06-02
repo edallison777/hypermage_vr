@@ -30,10 +30,12 @@ UE5_ROOT="${UE5_ROOT:-}"
 if [[ -z "$UE5_ROOT" ]]; then
   # Prefer newest installed version
   for candidate in \
+    "C:/Program Files/Epic Games/UE_5.7" \
     "C:/Program Files/Epic Games/UE_5.6" \
     "C:/Program Files/Epic Games/UE_5.5" \
     "C:/Program Files/Epic Games/UE_5.4" \
     "C:/Program Files/Epic Games/UE_5.3" \
+    "D:/Epic Games/UE_5.7" \
     "D:/Epic Games/UE_5.6" \
     "D:/Epic Games/UE_5.5" \
     "D:/Epic Games/UE_5.4" \
@@ -165,7 +167,9 @@ if [[ "$DO_BUILD" == true ]]; then
 
   JAVA_HOME_WIN="C:/Program Files/Android/Android Studio1/jbr"
   UBT_WIN=$(cygpath -m "$UE5_ROOT/Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.dll")
-  DOTNET_WIN=$(cygpath -m "$UE5_ROOT/Engine/Binaries/ThirdParty/DotNet/8.0.300/win-x64/dotnet.exe")
+  # Detect DotNet version — UE 5.6 ships 8.0.300, UE 5.7 ships 8.0.412, future versions may differ
+  DOTNET_DIR=$(ls -d "$UE5_ROOT/Engine/Binaries/ThirdParty/DotNet/"*/ 2>/dev/null | sort -V | tail -1)
+  DOTNET_WIN=$(cygpath -m "${DOTNET_DIR}win-x64/dotnet.exe")
 
   # @echo on so RunUAT errors are visible; set SDK env vars so UBT finds them even in a stale shell
   # Step 1: compile HyperMageVREditor for Win64 so the editor can load UnrealEditor-HyperMageVR.dll during the cook step

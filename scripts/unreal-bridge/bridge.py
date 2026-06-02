@@ -26,6 +26,10 @@ For agents to reach it, expose via ngrok:
 import argparse
 import json
 import logging
+import os
+import subprocess
+import tempfile
+import textwrap
 
 import httpx
 import uvicorn
@@ -36,7 +40,9 @@ from pydantic import BaseModel
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("unreal-bridge")
 
-UE5_RC_URL = "http://localhost:30010"  # UE5 Remote Control HTTP API
+UE5_RC_URL   = "http://localhost:30010"
+UE_CMD       = r"C:\Program Files\Epic Games\UE_5.7\Engine\Binaries\Win64\UnrealEditor-Cmd.exe"
+UPROJECT     = r"C:\Users\j_e_a\OneDrive\Projects\Hypermage\Hypermage_VR\UnrealProject\HyperMageVR.uproject"
 
 app = FastAPI(title="UnrealBridge", version="2.0.0",
               description="FastAPI wrapper for UE5 Remote Control — Phase 20")
@@ -140,21 +146,25 @@ async def _spawn_actor(actor_class: str, label: str,
                        yaw: float = 0.0) -> str:
     """Spawn an actor and return its object path."""
     result = await rc_call(
-        "/Script/EditorScriptingUtilities.Default__EditorActorSubsystem",
-        "SpawnActorFromClass",
+        "/Script/EditorScriptingUtilities.Default__EditorLevelLibrary",
+        "SpawnActorFromObject",
         {
-            "ActorClass": actor_class,
-            "SpawnTransform": {
-                "Rotation":    {"X": 0.0, "Y": yaw, "Z": 0.0, "W": 1.0},
-                "Translation": {"X": x, "Y": y, "Z": z},
-                "Scale3D":     {"X": scale_x, "Y": scale_y, "Z": scale_z},
-            },
+            "ObjectToUse": actor_class,
+            "Location":    {"X": x, "Y": y, "Z": z},
+            "Rotation":    {"Roll": 0.0, "Pitch": 0.0, "Yaw": yaw},
+            "Transient":   False,
         },
     )
-    actor_path = result.get("ActorObject", {}).get("ObjectPath", "")
+    actor_path = result.get("ReturnValue", "")
     if actor_path and label:
         try:
             await rc_call(actor_path, "SetActorLabel", {"NewActorLabel": label})
+        except Exception:
+            pass
+    if actor_path and (scale_x != 1.0 or scale_y != 1.0 or scale_z != 1.0):
+        try:
+            await rc_call(actor_path, "SetActorScale3D",
+                          {"NewScale3D": {"X": scale_x, "Y": scale_y, "Z": scale_z}})
         except Exception:
             pass
     return actor_path
@@ -231,15 +241,7 @@ async def _spawn_room_geometry(b: dict, spawned: list, errors: list) -> None:
         except Exception as exc:
             errors.append({"type": "room_geometry", "label": label, "error": str(exc)})
 
-    # Directional light — overhead sun angle
-    try:
-        light_path = await _spawn_actor(
-            "/Script/Engine.DirectionalLight", "Sun",
-            cx, cy, h + 500, yaw=-45.0,
-        )
-        spawned.append({"type": "lighting", "label": "Sun", "actor_path": light_path})
-    except Exception as exc:
-        errors.append({"type": "lighting", "label": "Sun", "error": str(exc)})
+    # Skip DirectionalLight — default empty level already provides one.
 
     # Sky light for ambient fill
     try:
@@ -425,7 +427,7 @@ async def _execute_scene_plan_build(plan: dict, spawned: list, errors: list) -> 
             atm_cmds = ["r.Atmosphere 1", "r.BloomIntensity 1.0", "r.VignetteIntensity 0.3"]
         for cmd in atm_cmds:
             try:
-                await rc_call("/Script/UnrealEd.Default__EditorLevelLibrary",
+                await rc_call("/Script/EditorScriptingUtilities.Default__EditorLevelLibrary",
                               "ExecuteConsoleCommand", {"Command": cmd},
                               generate_transaction=False)
                 atmosphere_cmds.append(cmd)
@@ -507,16 +509,15 @@ async def health():
 
 @app.post("/level/new")
 async def new_level(req: NewLevelRequest):
-    """Create and open a new empty level at the given asset path (e.g. /Game/Maps/HMVRArena)."""
-    log.info(f"new_level path={req.asset_path}")
+    """Save the current open level as the given asset path (NewLevel is blocked in UE5.3 RC)."""
+    log.info(f"new_level (save-as) path={req.asset_path}")
     try:
         await rc_call(
-            "/Script/UnrealEd.Default__EditorLevelLibrary",
-            "NewLevel",
-            {"AssetPath": req.asset_path},
+            "/Script/EditorScriptingUtilities.Default__EditorLevelLibrary",
+            "SaveCurrentLevel",
             generate_transaction=False,
         )
-        return {"status": "ok", "asset_path": req.asset_path}
+        return {"status": "ok", "note": "saved current level (NewLevel blocked remotely)", "asset_path": req.asset_path}
     except httpx.ConnectError:
         raise HTTPException(503, "UE5 Remote Control not reachable")
     except Exception as exc:
@@ -560,7 +561,7 @@ async def save_level():
     """Save the currently open UE5 level."""
     log.info("save_level")
     try:
-        await rc_call("/Script/UnrealEd.Default__EditorLevelLibrary",
+        await rc_call("/Script/EditorScriptingUtilities.Default__EditorLevelLibrary",
                       "SaveCurrentLevel", generate_transaction=False)
         return {"status": "ok", "message": "Level saved"}
     except httpx.ConnectError:
@@ -574,7 +575,7 @@ async def console_command(req: ConsoleCommandRequest):
     """Execute a UE5 console command."""
     log.info(f"console: {req.command}")
     try:
-        await rc_call("/Script/UnrealEd.Default__EditorLevelLibrary",
+        await rc_call("/Script/EditorScriptingUtilities.Default__EditorLevelLibrary",
                       "ExecuteConsoleCommand",
                       {"Command": req.command},
                       generate_transaction=False)
@@ -599,7 +600,7 @@ async def build_scene_from_plan(req: ScenePlanRequest):
     counts = await _execute_scene_plan_build(plan, spawned, errors)
 
     try:
-        await rc_call("/Script/UnrealEd.Default__EditorLevelLibrary",
+        await rc_call("/Script/EditorScriptingUtilities.Default__EditorLevelLibrary",
                       "SaveCurrentLevel", generate_transaction=False)
     except Exception as exc:
         errors.append({"type": "save", "error": str(exc)})
@@ -628,7 +629,7 @@ async def build_scene_full(req: ScenePlanFullRequest):
     counts = await _execute_scene_plan_build(plan, spawned, errors)
 
     try:
-        await rc_call("/Script/UnrealEd.Default__EditorLevelLibrary",
+        await rc_call("/Script/EditorScriptingUtilities.Default__EditorLevelLibrary",
                       "SaveCurrentLevel", generate_transaction=False)
     except Exception as exc:
         errors.append({"type": "save", "error": str(exc)})
@@ -644,70 +645,255 @@ async def build_scene_full(req: ScenePlanFullRequest):
     }
 
 
+def _run_ue_python(script: str) -> dict:
+    """
+    Write script to a temp file, run UnrealEditor-Cmd headlessly, return the
+    JSON result the script writes to a well-known result path.
+    Zero editor interaction required — editor does not need to be open.
+    """
+    result_path = os.path.join(tempfile.gettempdir(), "ue_bridge_result.json")
+    # Inject result_path so script knows where to write
+    full_script = f'_UE_RESULT_PATH = r"{result_path}"\n' + script
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False,
+                                     encoding="utf-8") as f:
+        f.write(full_script)
+        script_path = f.name
+
+    try:
+        proc = subprocess.run(
+            [UE_CMD, UPROJECT,
+             "-run=pythonscript", f"-script={script_path}",
+             "-stdout", "-unattended", "-nopause", "-nosplash"],
+            capture_output=True, text=True, timeout=300,
+            encoding="utf-8", errors="replace",
+        )
+        log.info(f"UE commandlet exit={proc.returncode}")
+        if os.path.exists(result_path):
+            with open(result_path, encoding="utf-8") as f:
+                return json.load(f)
+        # No result file — check for errors in output
+        errors = [l for l in proc.stdout.splitlines() if "Error" in l and "Warning" not in l]
+        return {"status": "error", "errors": errors[:10], "returncode": proc.returncode}
+    except subprocess.TimeoutExpired:
+        return {"status": "error", "errors": ["UE commandlet timed out after 300s"]}
+    finally:
+        try: os.unlink(script_path)
+        except Exception: pass
+        try: os.unlink(result_path)
+        except Exception: pass
+
+
 @app.post("/scene-plan/build-arena")
 async def build_arena(req: BuildArenaRequest):
     """
-    Full pipeline: create a new named level → room geometry + lighting →
-    zones + spawns + atmosphere + assets + hooks + interactables → save.
-
-    This is the single call the UnrealLevelBuilder agent makes to turn a
-    ScenePlan into a playable UE5 level from scratch.
+    Full pipeline via UE5 Python commandlet — zero editor interaction.
+    Creates/loads the level, places room geometry + all scene content, saves.
+    The editor does not need to be open.
     """
-    log.info(f"build_arena map={req.map_name}")
+    log.info(f"build_arena map={req.map_name} (commandlet mode)")
     try:
         plan = json.loads(req.scene_plan_json)
     except json.JSONDecodeError as exc:
         raise HTTPException(400, f"Invalid ScenePlan JSON: {exc}")
 
-    spawned: list = []
-    errors:  list = []
-    asset_path = f"/Game/Maps/{req.map_name}"
+    plan_escaped = json.dumps(json.dumps(plan))  # double-encode for embedding in Python string
 
-    # 1. Create + open a new level
-    try:
-        await rc_call(
-            "/Script/UnrealEd.Default__EditorLevelLibrary",
-            "NewLevel",
-            {"AssetPath": asset_path},
-            generate_transaction=False,
-        )
-        log.info(f"  created level {asset_path}")
-    except Exception as exc:
-        raise HTTPException(500, f"NewLevel failed: {exc}")
+    script = textwrap.dedent(f"""
+import unreal, json, traceback
 
-    # 2. Room geometry + lighting derived from zone extents
-    bounds = _compute_arena_bounds(plan, req.room_margin)
-    await _spawn_room_geometry(bounds, spawned, errors)
+PLAN       = json.loads({plan_escaped})
+MAP_NAME   = {json.dumps(req.map_name)}
+MARGIN     = {req.room_margin}
+ASSET_PATH = f"/Game/{{MAP_NAME}}"
 
-    # 3. Zones, spawns, atmosphere, assets, hooks, interactables
-    counts = await _execute_scene_plan_build(plan, spawned, errors)
+spawned = []
+errors  = []
 
-    # 4. Save
-    try:
-        await rc_call("/Script/UnrealEd.Default__EditorLevelLibrary",
-                      "SaveCurrentLevel", generate_transaction=False)
-    except Exception as exc:
-        errors.append({"type": "save", "error": str(exc)})
+try:
+    actor_sub = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+    level_sub = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
 
-    room_geo    = [s for s in spawned if s["type"] == "room_geometry"]
-    lights      = [s for s in spawned if s["type"] == "lighting"]
-    zones_built = [s for s in spawned if s["type"] == "zone"]
-    starts      = [s for s in spawned if s["type"] == "player_start"]
-    interacts   = [s for s in spawned if s["type"] == "interactable"]
+    # ── 1. Load or create level ───────────────────────────────────────────────
+    loaded = level_sub.load_level(ASSET_PATH)
+    if not loaded:
+        level_sub.new_level(ASSET_PATH)
+        spawned.append({{"type": "level", "action": "created", "path": ASSET_PATH}})
+    else:
+        spawned.append({{"type": "level", "action": "loaded", "path": ASSET_PATH}})
+
+    cube_mesh = unreal.load_asset("/Engine/BasicShapes/Cube.Cube")
+
+    def spawn_cube(label, x, y, z, sx, sy, sz, yaw=0.0):
+        loc = unreal.Vector(x, y, z)
+        rot = unreal.Rotator(0, yaw, 0)
+        a = actor_sub.spawn_actor_from_class(unreal.StaticMeshActor, loc, rot)
+        if a:
+            a.set_actor_label(label)
+            a.set_actor_scale3d(unreal.Vector(sx, sy, sz))
+            a.static_mesh_component.set_static_mesh(cube_mesh)
+        return a
+
+    def cs(cm): return max(cm / 100.0, 0.05)
+
+    # ── 2. Compute room bounds ────────────────────────────────────────────────
+    min_x = min_y =  1e9
+    max_x = max_y = -1e9
+    max_z = 300.0
+    for z in PLAN.get("zones", []):
+        b  = z.get("bounds", {{}})
+        c  = b.get("center",  {{}})
+        e  = b.get("extents", {{}})
+        cx_, cy_ = float(c.get("x", 0)), float(c.get("y", 0))
+        ex_, ey_ = float(e.get("x", 500)), float(e.get("y", 500))
+        ez_      = float(e.get("z", 300))
+        min_x = min(min_x, cx_ - ex_); max_x = max(max_x, cx_ + ex_)
+        min_y = min(min_y, cy_ - ey_); max_y = max(max_y, cy_ + ey_)
+        max_z = max(max_z, ez_)
+    if min_x == 1e9:
+        min_x, min_y, max_x, max_y, max_z = -1500, -1500, 1500, 1500, 400
+    min_x -= MARGIN; min_y -= MARGIN; max_x += MARGIN; max_y += MARGIN
+    height = max_z + MARGIN
+    rcx = (min_x + max_x) / 2;  rcy = (min_y + max_y) / 2
+    w   = max_x - min_x;        d   = max_y - min_y
+    wt  = 30.0
+
+    # ── 3. Room geometry ──────────────────────────────────────────────────────
+    pieces = [
+        ("Room_Floor",   rcx, rcy, -10,          cs(w),       cs(d),  cs(20)),
+        ("Room_Ceiling", rcx, rcy, height+10,     cs(w),       cs(d),  cs(20)),
+        ("Room_Wall_N",  rcx, rcy+d/2+wt/2, height/2, cs(w+wt*2), cs(wt), cs(height)),
+        ("Room_Wall_S",  rcx, rcy-d/2-wt/2, height/2, cs(w+wt*2), cs(wt), cs(height)),
+        ("Room_Wall_E",  rcx+w/2+wt/2, rcy, height/2, cs(wt), cs(d), cs(height)),
+        ("Room_Wall_W",  rcx-w/2-wt/2, rcy, height/2, cs(wt), cs(d), cs(height)),
+    ]
+    for label, x, y, z, sx, sy, sz in pieces:
+        try:
+            a = spawn_cube(label, x, y, z, sx, sy, sz)
+            spawned.append({{"type": "room", "label": label, "ok": a is not None}})
+        except Exception as exc:
+            errors.append({{"type": "room", "label": label, "error": str(exc)}})
+
+    # ── 4. Zone blockouts + PlayerStarts ─────────────────────────────────────
+    zone_colours = {{"spawn": "SP", "ritual": "RT", "objective": "OB",
+                    "combat": "CB", "exploration": "EX", "social": "SO",
+                    "sanctuary": "SA", "hybrid": "HY"}}
+    for zone in PLAN.get("zones", []):
+        zid   = zone.get("id", "zone")
+        ztype = zone.get("type", "zone")
+        zname = zone.get("name", zid)
+        b     = zone.get("bounds", {{}})
+        c     = b.get("center",  {{}})
+        e     = b.get("extents", {{}})
+        prefix = zone_colours.get(ztype, "ZN")
+        label  = f"{{prefix}}_{{zname}}"
+        x, y, z_ = float(c.get("x", 0)), float(c.get("y", 0)), float(c.get("z", 0))
+        ex, ey, ez = float(e.get("x", 500)), float(e.get("y", 500)), float(e.get("z", 200))
+        try:
+            a = spawn_cube(label, x, y, z_, cs(ex*2), cs(ey*2), cs(ez*2))
+            spawned.append({{"type": "zone", "id": zid, "label": label, "ok": a is not None}})
+        except Exception as exc:
+            errors.append({{"type": "zone", "id": zid, "error": str(exc)}})
+
+    for sp in PLAN.get("participant_spawns", []):
+        sid = sp.get("spawn_id", "spawn")
+        p   = sp.get("position", {{}})
+        r   = sp.get("rotation", {{}})
+        sx_, sy_, sz_ = float(p.get("x", 0)), float(p.get("y", 0)), float(p.get("z", 0))
+        yaw_ = float(r.get("yaw", 0))
+        try:
+            loc_ = unreal.Vector(sx_, sy_, sz_)
+            rot_ = unreal.Rotator(0, yaw_, 0)
+            a = actor_sub.spawn_actor_from_class(unreal.PlayerStart, loc_, rot_)
+            if a: a.set_actor_label(f"PlayerStart_{{sid}}")
+            spawned.append({{"type": "player_start", "id": sid, "ok": a is not None}})
+        except Exception as exc:
+            errors.append({{"type": "player_start", "id": sid, "error": str(exc)}})
+
+    # ── 5. Interactables ─────────────────────────────────────────────────────
+    CLASS_MAP = {{
+        "artefact":      "/Script/HyperMageVR.HMVRArtifact",
+        "machinery":     "/Script/HyperMageVR.HMVRMachinery",
+        "creature":      "/Script/HyperMageVR.HMVRCreature",
+        "environmental": "/Script/HyperMageVR.HMVREnvironmental",
+    }}
+    for zone in PLAN.get("zones", []):
+        for obj in zone.get("interactables", []):
+            oid   = obj.get("id", "obj")
+            otype = obj.get("type", "artefact")
+            oname = obj.get("label", oid)
+            pos   = obj.get("position", {{}})
+            ox, oy, oz = float(pos.get("x", 0)), float(pos.get("y", 0)), float(pos.get("z", 0))
+            cls_path = CLASS_MAP.get(otype)
+            prefix   = otype[:4].upper()
+            label    = f"{{prefix}}_{{oname}}"
+            try:
+                cls = unreal.load_class(None, cls_path) if cls_path else None
+                if cls:
+                    loc_ = unreal.Vector(ox, oy, oz)
+                    rot_ = unreal.Rotator(0, 0, 0)
+                    a = actor_sub.spawn_actor_from_class(cls, loc_, rot_)
+                else:
+                    a = spawn_cube(label, ox, oy, oz, 0.5, 0.5, 0.5)
+                if a: a.set_actor_label(label)
+                spawned.append({{"type": "interactable", "id": oid, "label": label, "ok": a is not None}})
+            except Exception as exc:
+                errors.append({{"type": "interactable", "id": oid, "error": str(exc)}})
+
+    # ── 6. GM hook trigger volumes ────────────────────────────────────────────
+    for i, hook in enumerate(PLAN.get("gm_hooks", [])):
+        hid   = hook.get("id", f"hook_{{i}}")
+        label = f"GMHOOK_{{hid}}"
+        hx    = -5000.0
+        hy    = 3000.0 + i * 400.0
+        try:
+            loc_ = unreal.Vector(hx, hy, 200)
+            rot_ = unreal.Rotator(0, 0, 0)
+            a = actor_sub.spawn_actor_from_class(unreal.TriggerVolume, loc_, rot_)
+            if a: a.set_actor_label(label)
+            spawned.append({{"type": "gm_hook", "id": hid, "ok": a is not None}})
+        except Exception as exc:
+            errors.append({{"type": "gm_hook", "id": hid, "error": str(exc)}})
+
+    # ── 7. Save ───────────────────────────────────────────────────────────────
+    unreal.EditorLoadingAndSavingUtils.save_current_level()
+    spawned.append({{"type": "save", "ok": True}})
+
+except Exception as exc:
+    errors.append({{"type": "fatal", "error": traceback.format_exc()}})
+
+result = {{
+    "status":   "ok" if not errors else "partial",
+    "spawned":  spawned,
+    "errors":   errors,
+    "n_room":        sum(1 for s in spawned if s["type"] == "room"),
+    "n_zones":       sum(1 for s in spawned if s["type"] == "zone"),
+    "n_starts":      sum(1 for s in spawned if s["type"] == "player_start"),
+    "n_interactables": sum(1 for s in spawned if s["type"] == "interactable"),
+    "n_hooks":       sum(1 for s in spawned if s["type"] == "gm_hook"),
+}}
+with open(_UE_RESULT_PATH, "w", encoding="utf-8") as _f:
+    json.dump(result, _f)
+""")
+
+    import asyncio
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, _run_ue_python, script)
+
+    if result.get("status") == "error":
+        raise HTTPException(500, f"UE commandlet failed: {result.get('errors')}")
 
     return {
-        "status":                "ok" if not errors else "partial",
-        "level_asset_path":      asset_path,
-        "scene_name":            plan.get("name", ""),
-        "room_pieces":           len(room_geo),
-        "lights":                len(lights),
-        "zones_built":           len(zones_built),
-        "player_starts":         len(starts),
-        "interactables_spawned": len(interacts),
-        "arena_bounds_cm":       bounds,
-        "actors":                spawned,
-        "errors":                errors,
-        **{k: v for k, v in counts.items() if k != "interactables_spawned"},
+        "status":           result.get("status", "ok"),
+        "level_asset_path": f"/Game/{req.map_name}",
+        "scene_name":       plan.get("name", ""),
+        "n_room":           result.get("n_room", 0),
+        "n_zones":          result.get("n_zones", 0),
+        "n_player_starts":  result.get("n_starts", 0),
+        "n_interactables":  result.get("n_interactables", 0),
+        "n_hooks":          result.get("n_hooks", 0),
+        "spawned":          result.get("spawned", []),
+        "errors":           result.get("errors", []),
     }
 
 

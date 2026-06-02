@@ -21,7 +21,7 @@ from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
 app = BedrockAgentCoreApp()
 
-MODEL_ID              = "eu.anthropic.claude-sonnet-4-20250514-v1:0"
+MODEL_ID              = "eu.anthropic.claude-sonnet-4-6"
 S3_BUCKET             = os.environ.get("BUILD_S3_BUCKET", "hypermage-vr-unreal-build-artifacts-dev")
 S3_PREFIX             = "scene-plans"
 ASSET_CATALOGUE_TABLE = os.environ.get("ASSET_CATALOGUE_TABLE", "hypermage-vr-asset-catalogue-dev")

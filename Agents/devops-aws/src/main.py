@@ -11,7 +11,7 @@ from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
 app = BedrockAgentCoreApp()
 
-MODEL_ID = "eu.anthropic.claude-sonnet-4-20250514-v1:0"
+MODEL_ID = "eu.anthropic.claude-sonnet-4-6"
 REGION = os.environ.get("AWS_REGION", "eu-west-1")
 FLEET_ID = "fleet-848aced2-ac8f-405a-b120-43f4f3904983"
 TF_STATE_BUCKET = "hypermage-vr-terraform-state"

@@ -22,10 +22,17 @@
   <androidManifestUpdates>
 
     <!-- ── 1. Swap LAUNCHER from SplashActivity to GameActivity ─────────── -->
+    <!--    SplashActivity caused an OBB-wait hang: the Quest shell (SEO)      -->
+    <!--    cached bHasOBBFiles=true and kept passing it via Intent extras.    -->
+    <!--    GameActivity already has MAIN+LAUNCHER+com.oculus.intent.VR from  -->
+    <!--    the UE5.7 toolchain; we add a plain LAUNCHER too (matching the     -->
+    <!--    confirmed-working 0671705 build). Removing the plain LAUNCHER       -->
+    <!--    prevents the app from registering with VrApi (GameThread runs but  -->
+    <!--    PTApiClients never shows com.hypermage.vr).                        -->
     <loopElements tag="activity">
       <setStringFromAttribute result="actName" tag="$" name="android:name"/>
 
-      <!-- SplashActivity: remove its intent-filter (drops MAIN/LAUNCHER from it) -->
+      <!-- SplashActivity: remove all intent-filters (drops MAIN/LAUNCHER) -->
       <setBoolIsEqual result="isSplash" arg1="$S(actName)" arg2="com.epicgames.unreal.SplashActivity"/>
       <if condition="isSplash">
         <true>
@@ -35,7 +42,9 @@
         </true>
       </if>
 
-      <!-- GameActivity: add MAIN/LAUNCHER so the Quest library starts it directly -->
+      <!-- GameActivity: add plain MAIN/LAUNCHER (no VR category). -->
+      <!-- This is required for VrApi registration — without it the  -->
+      <!-- GameThread starts but PTApiClients never lists the app.   -->
       <setBoolIsEqual result="isGame" arg1="$S(actName)" arg2="com.epicgames.unreal.GameActivity"/>
       <if condition="isGame">
         <true>

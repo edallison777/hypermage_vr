@@ -27,7 +27,7 @@ async def invoke(payload, context):
     try:
         # Use Claude 3.7 Sonnet
         model = BedrockModel(
-            model_id="eu.anthropic.claude-sonnet-4-20250514-v1:0"
+            model_id="eu.anthropic.claude-sonnet-4-6"
         )
         
         # Create agent inside handler

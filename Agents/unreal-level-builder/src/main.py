@@ -33,7 +33,7 @@ from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
 app = BedrockAgentCoreApp()
 
-MODEL_ID          = "eu.anthropic.claude-sonnet-4-20250514-v1:0"
+MODEL_ID          = "eu.anthropic.claude-sonnet-4-6"
 AWS_REGION        = os.environ.get("AWS_DEFAULT_REGION", "eu-west-1")
 BRIDGE_URL_SSM    = os.environ.get("BRIDGE_URL_SSM", "/hypermage/unreal-bridge-url")
 

@@ -271,24 +271,44 @@ resource "aws_iam_role_policy" "lambda_logs" {
   })
 }
 
-# IAM policy for GameLift access
-resource "aws_iam_role_policy" "lambda_gamelift" {
-  name = "gamelift-access"
+# IAM policy for ECS matchmaking (G5 — replaces GameLift)
+resource "aws_iam_role_policy" "lambda_ecs" {
+  name = "ecs-matchmaking"
   role = aws_iam_role.lambda.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
-        Action = [
-          "gamelift:StartMatchmaking",
-          "gamelift:DescribeMatchmaking",
-          "gamelift:StopMatchmaking"
-        ]
+        Effect   = "Allow"
+        Action   = ["ecs:RunTask", "ecs:DescribeTasks", "ecs:StopTask"]
         Resource = "*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = "ec2:DescribeNetworkInterfaces"
+        Resource = "*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = "iam:PassRole"
+        Resource = length(compact([var.ecs_task_role_arn, var.ecs_task_exec_role_arn])) > 0 ? compact([var.ecs_task_role_arn, var.ecs_task_exec_role_arn]) : ["*"]
       }
     ]
+  })
+}
+
+resource "aws_iam_role_policy" "lambda_tickets_dynamodb" {
+  name = "matchmaking-tickets-dynamodb"
+  role = aws_iam_role.lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:UpdateItem"]
+      Resource = var.matchmaking_tickets_table_arn != "" ? var.matchmaking_tickets_table_arn : "arn:aws:dynamodb:*:*:table/placeholder"
+    }]
   })
 }
 
@@ -346,9 +366,13 @@ resource "aws_lambda_function" "start_matchmaking" {
 
   environment {
     variables = {
-      MATCHMAKING_CONFIG_NAME = var.matchmaking_configuration_name
-      ENVIRONMENT             = var.environment
-      LOG_LEVEL               = var.lambda_log_level
+      ECS_CLUSTER_ARN           = var.ecs_cluster_arn
+      ECS_TASK_DEF_ARN          = var.ecs_task_def_arn
+      ECS_SUBNETS               = join(",", var.ecs_subnet_ids)
+      ECS_SECURITY_GROUPS       = var.ecs_security_group_ids
+      MATCHMAKING_TICKETS_TABLE = var.matchmaking_tickets_table_name
+      ENVIRONMENT               = var.environment
+      LOG_LEVEL                 = var.lambda_log_level
     }
   }
 
@@ -360,7 +384,8 @@ resource "aws_lambda_function" "start_matchmaking" {
   depends_on = [
     aws_cloudwatch_log_group.lambda_start_matchmaking,
     aws_iam_role_policy.lambda_logs,
-    aws_iam_role_policy.lambda_gamelift
+    aws_iam_role_policy.lambda_ecs,
+    aws_iam_role_policy.lambda_tickets_dynamodb,
   ]
 }
 
@@ -377,8 +402,10 @@ resource "aws_lambda_function" "get_matchmaking_status" {
 
   environment {
     variables = {
-      ENVIRONMENT = var.environment
-      LOG_LEVEL   = var.lambda_log_level
+      ECS_CLUSTER_ARN           = var.ecs_cluster_arn
+      MATCHMAKING_TICKETS_TABLE = var.matchmaking_tickets_table_name
+      ENVIRONMENT               = var.environment
+      LOG_LEVEL                 = var.lambda_log_level
     }
   }
 
@@ -390,7 +417,8 @@ resource "aws_lambda_function" "get_matchmaking_status" {
   depends_on = [
     aws_cloudwatch_log_group.lambda_get_status,
     aws_iam_role_policy.lambda_logs,
-    aws_iam_role_policy.lambda_gamelift
+    aws_iam_role_policy.lambda_ecs,
+    aws_iam_role_policy.lambda_tickets_dynamodb,
   ]
 }
 
@@ -517,8 +545,10 @@ resource "aws_lambda_function" "cancel_matchmaking" {
 
   environment {
     variables = {
-      ENVIRONMENT = var.environment
-      LOG_LEVEL   = var.lambda_log_level
+      ECS_CLUSTER_ARN           = var.ecs_cluster_arn
+      MATCHMAKING_TICKETS_TABLE = var.matchmaking_tickets_table_name
+      ENVIRONMENT               = var.environment
+      LOG_LEVEL                 = var.lambda_log_level
     }
   }
 
@@ -530,7 +560,8 @@ resource "aws_lambda_function" "cancel_matchmaking" {
   depends_on = [
     aws_cloudwatch_log_group.lambda_cancel_matchmaking,
     aws_iam_role_policy.lambda_logs,
-    aws_iam_role_policy.lambda_gamelift
+    aws_iam_role_policy.lambda_ecs,
+    aws_iam_role_policy.lambda_tickets_dynamodb,
   ]
 }
 

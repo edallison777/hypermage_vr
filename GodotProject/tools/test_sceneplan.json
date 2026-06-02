@@ -1,0 +1,187 @@
+{
+  "id": "g1-dungeon-cell-test",
+  "name": "Dungeon Cell Escape",
+  "description": "A prisoner wakes in a stone dungeon cell. A rusted iron key lies near the far wall. The locked door to the guard room is the only way out. The guard is asleep at his post.",
+  "scene_type": "exploration",
+  "platforms": ["vr"],
+  "narrative_context": {
+    "setting": "Medieval dungeon, night",
+    "tone": "tense, oppressive, dim",
+    "initial_state": "locked_in"
+  },
+  "atmosphere": {
+    "lighting_mood": "dim torchlight, deep shadows, warm amber",
+    "time_of_day": "night",
+    "weather": "none",
+    "vfx_density": "low",
+    "audio_palette": "dripping water, distant chains, low wind hum"
+  },
+  "zones": [
+    {
+      "id": "cell",
+      "name": "Prison Cell",
+      "type": "exploration",
+      "bounds": {
+        "center": { "x": 0,   "y": 0,   "z": 150 },
+        "extents": { "x": 200, "y": 250, "z": 150 }
+      },
+      "interactables": [
+        {
+          "id": "iron_key",
+          "type": "artefact",
+          "position": { "x": 120, "y": 180, "z": 15 },
+          "behaviour": "A rusted iron key, cold to the touch. Glows faintly when the player is near.",
+          "artefact_id": "iron_key",
+          "audio_profile": "faint metallic hum when approached",
+          "persistent": false
+        },
+        {
+          "id": "cell_door",
+          "type": "machinery",
+          "position": { "x": 0, "y": 230, "z": 100 },
+          "behaviour": "Heavy oak door with an iron lock. Opens when the player carries the iron key and stands within 80cm.",
+          "trigger_radius": 80,
+          "required_key_id": "iron_key",
+          "model_asset_id": "door_oak_locked",
+          "audio_profile": "locked hum, grinding creak on unlock, heavy thud when swings open",
+          "persistent": true
+        }
+      ]
+    },
+    {
+      "id": "guard_room",
+      "name": "Guard Room",
+      "type": "narrative",
+      "bounds": {
+        "center": { "x": 0,   "y": 600, "z": 150 },
+        "extents": { "x": 150, "y": 250, "z": 150 }
+      },
+      "interactables": [
+        {
+          "id": "sleeping_guard",
+          "type": "creature",
+          "position": { "x": -50, "y": 700, "z": 90 },
+          "behaviour": "Guard slumped at a table, snoring. Wakes and raises alarm if the player makes loud noise nearby.",
+          "health": 1,
+          "patrol_radius": 0,
+          "model_asset_id": "guard_human_male",
+          "audio_profile": "deep snoring, startled shout if alerted",
+          "persistent": true,
+          "loot": []
+        },
+        {
+          "id": "exit_door",
+          "type": "environmental",
+          "position": { "x": 0, "y": 820, "z": 100 },
+          "behaviour": "The dungeon exit. Triggers scene completion when the player passes through.",
+          "trigger_radius": 120,
+          "model_asset_id": "door_stone_archway",
+          "audio_profile": "ambient wind from outside, success chime on exit"
+        }
+      ]
+    }
+  ],
+  "participant_spawns": [
+    {
+      "position": { "x": 0, "y": -100, "z": 0 },
+      "rotation": { "pitch": 0, "yaw": 0, "roll": 0 },
+      "role": "player"
+    }
+  ],
+  "participant_capacity": {
+    "min": 1,
+    "max": 2,
+    "recommended": 1
+  },
+  "objectives": [
+    {
+      "id": "find_key",
+      "type": "collect",
+      "description": "Find the iron key hidden in the cell",
+      "zone_id": "cell",
+      "is_optional": false
+    },
+    {
+      "id": "unlock_door",
+      "type": "trigger",
+      "description": "Use the key to unlock the cell door",
+      "zone_id": "cell",
+      "is_optional": false
+    },
+    {
+      "id": "escape",
+      "type": "reach",
+      "description": "Reach the dungeon exit without waking the guard",
+      "zone_id": "guard_room",
+      "is_optional": false
+    }
+  ],
+  "narrative_states": [
+    {
+      "id": "locked_in",
+      "name": "Locked In",
+      "description": "Player is trapped in the cell. The door is locked.",
+      "is_initial": true,
+      "transitions": [
+        {
+          "trigger_hook_id": "door_unlocked",
+          "next_state_id": "door_open"
+        }
+      ]
+    },
+    {
+      "id": "door_open",
+      "name": "Door Open",
+      "description": "Cell door is open. Guard room is accessible.",
+      "is_initial": false,
+      "transitions": [
+        {
+          "trigger_hook_id": "guard_alerted",
+          "next_state_id": "alarm_raised"
+        },
+        {
+          "trigger_hook_id": "player_escaped",
+          "next_state_id": "escaped"
+        }
+      ]
+    },
+    {
+      "id": "alarm_raised",
+      "name": "Alarm Raised",
+      "description": "Guard is awake and pursuing the player.",
+      "is_initial": false,
+      "transitions": []
+    },
+    {
+      "id": "escaped",
+      "name": "Escaped",
+      "description": "Player has reached the exit. Scene complete.",
+      "is_initial": false,
+      "transitions": []
+    }
+  ],
+  "gm_hooks": [
+    {
+      "id": "door_unlocked",
+      "name": "Unlock Cell Door",
+      "description": "Force the cell door open (bypass key requirement)",
+      "effects": ["state: cell_door → open"],
+      "is_reversible": false
+    },
+    {
+      "id": "guard_alerted",
+      "name": "Wake the Guard",
+      "description": "Trigger the guard to wake and raise alarm",
+      "effects": ["creature: sleeping_guard → alert"],
+      "is_reversible": false
+    },
+    {
+      "id": "player_escaped",
+      "name": "Trigger Escape",
+      "description": "Manually trigger the escape completion",
+      "effects": ["state: scene → escaped"],
+      "is_reversible": false
+    }
+  ],
+  "tags": ["escape-room", "medieval", "stealth", "single-player", "g1-test"]
+}

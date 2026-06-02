@@ -21,13 +21,20 @@ if ! python -c "import fastapi" 2>/dev/null; then
 fi
 
 if [[ "${1:-}" == "--ngrok" ]]; then
-  if ! command -v ngrok &>/dev/null; then
+  # Prefer ngrok on PATH, fall back to local copy in bridge dir
+  if command -v ngrok &>/dev/null; then
+    NGROK_BIN="ngrok"
+  elif [[ -f "$SCRIPT_DIR/ngrok.exe" ]]; then
+    NGROK_BIN="$SCRIPT_DIR/ngrok.exe"
+  elif [[ -f "$SCRIPT_DIR/ngrok" ]]; then
+    NGROK_BIN="$SCRIPT_DIR/ngrok"
+  else
     echo "[bridge] ERROR: ngrok not found. Install from https://ngrok.com/download"
     exit 1
   fi
 
   echo "[bridge] Starting ngrok tunnel on port $PORT..."
-  ngrok http "$PORT" --log=stdout &
+  "$NGROK_BIN" http "$PORT" --log=stdout &
   NGROK_PID=$!
   sleep 3
 

@@ -11,7 +11,7 @@ import boto3
 
 app = BedrockAgentCoreApp()
 
-MODEL_ID = "eu.anthropic.claude-sonnet-4-20250514-v1:0"
+MODEL_ID = "eu.anthropic.claude-sonnet-4-6"
 REGION = "eu-west-1"
 FLEET_ID = "fleet-848aced2-ac8f-405a-b120-43f4f3904983"
 SESSION_API_BASE = "https://fhjoxyk9x5.execute-api.eu-west-1.amazonaws.com/dev"

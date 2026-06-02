@@ -61,3 +61,53 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+# ── G5: ECS Godot server matchmaking ─────────────────────────────────────────
+
+variable "ecs_cluster_arn" {
+  description = "ARN of the ECS cluster that runs Godot dedicated server tasks"
+  type        = string
+  default     = ""
+}
+
+variable "ecs_task_def_arn" {
+  description = "ARN of the Godot server ECS task definition"
+  type        = string
+  default     = ""
+}
+
+variable "ecs_task_role_arn" {
+  description = "ARN of the ECS task role (for iam:PassRole)"
+  type        = string
+  default     = ""
+}
+
+variable "ecs_task_exec_role_arn" {
+  description = "ARN of the ECS task execution role (for iam:PassRole)"
+  type        = string
+  default     = ""
+}
+
+variable "ecs_security_group_ids" {
+  description = "Comma-separated security group IDs for ECS Fargate tasks"
+  type        = string
+  default     = ""
+}
+
+variable "ecs_subnet_ids" {
+  description = "List of subnet IDs for ECS Fargate tasks"
+  type        = list(string)
+  default     = []
+}
+
+variable "matchmaking_tickets_table_name" {
+  description = "DynamoDB table name for matchmaking tickets (ticketId → taskArn)"
+  type        = string
+  default     = ""
+}
+
+variable "matchmaking_tickets_table_arn" {
+  description = "DynamoDB table ARN for matchmaking tickets"
+  type        = string
+  default     = ""
+}

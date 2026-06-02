@@ -1,96 +1,76 @@
 /**
- * Start Matchmaking Lambda Function
- * Initiates a FlexMatch matchmaking request for a player
+ * Start Matchmaking Lambda — G5
+ * Launches an ECS Fargate game server task and returns a ticket ID.
+ * Replaces GameLift/FlexMatch with on-demand ECS.
  */
 
-const { GameLiftClient, StartMatchmakingCommand } = require('@aws-sdk/client-gamelift');
+const { ECSClient, RunTaskCommand } = require('@aws-sdk/client-ecs');
+const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
+const crypto = require('crypto');
 
-const gamelift = new GameLiftClient({ region: process.env.AWS_REGION });
-const MATCHMAKING_CONFIG_NAME = process.env.MATCHMAKING_CONFIG_NAME;
-const LOG_LEVEL = process.env.LOG_LEVEL || 'INFO';
-
-function log(level, message, data = {}) {
-    if (LOG_LEVEL === 'DEBUG' || level !== 'DEBUG') {
-        console.log(JSON.stringify({ level, message, ...data, timestamp: new Date().toISOString() }));
-    }
-}
+const ecs = new ECSClient({ region: process.env.AWS_REGION });
+const dynamodb = new DynamoDBClient({ region: process.env.AWS_REGION });
 
 exports.handler = async (event) => {
-    log('INFO', 'Start matchmaking request received', { event });
-
     try {
-        // Parse request body
         const body = JSON.parse(event.body || '{}');
-        const { playerId, playerAttributes = {} } = body;
+        const { playerId } = body;
 
-        // Validate required fields
         if (!playerId) {
             return {
                 statusCode: 400,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    error: 'INVALID_REQUEST',
-                    message: 'playerId is required'
-                })
+                body: JSON.stringify({ error: 'INVALID_REQUEST', message: 'playerId is required' })
             };
         }
 
-        // Extract player info from Cognito authorizer context
-        const cognitoUsername = event.requestContext?.authorizer?.claims?.sub;
-        const cognitoEmail = event.requestContext?.authorizer?.claims?.email;
-
-        log('DEBUG', 'Player info extracted', { playerId, cognitoUsername, cognitoEmail });
-
-        // GameLift SDK v3 PlayerAttributes requires AttributeValue objects, not raw values.
-        // LatencyInMs is a separate field — exclude it from PlayerAttributes.
-        const { latencyInMs, ...otherAttributes } = playerAttributes;
-        const attributes = {
-            skill:  { N: otherAttributes.skill  !== undefined ? Number(otherAttributes.skill)  : 10 },
-            region: { S: otherAttributes.region !== undefined ? String(otherAttributes.region) : 'eu-west-1' }
-        };
-
-        // Start matchmaking
-        const command = new StartMatchmakingCommand({
-            ConfigurationName: MATCHMAKING_CONFIG_NAME,
-            Players: [
-                {
-                    PlayerId: playerId,
-                    PlayerAttributes: attributes,
-                    LatencyInMs: latencyInMs || {}
+        const taskResponse = await ecs.send(new RunTaskCommand({
+            cluster: process.env.ECS_CLUSTER_ARN,
+            taskDefinition: process.env.ECS_TASK_DEF_ARN,
+            launchType: 'FARGATE',
+            networkConfiguration: {
+                awsvpcConfiguration: {
+                    subnets: process.env.ECS_SUBNETS.split(','),
+                    securityGroups: process.env.ECS_SECURITY_GROUPS.split(','),
+                    assignPublicIp: 'ENABLED'
                 }
-            ]
-        });
+            },
+            count: 1
+        }));
 
-        const response = await gamelift.send(command);
+        if (!taskResponse.tasks || taskResponse.tasks.length === 0) {
+            throw new Error('ECS RunTask returned no tasks: ' + JSON.stringify(taskResponse.failures || []));
+        }
 
-        log('INFO', 'Matchmaking started successfully', {
-            ticketId: response.MatchmakingTicket.TicketId,
-            playerId
-        });
+        const taskArn = taskResponse.tasks[0].taskArn;
+        const ticketId = crypto.randomUUID();
+        const ttl = Math.floor(Date.now() / 1000) + 3600;
+
+        await dynamodb.send(new PutItemCommand({
+            TableName: process.env.MATCHMAKING_TICKETS_TABLE,
+            Item: {
+                ticketId:  { S: ticketId },
+                taskArn:   { S: taskArn },
+                playerId:  { S: playerId },
+                status:    { S: 'SEARCHING' },
+                createdAt: { S: new Date().toISOString() },
+                ttl:       { N: String(ttl) }
+            }
+        }));
+
+        console.log(JSON.stringify({ level: 'INFO', message: 'Matchmaking started', ticketId, taskArn, playerId }));
 
         return {
             statusCode: 200,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                ticketId: response.MatchmakingTicket.TicketId,
-                status: response.MatchmakingTicket.Status,
-                estimatedWaitTime: response.MatchmakingTicket.EstimatedWaitTime,
-                startTime: response.MatchmakingTicket.StartTime
-            })
+            body: JSON.stringify({ ticketId, status: 'SEARCHING', startTime: new Date().toISOString() })
         };
     } catch (error) {
-        log('ERROR', 'Failed to start matchmaking', {
-            error: error.message,
-            stack: error.stack
-        });
-
+        console.error(JSON.stringify({ level: 'ERROR', message: error.message, stack: error.stack }));
         return {
             statusCode: 500,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                error: 'MATCHMAKING_FAILED',
-                message: error.message
-            })
+            body: JSON.stringify({ error: 'MATCHMAKING_FAILED', message: error.message })
         };
     }
 };

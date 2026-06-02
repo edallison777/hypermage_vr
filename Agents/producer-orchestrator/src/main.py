@@ -8,7 +8,7 @@ from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
 app = BedrockAgentCoreApp()
 
-MODEL_ID = "eu.anthropic.claude-sonnet-4-20250514-v1:0"
+MODEL_ID = "eu.anthropic.claude-sonnet-4-6"
 
 SYSTEM_PROMPT = """You are the ProducerOrchestratorAgent, a high-level coordinator responsible for breaking down complex VR multiplayer system specifications into manageable tasks.
 
