@@ -1,0 +1,60 @@
+{
+  "id": "forest-clearing",
+  "name": "Forest Clearing",
+  "description": "A moonlit clearing in an ancient forest. Fireflies drift between standing stones.",
+  "scene_type": "social",
+  "platforms": ["vr"],
+  "atmosphere": {
+    "lighting_mood": "silver moonlight with warm firelight",
+    "time_of_day": "midnight",
+    "weather": "clear",
+    "vfx_density": "medium",
+    "audio_palette": "crickets, crackling fire, distant owl, rustling leaves"
+  },
+  "zones": [
+    {
+      "id": "moonlit-clearing",
+      "name": "Moonlit Clearing",
+      "type": "social",
+      "bounds": {
+        "center": { "x": 0, "y": 0, "z": 175 },
+        "extents": { "x": 400, "y": 400, "z": 175 }
+      },
+      "interactables": [
+        {
+          "id": "bonfire",
+          "type": "environmental",
+          "position": { "x": 0, "y": 0, "z": 10 },
+          "behaviour": "A roaring campfire at the centre of the clearing. Throws warm light in all directions.",
+          "audio_profile": "crackling fire, pop and hiss",
+          "persistent": true
+        },
+        {
+          "id": "standing_stone",
+          "type": "machinery",
+          "position": { "x": 250, "y": -250, "z": 30 },
+          "behaviour": "A moss-covered monolith carved with runes. Hums with ley-line energy at midnight.",
+          "audio_profile": "deep stone resonance, subtle harmonic",
+          "persistent": true
+        },
+        {
+          "id": "moonflower",
+          "type": "artefact",
+          "position": { "x": -200, "y": 150, "z": 80 },
+          "behaviour": "A luminescent flower that blooms only under moonlight. Its petals hold a fortune.",
+          "audio_profile": "soft chime, petal whisper",
+          "persistent": false
+        }
+      ]
+    }
+  ],
+  "participant_spawns": [
+    {
+      "position": { "x": 0, "y": 0, "z": 0 },
+      "rotation": { "pitch": 0, "yaw": 0, "roll": 0 },
+      "role": "player"
+    }
+  ],
+  "participant_capacity": { "min": 1, "max": 6, "recommended": 3 },
+  "tags": ["forest", "outdoor", "social", "nature", "magic"]
+}

@@ -5,6 +5,7 @@
 [ext_resource type="Script" path="res://scripts/matchmaking_client.gd" id="Script_matchmaking"]
 [ext_resource type="Script" path="res://scripts/game_network.gd" id="Script_network"]
 [ext_resource type="Script" path="res://scripts/player_sync.gd" id="Script_sync"]
+[ext_resource type="Script" path="res://scripts/room_manager.gd" id="Script_room"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 
@@ -15,32 +16,11 @@ sky_material = SubResource("ProceduralSkyMaterial_1")
 background_mode = 2
 sky = SubResource("Sky_1")
 
-[sub_resource type="BoxMesh" id="BoxMesh_2"]
-size = Vector3(10.0, 0.1, 10.0)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_3"]
-albedo_color = Color(0.2, 0.5, 0.2, 1.0)
-
-[sub_resource type="BoxShape3D" id="BoxShape3D_4"]
-size = Vector3(10.0, 0.1, 10.0)
-
 [node name="HMVRGame" type="Node3D"]
 script = ExtResource("Script_1")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_1")
-
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
-transform = Transform3D(0.866, -0.25, 0.433, 0, 0.866, 0.5, -0.5, -0.433, 0.75, 0, 3, 0)
-
-[node name="Floor" type="StaticBody3D" parent="."]
-
-[node name="FloorMesh" type="MeshInstance3D" parent="Floor"]
-mesh = SubResource("BoxMesh_2")
-surface_material_override/0 = SubResource("StandardMaterial3D_3")
-
-[node name="FloorCollision" type="CollisionShape3D" parent="Floor"]
-shape = SubResource("BoxShape3D_4")
 
 [node name="XROrigin3D" type="XROrigin3D" parent="."]
 
@@ -71,3 +51,6 @@ script = ExtResource("Script_network")
 
 [node name="PlayerSync" type="Node" parent="."]
 script = ExtResource("Script_sync")
+
+[node name="RoomManager" type="Node" parent="."]
+script = ExtResource("Script_room")

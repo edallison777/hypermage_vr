@@ -21,8 +21,9 @@ func _ready() -> void:
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	print("Server: listening port=" + str(PORT))
-	# PlayerSync._ready ran before us (child-first); trigger its deferred init now
+	# Children' _ready ran before us (child-first order); trigger deferred inits now
 	$PlayerSync.setup()
+	$RoomManager.setup()
 
 func _process(delta: float) -> void:
 	if not _ever_had_peer:

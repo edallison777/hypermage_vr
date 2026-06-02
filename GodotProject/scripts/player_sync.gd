@@ -34,6 +34,9 @@ func _sv_peer_up(id: int) -> void:
 		rpc_id(id, "player_joined", p)
 	_sv_peers.append(id)
 	print("PlayerSync: sv peer_up id=" + str(id) + " total=" + str(_sv_peers.size()))
+	var rm := get_node_or_null("../RoomManager")
+	if rm:
+		rm.tell_client_room(id)
 
 func _sv_peer_down(id: int) -> void:
 	_sv_peers.erase(id)

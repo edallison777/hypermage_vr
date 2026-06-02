@@ -2,9 +2,13 @@
 
 [ext_resource type="Script" path="res://scripts/server_main.gd" id="Script_server"]
 [ext_resource type="Script" path="res://scripts/player_sync.gd" id="Script_sync"]
+[ext_resource type="Script" path="res://scripts/room_manager.gd" id="Script_room"]
 
 [node name="HMVRGame" type="Node"]
 script = ExtResource("Script_server")
 
 [node name="PlayerSync" type="Node" parent="."]
 script = ExtResource("Script_sync")
+
+[node name="RoomManager" type="Node" parent="."]
+script = ExtResource("Script_room")

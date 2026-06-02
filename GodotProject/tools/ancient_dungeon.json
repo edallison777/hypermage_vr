@@ -1,0 +1,60 @@
+{
+  "id": "ancient-dungeon",
+  "name": "Ancient Dungeon",
+  "description": "A damp stone vault beneath a ruined fortress, lit by eerie bioluminescent fungi.",
+  "scene_type": "exploration",
+  "platforms": ["vr"],
+  "atmosphere": {
+    "lighting_mood": "cold blue-green bioluminescence with deep shadow",
+    "time_of_day": "none",
+    "weather": "none",
+    "vfx_density": "low",
+    "audio_palette": "dripping water, distant rumble, distant chains"
+  },
+  "zones": [
+    {
+      "id": "vault-chamber",
+      "name": "Vault Chamber",
+      "type": "ritual",
+      "bounds": {
+        "center": { "x": 0, "y": 0, "z": 175 },
+        "extents": { "x": 300, "y": 300, "z": 175 }
+      },
+      "interactables": [
+        {
+          "id": "sarcophagus",
+          "type": "machinery",
+          "position": { "x": 150, "y": 0, "z": 30 },
+          "behaviour": "Ancient stone sarcophagus sealed with iron bands. Faint scratching from within.",
+          "audio_profile": "low grinding, faint scratching",
+          "persistent": true
+        },
+        {
+          "id": "rune_stone",
+          "type": "artefact",
+          "position": { "x": -100, "y": -100, "z": 80 },
+          "behaviour": "A glowing runestone floating above a carved pedestal. Pulses with trapped soul energy.",
+          "audio_profile": "ethereal drone, rhythmic pulse",
+          "persistent": true
+        },
+        {
+          "id": "bone_guardian",
+          "type": "creature",
+          "position": { "x": 0, "y": 100, "z": 10 },
+          "behaviour": "Skeletal guardian standing motionless at the far wall. Turns to face anyone who moves.",
+          "audio_profile": "bone rattle, hollow exhale",
+          "persistent": false
+        }
+      ]
+    }
+  ],
+  "participant_spawns": [
+    {
+      "position": { "x": 0, "y": 0, "z": 0 },
+      "rotation": { "pitch": 0, "yaw": 0, "roll": 0 },
+      "role": "player"
+    }
+  ],
+  "participant_capacity": { "min": 1, "max": 4, "recommended": 2 },
+  "tags": ["dungeon", "dark", "ritual", "undead"]
+}
