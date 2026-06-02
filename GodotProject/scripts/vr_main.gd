@@ -6,6 +6,7 @@ const AUTO_LOGIN_PATH := "user://AutoLogin.txt"
 @onready var cognito:        Node    = $CognitoAuth
 @onready var matchmaking:    Node    = $MatchmakingClient
 @onready var game_network:   Node    = $GameNetwork
+@onready var player_sync:    Node    = $PlayerSync
 
 func _ready() -> void:
 	var xr = XRServer.find_interface("OpenXR")
@@ -56,6 +57,7 @@ func _on_matchmaking_failed(error: String) -> void:
 
 func _on_connected() -> void:
 	_set_status("Connected!")
+	player_sync.setup()
 	await get_tree().create_timer(3.0).timeout
 	if is_instance_valid(status_label):
 		status_label.visible = false

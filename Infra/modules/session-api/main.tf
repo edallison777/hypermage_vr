@@ -281,7 +281,7 @@ resource "aws_iam_role_policy" "lambda_ecs" {
     Statement = [
       {
         Effect   = "Allow"
-        Action   = ["ecs:RunTask", "ecs:DescribeTasks", "ecs:StopTask"]
+        Action   = ["ecs:RunTask", "ecs:DescribeTasks", "ecs:StopTask", "ecs:ListTasks"]
         Resource = "*"
       },
       {

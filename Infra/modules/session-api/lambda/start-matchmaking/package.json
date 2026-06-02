@@ -8,6 +8,7 @@
     },
     "dependencies": {
         "@aws-sdk/client-ecs": "^3.750.0",
+        "@aws-sdk/client-ec2": "^3.750.0",
         "@aws-sdk/client-dynamodb": "^3.750.0"
     },
     "engines": {

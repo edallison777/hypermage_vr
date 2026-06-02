@@ -70,8 +70,16 @@ func _on_request_completed(result: int, code: int, _hdrs: PackedStringArray, bod
 	# Start response — has ticketId, polling not yet started
 	if json.has("ticketId") and not _polling:
 		_ticket_id = json["ticketId"]
-		_polling = true
 		print("MatchmakingClient: ticket=" + _ticket_id)
+		# Immediately COMPLETED (joined existing session — no poll needed)
+		if json.get("status") == "COMPLETED" and json.has("gameSessionConnectionInfo"):
+			var conn: Dictionary = json.get("gameSessionConnectionInfo", {})
+			var ip: String = conn.get("ipAddress", "")
+			var port: int   = int(conn.get("port", 7777))
+			if not ip.is_empty():
+				matchmaking_complete.emit(ip, port)
+				return
+		_polling = true
 		return
 	# Poll response — has status
 	var status: String = json.get("status", "")
