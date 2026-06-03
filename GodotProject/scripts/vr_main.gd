@@ -24,9 +24,13 @@ func _ready() -> void:
 
 	_try_auto_login()
 
+const LOCAL_ROOM_PATH := "res://scenes/generated/wizards-tower.tscn"
+
 func _try_auto_login() -> void:
 	if not FileAccess.file_exists(AUTO_LOGIN_PATH):
-		_set_status("No AutoLogin.txt\nPush with adb:\nadb shell run-as com.hypermage.godot\n  sh -c 'cat > .../files/AutoLogin.txt'")
+		# Offline mode: no matchmaking. Load a room locally so grab/throw can be
+		# tested without a server (grab_manager runs in local_mode).
+		_load_local_room()
 		return
 	var f := FileAccess.open(AUTO_LOGIN_PATH, FileAccess.READ)
 	if not f:
@@ -40,6 +44,24 @@ func _try_auto_login() -> void:
 		return
 	_set_status("Authenticating...")
 	cognito.login(username, password)
+
+func _load_local_room() -> void:
+	var packed := load(LOCAL_ROOM_PATH) as PackedScene
+	if packed == null:
+		_set_status("Local room load failed:\n" + LOCAL_ROOM_PATH)
+		return
+	var room := packed.instantiate()
+	room.name = "Room"
+	add_child(room)
+	# Enable offline grab/throw on the GrabManager (if present in this scene).
+	var gm := get_node_or_null("GrabManager")
+	if gm:
+		gm.local_mode = true
+	var n := get_tree().get_nodes_in_group("grabbable").size()
+	_set_status("Local room (offline)\n" + LOCAL_ROOM_PATH.get_file() + "\ngrabbables: " + str(n))
+	await get_tree().create_timer(4.0).timeout
+	if is_instance_valid(status_label):
+		status_label.visible = false
 
 func _on_auth_success(id_token: String, player_id: String) -> void:
 	_set_status("Finding server...")

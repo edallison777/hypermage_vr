@@ -155,9 +155,14 @@ class TscnBuilder:
         ntype: str,
         parent: str | None,
         props: dict[str, str] | None = None,
+        groups: list[str] | None = None,
     ) -> None:
         parent_attr = "" if parent is None else f' parent="{parent}"'
-        lines = [f'[node name="{name}" type="{ntype}"{parent_attr}]']
+        groups_attr = ""
+        if groups:
+            groups_str = ", ".join(f'"{g}"' for g in groups)
+            groups_attr = f' groups=[{groups_str}]'
+        lines = [f'[node name="{name}" type="{ntype}"{parent_attr}{groups_attr}]']
         for k, v in (props or {}).items():
             lines.append(f'{k} = {v}')
         lines.append("")
@@ -264,7 +269,10 @@ def _add_interactable(b: TscnBuilder, obj: dict, zone_node: str, bounds: dict) -
         mesh  = b.sphere_mesh(0.15)
         shape = b.sphere_shape(0.15)
         node_name = f"Artefact_{oid}"
-        b.node(node_name, "Area3D", zone_node, {"transform": t3d(lx, ly + 0.15, lz)})
+        b.node(node_name, "RigidBody3D", zone_node, {
+            "transform": t3d(lx, ly + 0.15, lz),
+            "mass": "1.0",
+        }, groups=["grabbable"])
         sub = f"{zone_node}/{node_name}"
         b.node("Mesh",      "MeshInstance3D",   sub, {"mesh": f'SubResource("{mesh}")', "surface_material_override/0": f'SubResource("{mat}")'})
         b.node("Collision", "CollisionShape3D", sub, {"shape": f'SubResource("{shape}")'})
