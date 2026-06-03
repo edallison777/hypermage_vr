@@ -9,7 +9,7 @@ extends Node
 const GRAB_RADIUS   := 0.40   # metres — how close your hand must be
 const TRIGGER_ON    := 0.7    # squeeze past this to grab
 const TRIGGER_OFF   := 0.3    # release below this to throw
-const THROW_MULT    := 2.5
+const THROW_MULT    := 4.0
 const SEND_INTERVAL := 1.0 / 20.0
 
 var _left:  Node3D = null
