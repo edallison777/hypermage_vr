@@ -71,6 +71,9 @@ _INTERACTABLE_RGB: dict[str, tuple[float, float, float]] = {
 }
 
 WALL_DIM  = 0.30  # wall/floor/ceiling thickness in metres
+DOOR_W    = 1.60  # doorway opening width in metres
+DOOR_H    = 2.20  # doorway opening height in metres (from floor)
+ADJ_TOL   = 0.60  # max gap between zone faces to treat them as adjacent (metres)
 
 
 # ── .tscn builder ─────────────────────────────────────────────────────────────
@@ -176,6 +179,93 @@ class TscnBuilder:
         return header + ext_part + "\n".join(self._sub) + "\n" + "\n".join(self._nodes)
 
 
+# ── Zone adjacency / doorways ───────────────────────────────────────────────────
+
+def _zone_aabb(zone: dict) -> dict:
+    """Godot-space axis-aligned bounding box for a zone: centre + full size + min/max."""
+    cx, cy, cz = ue_pos(
+        zone["bounds"]["center"]["x"],
+        zone["bounds"]["center"]["y"],
+        zone["bounds"]["center"]["z"],
+    )
+    sx, sy, sz = ue_ext(
+        zone["bounds"]["extents"]["x"],
+        zone["bounds"]["extents"]["y"],
+        zone["bounds"]["extents"]["z"],
+    )
+    c = (cx, cy, cz)
+    s = (sx, sy, sz)
+    mn = (cx - sx / 2, cy - sy / 2, cz - sz / 2)
+    mx = (cx + sx / 2, cy + sy / 2, cz + sz / 2)
+    return {"id": zone["id"], "c": c, "s": s, "min": mn, "max": mx}
+
+
+def _overlap(a: dict, b: dict, axis: int) -> tuple[float, float] | None:
+    """1-D overlap interval of two AABBs along an axis (0=X,1=Y,2=Z), or None."""
+    lo = max(a["min"][axis], b["min"][axis])
+    hi = min(a["max"][axis], b["max"][axis])
+    return (lo, hi) if hi > lo else None
+
+
+def _compute_doors(zones: list[dict]) -> dict[str, list[tuple[str, float]]]:
+    """Find adjacent zone pairs and return per-zone doorways.
+
+    A doorway is cut where two zones touch on a horizontal axis (X or Z) and
+    overlap enough on the other horizontal axis and on Y to fit a door. Result
+    maps zone id -> list of (wall_side, offset_along_wall) where wall_side is
+    one of N/S/E/W and the offset is along that wall's span axis from the zone
+    centre.
+    """
+    boxes = [_zone_aabb(z) for z in zones]
+    doors: dict[str, list[tuple[str, float]]] = {z["id"]: [] for z in zones}
+
+    for i in range(len(boxes)):
+        for j in range(i + 1, len(boxes)):
+            for axis in (0, 2):              # X -> E/W walls, Z -> N/S walls
+                _try_doorway(boxes[i], boxes[j], axis, doors)
+
+    # Exterior doorways: an opening in a wall that leads outside (no adjacent zone).
+    # ScenePlan zone may set "exterior_door": "N"  (or a list) using Godot wall sides
+    # N=-Z, S=+Z, E=+X, W=-X. Centred on the wall.
+    for z in zones:
+        ext = z.get("exterior_door")
+        if not ext:
+            continue
+        sides = [ext] if isinstance(ext, str) else list(ext)
+        for side in sides:
+            side = str(side).upper()
+            if side in ("N", "S", "E", "W"):
+                doors[z["id"]].append((side, 0.0))
+    return doors
+
+
+def _try_doorway(a: dict, b: dict, axis: int, doors: dict) -> None:
+    perp = 2 if axis == 0 else 0             # the other horizontal axis
+
+    # Which zone sits on the negative side of `axis`? Faces must nearly touch.
+    if abs(a["max"][axis] - b["min"][axis]) <= ADJ_TOL:
+        lower, upper = a, b
+    elif abs(b["max"][axis] - a["min"][axis]) <= ADJ_TOL:
+        lower, upper = b, a
+    else:
+        return
+
+    ov_perp = _overlap(a, b, perp)
+    ov_y    = _overlap(a, b, 1)
+    if ov_perp is None or ov_y is None:
+        return
+    if (ov_perp[1] - ov_perp[0]) < DOOR_W * 0.9 or (ov_y[1] - ov_y[0]) < DOOR_H * 0.9:
+        return                               # not enough shared opening to fit a door
+
+    door_world = (ov_perp[0] + ov_perp[1]) / 2.0
+    if axis == 0:   # adjacency along X -> doors in the E/W walls, offset along Z
+        doors[lower["id"]].append(("E", door_world - lower["c"][perp]))
+        doors[upper["id"]].append(("W", door_world - upper["c"][perp]))
+    else:           # adjacency along Z -> doors in the N/S walls, offset along X
+        doors[lower["id"]].append(("S", door_world - lower["c"][perp]))
+        doors[upper["id"]].append(("N", door_world - upper["c"][perp]))
+
+
 # ── Room geometry ──────────────────────────────────────────────────────────────
 
 def _static_box(
@@ -200,7 +290,44 @@ def _static_box(
     })
 
 
-def add_zone(b: TscnBuilder, zone: dict) -> None:
+def _build_wall(
+    b: TscnBuilder,
+    name: str,
+    parent: str,
+    mat_rid: str,
+    *,
+    span_axis: str,          # "x" (N/S walls) or "z" (E/W walls)
+    span_len: float,         # wall length along its span axis
+    height: float,           # wall height (Y)
+    thickness: float,        # wall thickness along the perpendicular horizontal axis
+    lx: float, ly: float, lz: float,   # wall centre in zone-local coords
+    door_offset: float | None,         # door centre along span axis, or None for a solid wall
+) -> None:
+    """A wall, optionally with a rectangular doorway (two side panels + a lintel)."""
+
+    def emit(suffix: str, seg_len: float, seg_h: float, span_c: float, y_c: float) -> None:
+        if seg_len <= 0.01 or seg_h <= 0.01:
+            return
+        if span_axis == "x":
+            _static_box(b, name + suffix, parent, seg_len, seg_h, thickness, lx + span_c, y_c, lz, mat_rid)
+        else:
+            _static_box(b, name + suffix, parent, thickness, seg_h, seg_len, lx, y_c, lz + span_c, mat_rid)
+
+    if door_offset is None:
+        emit("", span_len, height, 0.0, ly)
+        return
+
+    half = span_len / 2.0
+    dl = max(door_offset - DOOR_W / 2.0, -half)
+    dr = min(door_offset + DOOR_W / 2.0,  half)
+    emit("_a", dl - (-half), height, (-half + dl) / 2.0, ly)   # panel left of door
+    emit("_b", half - dr,    height, (dr + half) / 2.0,  ly)   # panel right of door
+    lintel_h = height - DOOR_H
+    if lintel_h > 0.01:                                        # lintel above the opening
+        emit("_lintel", dr - dl, lintel_h, (dl + dr) / 2.0, (ly - height / 2.0) + DOOR_H + lintel_h / 2.0)
+
+
+def add_zone(b: TscnBuilder, zone: dict, doors: list[tuple[str, float]] | None = None) -> None:
     zid    = zone["id"].replace("-", "_")
     ztype  = zone.get("type", "exploration")
     bounds = zone["bounds"]
@@ -225,15 +352,18 @@ def add_zone(b: TscnBuilder, zone: dict) -> None:
     zone_node = f"Zone_{zid}"
     b.node(zone_node, "Node3D", ".", {"transform": t3d(cx, cy, cz)})
 
+    # doorway offsets per wall side (None = solid wall)
+    door = {side: off for side, off in (doors or [])}
+
     # floor / ceiling
     _static_box(b, f"Floor_{zid}",   zone_node, sx, t,  sz,  0,  -sy/2 + t/2,  0, floor_mat)
     _static_box(b, f"Ceiling_{zid}", zone_node, sx, t,  sz,  0,   sy/2 - t/2,  0, ceil_mat)
-    # north / south walls  (Z faces in Godot)
-    _static_box(b, f"WallN_{zid}",   zone_node, sx, sy, t,   0,  0,  -sz/2 + t/2, wall_mat)
-    _static_box(b, f"WallS_{zid}",   zone_node, sx, sy, t,   0,  0,   sz/2 - t/2, wall_mat)
-    # east / west walls  (X faces in Godot)
-    _static_box(b, f"WallE_{zid}",   zone_node, t,  sy, sz,  sx/2 - t/2,  0,  0, wall_mat)
-    _static_box(b, f"WallW_{zid}",   zone_node, t,  sy, sz, -sx/2 + t/2,  0,  0, wall_mat)
+    # north / south walls  (Z faces in Godot) — span along X
+    _build_wall(b, f"WallN_{zid}", zone_node, wall_mat, span_axis="x", span_len=sx, height=sy, thickness=t, lx=0, ly=0, lz=-sz/2 + t/2, door_offset=door.get("N"))
+    _build_wall(b, f"WallS_{zid}", zone_node, wall_mat, span_axis="x", span_len=sx, height=sy, thickness=t, lx=0, ly=0, lz= sz/2 - t/2, door_offset=door.get("S"))
+    # east / west walls  (X faces in Godot) — span along Z
+    _build_wall(b, f"WallE_{zid}", zone_node, wall_mat, span_axis="z", span_len=sz, height=sy, thickness=t, lx= sx/2 - t/2, ly=0, lz=0, door_offset=door.get("E"))
+    _build_wall(b, f"WallW_{zid}", zone_node, wall_mat, span_axis="z", span_len=sz, height=sy, thickness=t, lx=-sx/2 + t/2, ly=0, lz=0, door_offset=door.get("W"))
 
     # zone fill-light
     light_range = max(sx, sz) * 0.9
@@ -335,9 +465,11 @@ def convert(scene_plan: dict, vr: bool = False) -> str:
             "current": "true",
         })
 
-    # Zones
-    for zone in scene_plan.get("zones", []):
-        add_zone(b, zone)
+    # Zones (with doorways cut where zones are adjacent)
+    zones = scene_plan.get("zones", [])
+    doors = _compute_doors(zones)
+    for zone in zones:
+        add_zone(b, zone, doors.get(zone["id"]))
 
     # Spawns / VR rig
     spawns = scene_plan.get("participant_spawns", [])

@@ -11,6 +11,9 @@ const TRIGGER_ON    := 0.7    # squeeze past this to grab
 const TRIGGER_OFF   := 0.3    # release below this to throw
 const THROW_MULT    := 4.0
 const SEND_INTERVAL := 1.0 / 20.0
+const TOUCH_RADIUS  := 0.18   # hand this close shoves a loose object
+const TOUCH_MIN_SPD := 0.6    # ...if the hand is moving at least this fast (m/s)
+const TOUCH_MULT    := 1.5    # impulse = hand velocity * this
 
 var _left:  Node3D = null
 var _right: Node3D = null
@@ -18,6 +21,7 @@ var _held:  Dictionary = {}      # "left"|"right"  →  RigidBody3D
 var _prev:  Dictionary = {}      # "left"|"right"  →  Vector3 (controller pos)
 var _vel:   Dictionary = {}      # "left"|"right"  →  Vector3
 var _down:  Dictionary = {"left": false, "right": false}
+var _touch_prev: Dictionary = {"left": null, "right": null}   # last object batted, per hand
 var _avatars_parent_ready := false
 var _debug: Label3D = null
 var _timer: float = 0.0
@@ -139,6 +143,18 @@ func _handle_side(side: String, ctrl: Node3D, trig: float, delta: float) -> void
 		var obj: RigidBody3D = _held[side]
 		if is_instance_valid(obj):
 			obj.global_transform = ctrl.global_transform
+		_touch_prev[side] = null
+		return
+
+	# Touch-to-shove: a moving hand bats a loose object aside (no grab needed).
+	var near := _nearest_grabbable(ctrl, TOUCH_RADIUS)
+	if near and near != _touch_prev.get(side) and not near.freeze:
+		var hv: Vector3 = _vel.get(side, Vector3.ZERO)
+		if hv.length() > TOUCH_MIN_SPD:
+			near.apply_central_impulse(hv * TOUCH_MULT)
+			if not local_mode:
+				rpc_id(1, "do_throw", str(near.get_path()), near.global_transform, near.linear_velocity)
+	_touch_prev[side] = near
 
 func _grab(side: String, ctrl: Node3D) -> void:
 	if _held.has(side):
@@ -153,6 +169,9 @@ func _grab(side: String, ctrl: Node3D) -> void:
 				best = obj
 	if best:
 		best.freeze = true
+		# Stop the held object colliding with the player body so you can carry it.
+		best.set_meta("orig_layer", best.collision_layer)
+		best.collision_layer = 0
 		_held[side] = best
 		print("GrabManager: grabbed " + best.name + " @ " + str(snapped(best_d, 0.01)) + "m")
 
@@ -164,6 +183,7 @@ func _throw(side: String) -> void:
 	if not is_instance_valid(obj):
 		return
 	var vel: Vector3 = _vel.get(side, Vector3.ZERO) * THROW_MULT
+	obj.collision_layer = obj.get_meta("orig_layer", 1)   # restore body collision
 	obj.freeze = false
 	obj.linear_velocity  = vel
 	obj.angular_velocity = Vector3.ZERO
@@ -200,6 +220,19 @@ func do_throw(object_path: String, xf: Transform3D, vel: Vector3) -> void:
 		obj.freeze           = false
 		obj.linear_velocity  = vel
 		obj.angular_velocity = Vector3.ZERO
+
+func _nearest_grabbable(ctrl: Node3D, radius: float) -> RigidBody3D:
+	if not ctrl:
+		return null
+	var best: RigidBody3D = null
+	var best_d := radius
+	for obj in get_tree().get_nodes_in_group("grabbable"):
+		if obj is RigidBody3D:
+			var d := ctrl.global_position.distance_to(obj.global_position)
+			if d < best_d:
+				best_d = d
+				best = obj
+	return best
 
 func _nearest_dist(ctrl: Node3D) -> float:
 	if not ctrl:

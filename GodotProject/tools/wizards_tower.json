@@ -52,6 +52,7 @@
       "id": "tower-entrance",
       "name": "Tower Entrance",
       "type": "transition",
+      "exterior_door": "N",
       "bounds": {
         "center": { "x": 0, "y": 350, "z": 150 },
         "extents": { "x": 150, "y": 150, "z": 150 }
@@ -60,7 +61,7 @@
         {
           "id": "tower_door",
           "type": "environmental",
-          "position": { "x": 0, "y": 480, "z": 100 },
+          "position": { "x": -130, "y": 400, "z": 100 },
           "behaviour": "Heavy oak door with an arcane lock. The only way in or out.",
           "trigger_radius": 80,
           "audio_profile": "heavy door creak, magical lock click",
