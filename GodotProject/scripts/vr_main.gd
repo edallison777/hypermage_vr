@@ -24,7 +24,7 @@ func _ready() -> void:
 
 	_try_auto_login()
 
-const LOCAL_ROOM_PATH := "res://scenes/generated/wizards-tower.tscn"
+const LOCAL_ROOM_PATH := "res://scenes/generated/mechanism-test.tscn"
 
 func _try_auto_login() -> void:
 	if not FileAccess.file_exists(AUTO_LOGIN_PATH):
@@ -53,15 +53,55 @@ func _load_local_room() -> void:
 	var room := packed.instantiate()
 	room.name = "Room"
 	add_child(room)
-	# Enable offline grab/throw on the GrabManager (if present in this scene).
+	# Stand the player at the room's spawn point so interactables are within reach.
+	for child in room.get_children():
+		if child.name.begins_with("SpawnPoint"):
+			$XROrigin3D.global_position = child.global_position
+			print("VRMain: moved XROrigin to spawn ", child.global_position)
+			break
+	# Drop the rig onto the visual floor (the spawn marker's Y may float above the
+	# room's actual floor geometry, which makes the world feel sunken).
+	call_deferred("_snap_rig_to_floor")
+	# Enable offline grab/throw + mechanisms (if those managers are in this scene).
 	var gm := get_node_or_null("GrabManager")
 	if gm:
 		gm.local_mode = true
+	var mm := get_node_or_null("MechanismManager")
+	if mm:
+		mm.local_mode = true
 	var n := get_tree().get_nodes_in_group("grabbable").size()
 	_set_status("Local room (offline)\n" + LOCAL_ROOM_PATH.get_file() + "\ngrabbables: " + str(n))
 	await get_tree().create_timer(4.0).timeout
 	if is_instance_valid(status_label):
 		status_label.visible = false
+
+const WALL_DIM := 0.30   # floor/wall thickness used by the converter
+
+func _snap_rig_to_floor() -> void:
+	# Read the floor geometry's height directly (a downward ray hits the player's
+	# own locomotion collision sphere, not the floor). Floor box centre + half its
+	# thickness = the top surface the player should stand on.
+	var room := get_node_or_null("Room")
+	if room == null:
+		return
+	var floor_node := _find_prefixed(room, "Floor_")
+	if floor_node == null:
+		print("VRMain: no Floor_ node to snap to")
+		return
+	var top: float = floor_node.global_position.y + WALL_DIM / 2.0
+	var p: Vector3 = $XROrigin3D.global_position
+	p.y = top
+	$XROrigin3D.global_position = p
+	print("VRMain: snapped rig to floor top y=", top)
+
+func _find_prefixed(n: Node, prefix: String) -> Node:
+	if n.name.begins_with(prefix):
+		return n
+	for c in n.get_children():
+		var r := _find_prefixed(c, prefix)
+		if r:
+			return r
+	return null
 
 func _on_auth_success(id_token: String, player_id: String) -> void:
 	_set_status("Finding server...")

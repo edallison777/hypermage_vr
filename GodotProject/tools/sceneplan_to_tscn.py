@@ -86,12 +86,21 @@ class TscnBuilder:
         self._sub: list[str] = []
         self._nodes: list[str] = []
         self._counter = 0
+        self._ext_by_path: dict[str, str] = {}
 
     # ── external resource factories ───────────────────────────────────────────
 
     def ext_resource(self, rtype: str, path: str, rid: str) -> str:
         self._ext.append(f'[ext_resource type="{rtype}" path="{path}" id="{rid}"]\n')
+        self._ext_by_path[path] = rid
         return rid
+
+    def script_resource(self, path: str) -> str:
+        """Get-or-create an ext_resource for a script, returning its id."""
+        if path in self._ext_by_path:
+            return self._ext_by_path[path]
+        rid = f"ExtScript_{len(self._ext_by_path) + 1}"
+        return self.ext_resource("Script", path, rid)
 
     # ── sub-resource factories ────────────────────────────────────────────────
 
@@ -392,6 +401,10 @@ def _add_interactable(b: TscnBuilder, obj: dict, zone_node: str, bounds: dict) -
     gx, gy, gz = ue_pos(pos["x"], pos["y"], pos["z"])
     lx, ly, lz = gx - zx, gy - zy, gz - zz
 
+    if otype in ("lever", "wheel"):
+        _add_mechanism(b, oid, otype, zone_node, lx, ly, lz)
+        return
+
     r, g, b_c = _INTERACTABLE_RGB.get(otype, (0.5, 0.5, 0.5))
     mat = b.material(r, g, b_c)
 
@@ -433,6 +446,100 @@ def _add_interactable(b: TscnBuilder, obj: dict, zone_node: str, bounds: dict) -
         sub = f"{zone_node}/{node_name}"
         b.node("Mesh",      "MeshInstance3D",   sub, {"mesh": f'SubResource("{mesh}")', "surface_material_override/0": f'SubResource("{mat}")'})
         b.node("Collision", "CollisionShape3D", sub, {"shape": f'SubResource("{shape}")'})
+
+
+def _add_mechanism(
+    b: TscnBuilder,
+    oid: str,
+    kind: str,
+    zone_node: str,
+    lx: float, ly: float, lz: float,
+) -> None:
+    """Emit a lever or wheel: a fixed Base post + a rotating Pivot carrying a steel
+    arm/disc and a bright recolouring Indicator (the grab handle). Driven at runtime
+    by mechanism.gd / MechanismManager. lx/ly/lz = floor position in zone-local space.
+    """
+    script_rid = b.script_resource("res://scripts/mechanism.gd")
+
+    if kind == "lever":
+        ph        = 1.00            # pivot height above floor (m)
+        arm_len   = 0.50
+        handle    = arm_len
+        knob_r    = 0.09
+        axis_str  = v3(1, 0, 0)     # swings fore/aft about local X
+        min_a, max_a = -0.785, 0.785
+    else:  # wheel
+        ph        = 1.20
+        rim_r     = 0.32
+        handle    = rim_r
+        knob_r    = 0.08
+        axis_str  = v3(0, 0, 1)     # turns about its facing axis (local Z)
+        min_a, max_a = -3.1416, 3.1416
+
+    mech = f"Mechanism_{oid}"
+    mech_path = f"{zone_node}/{mech}"   # full path from scene root for child nodes
+    b.node(mech, "Node3D", zone_node, {
+        "transform":    t3d(lx, ly + ph, lz),
+        "script":       f'ExtResource("{script_rid}")',
+        "kind":         f'"{kind}"',
+        "axis":         axis_str,
+        "min_angle":    f"{min_a:.4f}",
+        "max_angle":    f"{max_a:.4f}",
+        "handle_local": v3(0, handle, 0),
+    }, groups=["mechanism"])
+
+    # Fixed mounting post from floor up to the pivot.
+    base_mat   = b.material(0.25, 0.25, 0.28)
+    base_mesh  = b.box_mesh(0.12, ph, 0.12)
+    base_shape = b.box_shape(0.12, ph, 0.12)
+    b.node("Base", "StaticBody3D", mech_path, {"transform": t3d(0, -ph / 2, 0)})
+    b.node("Mesh", "MeshInstance3D", f"{mech_path}/Base", {
+        "mesh": f'SubResource("{base_mesh}")',
+        "surface_material_override/0": f'SubResource("{base_mat}")',
+    })
+    b.node("Collision", "CollisionShape3D", f"{mech_path}/Base", {
+        "shape": f'SubResource("{base_shape}")',
+    })
+
+    # Rotating part.
+    b.node("Pivot", "Node3D", mech_path)
+    pivot = f"{mech_path}/Pivot"
+    arm_mat = b.material(0.45, 0.48, 0.55)   # steel
+    if kind == "lever":
+        arm_mesh = b.box_mesh(0.05, arm_len, 0.05)
+        b.node("Arm", "MeshInstance3D", pivot, {
+            "transform": t3d(0, arm_len / 2, 0),
+            "mesh": f'SubResource("{arm_mesh}")',
+            "surface_material_override/0": f'SubResource("{arm_mat}")',
+        })
+    else:
+        disc_mesh = b.cylinder_mesh(rim_r, 0.07)
+        # Lay the disc into the X/Y plane (cylinder axis Y -> Z) so it spins like a valve.
+        b.node("Arm", "MeshInstance3D", pivot, {
+            "transform": "Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0, 0)",
+            "mesh": f'SubResource("{disc_mesh}")',
+            "surface_material_override/0": f'SubResource("{arm_mat}")',
+        })
+
+    # Bright recolouring grab handle (red->green across travel) at the grip point.
+    knob_mat  = b.material(1.0, 0.0, 0.0)
+    knob_mesh = b.sphere_mesh(knob_r)
+    b.node("Indicator", "MeshInstance3D", pivot, {
+        "transform": t3d(0, handle, 0),
+        "mesh": f'SubResource("{knob_mesh}")',
+        "surface_material_override/0": f'SubResource("{knob_mat}")',
+    })
+
+    # Live value readout, billboarded so it always faces the player.
+    b.node("ValueLabel", "Label3D", mech_path, {
+        "transform": t3d(0, handle + 0.35, 0),
+        "text": f'"{kind} 0.50"',
+        "billboard": "1",
+        "font_size": "48",
+        "pixel_size": "0.0015",
+        "modulate": col(1, 1, 1),
+        "outline_size": "4",
+    })
 
 
 # ── Main converter ─────────────────────────────────────────────────────────────

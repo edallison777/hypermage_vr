@@ -1,0 +1,47 @@
+{
+  "id": "mechanism-test",
+  "name": "Mechanism Test Hall",
+  "description": "A bare test room with a lever and a wheel for verifying VR mechanism interaction.",
+  "scene_type": "exploration",
+  "platforms": ["vr"],
+  "zones": [
+    {
+      "id": "test-hall",
+      "name": "Test Hall",
+      "type": "exploration",
+      "bounds": {
+        "center": { "x": 0, "y": 0, "z": 150 },
+        "extents": { "x": 250, "y": 200, "z": 150 }
+      },
+      "interactables": [
+        {
+          "id": "lever_a",
+          "type": "lever",
+          "position": { "x": 45, "y": -100, "z": 30 },
+          "behaviour": "A test lever that swings fore/aft. Knob recolours red->green across travel."
+        },
+        {
+          "id": "wheel_a",
+          "type": "wheel",
+          "position": { "x": -45, "y": -100, "z": 30 },
+          "behaviour": "A test valve wheel that turns. Rim marker recolours red->green across travel."
+        },
+        {
+          "id": "test_orb",
+          "type": "artefact",
+          "position": { "x": 0, "y": -60, "z": 90 },
+          "behaviour": "A grabbable orb at chest height, so grab/throw stays verifiable alongside the mechanisms."
+        }
+      ]
+    }
+  ],
+  "participant_spawns": [
+    {
+      "position": { "x": 0, "y": -100, "z": 0 },
+      "rotation": { "pitch": 0, "yaw": 0, "roll": 0 },
+      "role": "player"
+    }
+  ],
+  "participant_capacity": { "min": 1, "max": 2, "recommended": 1 },
+  "tags": ["test", "mechanism", "lever", "wheel"]
+}
