@@ -1,4 +1,5 @@
 extends Node
+const Diag = preload("res://scripts/debug_flags.gd")
 # Drives lever/wheel Mechanisms from the VR controllers. Mirrors GrabManager's
 # trigger-polling approach (robust on Quest) and its server-relay model:
 # clients read input + move the mechanism; the server only relays values to peers.
@@ -22,7 +23,8 @@ var local_mode: bool = false
 func _ready() -> void:
 	_left  = get_node_or_null("../XROrigin3D/LeftController")
 	_right = get_node_or_null("../XROrigin3D/RightController")
-	print("MechanismManager: left=" + str(_left != null) + " right=" + str(_right != null))
+	if Diag.ON:
+		print("MechanismManager: left=" + str(_left != null) + " right=" + str(_right != null))
 
 func _process(delta: float) -> void:
 	var lt := _trigger(_left)
@@ -36,10 +38,11 @@ func _process(delta: float) -> void:
 	_handle("right", _right, rt)
 
 	# Throttled diagnostic: nearest-handle distance per hand (grep MECHDIAG).
-	_diag_t += delta
-	if _diag_t >= 1.5:
-		_diag_t = 0.0
-		_diag()
+	if Diag.ON:
+		_diag_t += delta
+		if _diag_t >= 1.5:
+			_diag_t = 0.0
+			_diag()
 
 	if local_mode:
 		return
@@ -68,7 +71,8 @@ func _handle(side: String, ctrl: Node3D, trig: float) -> void:
 			if m:
 				_engaged[side] = m
 				m.engage(ctrl.global_position)
-				print("MechMgr: ", side, " engaged ", m.name, " value=", m.value)
+				if Diag.ON:
+					print("MechMgr: ", side, " engaged ", m.name, " value=", m.value)
 	elif trig <= TRIGGER_OFF and _down[side]:
 		_down[side] = false
 		if _engaged.has(side):

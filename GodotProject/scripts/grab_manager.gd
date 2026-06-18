@@ -1,4 +1,5 @@
 extends Node
+const Diag = preload("res://scripts/debug_flags.gd")
 # Grab/throw system for VR controllers.
 # Lives at /root/HMVRGame/GrabManager in both server and client scenes.
 # Polls the analog trigger every frame (robust on Quest) instead of relying on
@@ -37,7 +38,11 @@ func _ready() -> void:
 	_left  = get_node_or_null("../XROrigin3D/LeftController")
 	_right = get_node_or_null("../XROrigin3D/RightController")
 	_debug = get_node_or_null("../XROrigin3D/XRCamera3D/DebugLabel")
-	print("GrabManager: left=" + str(_left != null) + " right=" + str(_right != null) + " debug=" + str(_debug != null))
+	# Hide the in-world debug readout unless diagnostics are enabled.
+	if _debug:
+		_debug.visible = Diag.ON
+	if Diag.ON:
+		print("GrabManager: left=" + str(_left != null) + " right=" + str(_right != null) + " debug=" + str(_debug != null))
 
 func _diag_dump() -> void:
 	# One-shot-ish diagnostic: what does Godot's XR system actually have?
@@ -64,10 +69,11 @@ func _diag_dump() -> void:
 
 func _process(delta: float) -> void:
 	# Throttled XR diagnostic dump every ~2s (logcat: grep XRDIAG).
-	_diag_timer += delta
-	if _diag_timer >= 2.0:
-		_diag_timer = 0.0
-		_diag_dump()
+	if Diag.ON:
+		_diag_timer += delta
+		if _diag_timer >= 2.0:
+			_diag_timer = 0.0
+			_diag_dump()
 
 	var lt := _trigger_val(_left)
 	var rt := _trigger_val(_right)
@@ -77,7 +83,7 @@ func _process(delta: float) -> void:
 	#   act/trk = get_is_active() / get_has_tracking_data()
 	#   If A T shown but trig & grip both 0.00 -> input actions unbound (profile/binding).
 	#   If "- -" shown -> controller not active/tracked (focus or pairing issue).
-	if _debug:
+	if Diag.ON and _debug:
 		_debug.text = "L %s t%.2f g%.2f\nR %s t%.2f g%.2f\nnear %.2f held %d" % [
 			_state(_left),  lt, _grip(_left),
 			_state(_right), rt, _grip(_right),

@@ -1,4 +1,5 @@
 extends Node3D
+const Diag = preload("res://scripts/debug_flags.gd")
 # A constrained interactable driven directly by the VR hand: a LEVER (swings about
 # one local axis, clamped) or a WHEEL (rotates about its facing axis, accumulating).
 # Lives inside a generated room; MechanismManager engages/drives it from a controller.
@@ -38,7 +39,8 @@ func _ready() -> void:
 	# Rest at the low end so the full red->green range maps across the whole travel.
 	_angle = min_angle
 	_apply(false)
-	print("Mechanism: ", name, " kind=", kind, " handle_world=", handle_global_position())
+	if Diag.ON:
+		print("Mechanism: ", name, " kind=", kind, " handle_world=", handle_global_position())
 
 # World position of the grip point the hand must reach to engage. Follows the
 # handle as the mechanism turns (the indicator sits here).
@@ -68,9 +70,11 @@ func drive(hand_global: Vector3) -> void:
 	_apply(true)
 
 # Apply a value pushed from the network (other player turned it).
+# Emit value_changed here too so environment reactions (e.g. a secret door wired
+# to this mechanism) stay consistent on every peer, not just the driver's client.
 func set_value_remote(v: float) -> void:
 	_angle = lerpf(min_angle, max_angle, clampf(v, 0.0, 1.0))
-	_apply(false)
+	_apply(true)
 
 func _hand_angle(hand_global: Vector3) -> float:
 	var rel: Vector3 = to_local(hand_global)

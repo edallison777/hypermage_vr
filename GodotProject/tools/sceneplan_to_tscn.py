@@ -275,6 +275,50 @@ def _try_doorway(a: dict, b: dict, axis: int, doors: dict) -> None:
         doors[upper["id"]].append(("N", door_world - upper["c"][perp]))
 
 
+def _doorway_geoms(zones: list[dict]) -> list[dict]:
+    """Geometry of every auto-cut doorway, in Godot world coords.
+
+    Each entry: axis (0=X,2=Z adjacency), plane (shared-wall coordinate on that
+    axis), perp_c (doorway centre on the perpendicular horizontal axis), floor_top
+    (Y of the floor surface), and the two zone ids it joins. Mirrors the adjacency
+    test in _try_doorway so a secret-door slab can be placed exactly over an opening.
+    """
+    boxes = [_zone_aabb(z) for z in zones]
+    geoms: list[dict] = []
+    for i in range(len(boxes)):
+        for j in range(i + 1, len(boxes)):
+            for axis in (0, 2):
+                g = _doorway_geom(boxes[i], boxes[j], axis)
+                if g:
+                    geoms.append(g)
+    return geoms
+
+
+def _doorway_geom(a: dict, b: dict, axis: int) -> dict | None:
+    perp = 2 if axis == 0 else 0
+    if abs(a["max"][axis] - b["min"][axis]) <= ADJ_TOL:
+        lower, upper = a, b
+    elif abs(b["max"][axis] - a["min"][axis]) <= ADJ_TOL:
+        lower, upper = b, a
+    else:
+        return None
+    ov_perp = _overlap(a, b, perp)
+    ov_y    = _overlap(a, b, 1)
+    if ov_perp is None or ov_y is None:
+        return None
+    if (ov_perp[1] - ov_perp[0]) < DOOR_W * 0.9 or (ov_y[1] - ov_y[0]) < DOOR_H * 0.9:
+        return None
+    return {
+        "a_id":      a["id"],
+        "b_id":      b["id"],
+        "axis":      axis,
+        "perp":      perp,
+        "plane":     (lower["max"][axis] + upper["min"][axis]) / 2.0,
+        "perp_c":    (ov_perp[0] + ov_perp[1]) / 2.0,
+        "floor_top": max(a["min"][1], b["min"][1]) + WALL_DIM,
+    }
+
+
 # ── Room geometry ──────────────────────────────────────────────────────────────
 
 def _static_box(
@@ -415,6 +459,9 @@ def _add_interactable(b: TscnBuilder, obj: dict, zone_node: str, bounds: dict) -
         b.node(node_name, "RigidBody3D", zone_node, {
             "transform": t3d(lx, ly + 0.15, lz),
             "mass": "1.0",
+            # Continuous collision detection so a hard bat/throw can't tunnel the
+            # orb through the thin (0.3 m) walls and out of the level.
+            "continuous_cd": "true",
         }, groups=["grabbable"])
         sub = f"{zone_node}/{node_name}"
         b.node("Mesh",      "MeshInstance3D",   sub, {"mesh": f'SubResource("{mesh}")', "surface_material_override/0": f'SubResource("{mat}")'})
@@ -542,6 +589,53 @@ def _add_mechanism(
     })
 
 
+def _add_secret_door(b: TscnBuilder, geom: dict, cfg: dict) -> None:
+    """Emit a sliding slab that plugs an auto-cut doorway and looks like wall until a
+    mechanism opens it. `cfg` is the zone's "secret_door" object:
+      { "controlled_by": "<mechanism id>", "slide_distance": <m, optional> }
+    The slab is parented to the scene root and positioned in Godot world coords.
+    """
+    axis      = geom["axis"]
+    plane     = geom["plane"]
+    perp_c    = geom["perp_c"]
+    floor_top = geom["floor_top"]
+
+    w     = DOOR_W + 0.10            # cover the jambs a touch
+    h     = DOOR_H + 0.05
+    thick = WALL_DIM * 2 + 0.06      # span both zones' walls at the shared plane
+    cy    = floor_top + h / 2.0
+
+    if axis == 0:                    # zones meet along X -> slab thin on X, wide on Z
+        sx, sy, sz = thick, h, w
+        px, py, pz = plane, cy, perp_c
+    else:                            # zones meet along Z -> slab thin on Z, wide on X
+        sx, sy, sz = w, h, thick
+        px, py, pz = perp_c, cy, plane
+
+    mech_id = str(cfg.get("controlled_by", "")).replace("-", "_")
+    slide   = float(cfg.get("slide_distance", h + 0.20))   # default: drop into floor
+
+    script_rid = b.script_resource("res://scripts/secret_door.gd")
+    mesh_rid   = b.box_mesh(sx, sy, sz)
+    shape_rid  = b.box_shape(sx, sy, sz)
+    mat_rid    = b.material(0.34, 0.34, 0.38)              # stone — reads as wall
+
+    name = f"SecretDoor_{mech_id}"
+    b.node(name, "AnimatableBody3D", ".", {
+        "transform":    t3d(px, py, pz),
+        "script":       f'ExtResource("{script_rid}")',
+        "mechanism_id": f'"{mech_id}"',
+        "open_offset":  v3(0, -slide, 0),
+    })
+    b.node("Mesh", "MeshInstance3D", name, {
+        "mesh": f'SubResource("{mesh_rid}")',
+        "surface_material_override/0": f'SubResource("{mat_rid}")',
+    })
+    b.node("Collision", "CollisionShape3D", name, {
+        "shape": f'SubResource("{shape_rid}")',
+    })
+
+
 # ── Main converter ─────────────────────────────────────────────────────────────
 
 def convert(scene_plan: dict, vr: bool = False) -> str:
@@ -577,6 +671,16 @@ def convert(scene_plan: dict, vr: bool = False) -> str:
     doors = _compute_doors(zones)
     for zone in zones:
         add_zone(b, zone, doors.get(zone["id"]))
+
+    # Secret doors: a zone may declare {"secret_door": {"controlled_by": "<mech id>"}}.
+    # For each auto-cut doorway that touches such a zone, drop in a sliding slab that
+    # seals the opening until the linked mechanism is operated.
+    secret_by_zone = {z["id"]: z["secret_door"] for z in zones if z.get("secret_door")}
+    if secret_by_zone:
+        for geom in _doorway_geoms(zones):
+            cfg = secret_by_zone.get(geom["a_id"]) or secret_by_zone.get(geom["b_id"])
+            if cfg:
+                _add_secret_door(b, geom, cfg)
 
     # Spawns / VR rig
     spawns = scene_plan.get("participant_spawns", [])
