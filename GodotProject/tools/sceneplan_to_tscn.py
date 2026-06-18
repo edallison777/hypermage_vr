@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 import uuid
 from pathlib import Path
@@ -38,6 +39,25 @@ def ue_ext(ex: float, ey: float, ez: float) -> tuple[float, float, float]:
 def t3d(tx: float = 0, ty: float = 0, tz: float = 0) -> str:
     """Identity Transform3D with translation."""
     return f"Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, {tx:.4f}, {ty:.4f}, {tz:.4f})"
+
+
+def t3d_axes(
+    xa: tuple[float, float, float],
+    ya: tuple[float, float, float],
+    za: tuple[float, float, float],
+    o:  tuple[float, float, float],
+) -> str:
+    """Transform3D from explicit basis columns (local X/Y/Z axes) + origin.
+
+    Godot serialises a Transform3D row-major: the first three numbers are the
+    X-components of the three basis vectors, etc. Used for the tilted stair ramp.
+    """
+    return (
+        f"Transform3D({xa[0]:.5f}, {ya[0]:.5f}, {za[0]:.5f}, "
+        f"{xa[1]:.5f}, {ya[1]:.5f}, {za[1]:.5f}, "
+        f"{xa[2]:.5f}, {ya[2]:.5f}, {za[2]:.5f}, "
+        f"{o[0]:.4f}, {o[1]:.4f}, {o[2]:.4f})"
+    )
 
 
 def v3(x: float, y: float, z: float) -> str:
@@ -74,6 +94,15 @@ WALL_DIM  = 0.30  # wall/floor/ceiling thickness in metres
 DOOR_W    = 1.60  # doorway opening width in metres
 DOOR_H    = 2.20  # doorway opening height in metres (from floor)
 ADJ_TOL   = 0.60  # max gap between zone faces to treat them as adjacent (metres)
+
+# Walkable surfaces (floors + stair ramps) carry collision bit 1 (default block) AND
+# bit 3, so locomotion's downward floor-probe (mask = bit 3 only) finds them while
+# ignoring walls, the player's own body, and grabbables. Must match WALKABLE_MASK in
+# scripts/locomotion.gd (1 << 2 == 4).
+WALKABLE_LAYER = 1 | (1 << 2)   # = 5
+
+STEP_RISE  = 0.18  # height gained per visible step (m)
+STEP_GOING = 0.30  # horizontal depth per step (m); rise:going sets the incline
 
 
 # ── .tscn builder ─────────────────────────────────────────────────────────────
@@ -328,11 +357,19 @@ def _static_box(
     sx: float, sy: float, sz: float,
     lx: float, ly: float, lz: float,
     mat_rid: str,
+    layer: int | None = None,
 ) -> None:
-    """StaticBody3D + MeshInstance3D + CollisionShape3D for one wall/floor/ceiling."""
+    """StaticBody3D + MeshInstance3D + CollisionShape3D for one wall/floor/ceiling.
+
+    `layer` overrides the StaticBody's collision_layer (used to flag walkable
+    surfaces so locomotion's downward floor-probe can find them — see WALKABLE_LAYER).
+    """
     mesh_rid  = b.box_mesh(sx, sy, sz)
     shape_rid = b.box_shape(sx, sy, sz)
-    b.node(name, "StaticBody3D", parent, {"transform": t3d(lx, ly, lz)})
+    body_props: dict[str, str] = {"transform": t3d(lx, ly, lz)}
+    if layer is not None:
+        body_props["collision_layer"] = str(layer)
+    b.node(name, "StaticBody3D", parent, body_props)
     sub = f"{parent}/{name}"
     b.node("Mesh", "MeshInstance3D", sub, {
         "mesh": f'SubResource("{mesh_rid}")',
@@ -380,7 +417,190 @@ def _build_wall(
         emit("_lintel", dr - dl, lintel_h, (dl + dr) / 2.0, (ly - height / 2.0) + DOOR_H + lintel_h / 2.0)
 
 
-def add_zone(b: TscnBuilder, zone: dict, doors: list[tuple[str, float]] | None = None) -> None:
+def _build_slab_with_hole(
+    b: TscnBuilder,
+    name: str,
+    parent: str,
+    sx: float, sz: float,            # slab footprint (X by Z)
+    lx: float, ly: float, lz: float, # slab centre in parent-local coords
+    mat_rid: str,
+    hole_cx: float, hole_cz: float,  # hole centre, offset from slab centre
+    hole_x: float,  hole_z: float,   # hole size (X by Z)
+    layer: int | None = None,
+) -> None:
+    """A horizontal floor/ceiling slab with a rectangular opening, emitted as up to
+    four border panels — the horizontal-plane analogue of _build_wall's doorway. Lets
+    a staircase emerge through a floor (and pass up through the ceiling below)."""
+    t = WALL_DIM
+    hx0, hx1 = hole_cx - hole_x / 2.0, hole_cx + hole_x / 2.0
+    hz0, hz1 = hole_cz - hole_z / 2.0, hole_cz + hole_z / 2.0
+
+    def panel(suffix: str, px0: float, px1: float, pz0: float, pz1: float) -> None:
+        w, d = px1 - px0, pz1 - pz0
+        if w <= 0.01 or d <= 0.01:
+            return
+        _static_box(b, name + suffix, parent, w, t, d,
+                    lx + (px0 + px1) / 2.0, ly, lz + (pz0 + pz1) / 2.0, mat_rid, layer)
+
+    panel("_n", -sx / 2.0,  sx / 2.0, -sz / 2.0, hz0)          # full-width strip, -Z side
+    panel("_s", -sx / 2.0,  sx / 2.0,  hz1,  sz / 2.0)         # full-width strip, +Z side
+    panel("_w", -sx / 2.0,  hx0,       hz0,  hz1)              # filler, -X side of hole
+    panel("_e",  hx1,       sx / 2.0,  hz0,  hz1)              # filler, +X side of hole
+
+
+def _staircase_geoms(zones: list[dict]) -> list[dict]:
+    """Resolve each zone's optional "staircase" config into concrete geometry.
+
+    Schema (on the UPPER zone being reached):
+      "staircase": { "from_zone": "<lower id>", "base": {"x":..,"y":..},
+                     "run_axis": "N|S|E|W", "width": <UE cm, optional> }
+    base = UE horizontal position of the stair BOTTOM centre; run_axis = Godot wall
+    side it ascends toward (N=-Z, S=+Z, E=+X, W=-X). Heights derive from the two
+    zones' floor levels, so no manual Y plumbing.
+    """
+    by_id = {z["id"]: _zone_aabb(z) for z in zones}
+    out: list[dict] = []
+    for z in zones:
+        sc = z.get("staircase")
+        if not sc:
+            continue
+        upper = _zone_aabb(z)
+        lower = by_id.get(sc.get("from_zone"))
+        if lower is None:
+            continue
+        bottom_y = lower["min"][1] + WALL_DIM
+        top_y    = upper["min"][1] + WALL_DIM
+        rise = top_y - bottom_y
+        if rise <= 0.01:
+            continue
+        base = sc.get("base", {"x": 0, "y": 0})
+        bx, _by, bz = ue_pos(base.get("x", 0), base.get("y", 0), 0)
+        run = {"N": (0, -1), "S": (0, 1), "E": (1, 0), "W": (-1, 0)}.get(
+            str(sc.get("run_axis", "N")).upper(), (0, -1))
+        width = sc.get("width")
+        width = (width / 100.0) if width else 1.40
+
+        n = max(1, round(rise / STEP_RISE))
+        step_rise = rise / n
+        going_total = n * STEP_GOING
+        top_x = bx + run[0] * going_total
+        top_z = bz + run[1] * going_total
+
+        # Stairwell opening. It must span every run-position where the ramp passes
+        # UNDER the upper floor / lower ceiling while the player's head is at or above
+        # those slabs — otherwise the head-height body snags on the slab underside and
+        # the downward floor-probe snaps to the slab instead of the ramp. Low end: where
+        # the head (feet + HEAD_CLEAR) first reaches the lowest slab (the lower ceiling's
+        # underside). High end: just past the top landing. (HEAD_CLEAR must exceed a tall
+        # player's eye height; it pairs with HEAD_DROP/probe in locomotion.gd.)
+        HEAD_CLEAR = 1.70
+        slab_lo = lower["max"][1] - WALL_DIM
+        frac_lo = max(0.0, min(1.0, ((slab_lo - HEAD_CLEAR) - bottom_y) / rise))
+        p_lo = frac_lo * going_total - 0.30      # start a touch earlier (body radius margin)
+        # End the hole exactly at the ramp top so the solid upper floor abuts the ramp
+        # there (both at top_y). Extending past it would leave a walkable gap where the
+        # probe sees through to the floor far below and drops the player.
+        p_hi = going_total
+        lo_x, lo_z = bx + run[0] * p_lo, bz + run[1] * p_lo
+        hi_x, hi_z = bx + run[0] * p_hi, bz + run[1] * p_hi
+        hcx, hcz = (lo_x + hi_x) / 2.0, (lo_z + hi_z) / 2.0
+        along = abs(p_hi - p_lo)
+        perp  = width + 0.6
+        if run[1] == 0:        # ascends along X -> long axis of the hole is X
+            hole_x, hole_z = along, perp
+        else:                  # ascends along Z
+            hole_x, hole_z = perp, along
+
+        out.append({
+            "lower_id": lower["id"], "upper_id": upper["id"],
+            "bx": bx, "bz": bz, "bottom_y": bottom_y,
+            "top_x": top_x, "top_z": top_z, "top_y": top_y,
+            "run": run, "width": width, "n": n,
+            "step_rise": step_rise, "step_going": STEP_GOING, "going_total": going_total,
+            "lower_c": lower["c"], "upper_c": upper["c"],
+            "hcx": hcx, "hcz": hcz, "hole_x": hole_x, "hole_z": hole_z,
+        })
+    return out
+
+
+def _stair_holes(geoms: list[dict]) -> dict[str, dict]:
+    """Map zone id -> hole spec (in that zone's local coords) for floors/ceilings the
+    staircases must pierce: the upper zone's floor and the lower zone's ceiling."""
+    holes: dict[str, dict] = {}
+    for g in geoms:
+        holes[g["upper_id"]] = {  # cut the upper zone's FLOOR
+            "where": "floor",
+            "cx": g["hcx"] - g["upper_c"][0], "cz": g["hcz"] - g["upper_c"][2],
+            "hx": g["hole_x"], "hz": g["hole_z"],
+        }
+        holes[g["lower_id"]] = {  # cut the lower zone's CEILING
+            "where": "ceiling",
+            "cx": g["hcx"] - g["lower_c"][0], "cz": g["hcz"] - g["lower_c"][2],
+            "hx": g["hole_x"], "hz": g["hole_z"],
+        }
+    return holes
+
+
+def _add_staircase(b: TscnBuilder, g: dict) -> None:
+    """Emit a staircase in Godot world coords (parented to the scene root): SOLID step
+    boxes (collision on the default layer so the body + thrown objects are blocked and
+    can't pass through the stairs) plus one tilted ramp collider on the WALKABLE layer
+    so the floor-probe rides a smooth slope (the steps are off the walkable layer so they
+    don't make the probe steppy)."""
+    run = g["run"]
+    bx, bz, bottom_y = g["bx"], g["bz"], g["bottom_y"]
+    w = g["width"]
+    parent = f"Staircase_{g['lower_id']}_{g['upper_id']}".replace("-", "_")
+    b.node(parent, "Node3D", ".", {"transform": t3d(0, 0, 0)})
+    mat = b.material(0.55, 0.55, 0.60)
+
+    # Solid steps: each runs from below the floor up to its tread top (which sits on the
+    # ramp/walking surface). Stacked side-by-side along the run they form a solid mass
+    # whose tall upper steps block the chest-height body from walking through the stairs.
+    base = bottom_y - WALL_DIM
+    for i in range(g["n"]):
+        cx = bx + run[0] * g["step_going"] * (i + 0.5)
+        cz = bz + run[1] * g["step_going"] * (i + 0.5)
+        top_i = bottom_y + g["step_rise"] * (i + 0.5)   # tread top on the slope line
+        h = top_i - base
+        cy = (base + top_i) / 2.0
+        if run[1] == 0:
+            sx, sz = g["step_going"], w
+        else:
+            sx, sz = w, g["step_going"]
+        _static_box(b, f"Step_{i}", parent, sx, h, sz, cx, cy, cz, mat)  # default layer 1
+
+    # Smooth ramp collider (walkable layer) under the treads.
+    going_total, rise = g["going_total"], g["top_y"] - bottom_y
+    length = math.sqrt(going_total * going_total + rise * rise)
+    xa = (run[0] * going_total / length, rise / length, run[1] * going_total / length)
+    za = (0.0, 0.0, 1.0) if run[1] == 0 else (1.0, 0.0, 0.0)
+    # ya = za x xa  (thin axis of the slab; here it points DOWN-slope, so physical
+    # "up" out of the ramp is -ya). Offset the centre by +ya*thick/2 so the TOP face
+    # lands exactly on the slope line joining the two floor tops -> flush, no lurch
+    # stepping on/off the ramp.
+    ya = (
+        za[1] * xa[2] - za[2] * xa[1],
+        za[2] * xa[0] - za[0] * xa[2],
+        za[0] * xa[1] - za[1] * xa[0],
+    )
+    thick = 0.20
+    mid = ((bx + g["top_x"]) / 2.0, (bottom_y + g["top_y"]) / 2.0, (bz + g["top_z"]) / 2.0)
+    origin = (mid[0] + ya[0] * thick / 2.0,
+              mid[1] + ya[1] * thick / 2.0,
+              mid[2] + ya[2] * thick / 2.0)
+    shape = b.box_shape(length, thick, w)
+    b.node("Ramp", "StaticBody3D", parent, {
+        "transform": t3d_axes(xa, ya, za, origin),
+        "collision_layer": str(WALKABLE_LAYER),
+    })
+    b.node("Collision", "CollisionShape3D", f"{parent}/Ramp", {
+        "shape": f'SubResource("{shape}")',
+    })
+
+
+def add_zone(b: TscnBuilder, zone: dict, doors: list[tuple[str, float]] | None = None,
+             hole: dict | None = None) -> None:
     zid    = zone["id"].replace("-", "_")
     ztype  = zone.get("type", "exploration")
     bounds = zone["bounds"]
@@ -408,9 +628,22 @@ def add_zone(b: TscnBuilder, zone: dict, doors: list[tuple[str, float]] | None =
     # doorway offsets per wall side (None = solid wall)
     door = {side: off for side, off in (doors or [])}
 
-    # floor / ceiling
-    _static_box(b, f"Floor_{zid}",   zone_node, sx, t,  sz,  0,  -sy/2 + t/2,  0, floor_mat)
-    _static_box(b, f"Ceiling_{zid}", zone_node, sx, t,  sz,  0,   sy/2 - t/2,  0, ceil_mat)
+    # floor / ceiling — floors are flagged walkable so locomotion's floor-probe finds
+    # them; a staircase that pierces this zone cuts a hole in the floor (or ceiling).
+    floor_ly = -sy/2 + t/2
+    ceil_ly  =  sy/2 - t/2
+    if hole and hole["where"] == "floor":
+        _build_slab_with_hole(b, f"Floor_{zid}", zone_node, sx, sz, 0, floor_ly, 0,
+                              floor_mat, hole["cx"], hole["cz"], hole["hx"], hole["hz"],
+                              WALKABLE_LAYER)
+    else:
+        _static_box(b, f"Floor_{zid}", zone_node, sx, t, sz, 0, floor_ly, 0, floor_mat,
+                    WALKABLE_LAYER)
+    if hole and hole["where"] == "ceiling":
+        _build_slab_with_hole(b, f"Ceiling_{zid}", zone_node, sx, sz, 0, ceil_ly, 0,
+                              ceil_mat, hole["cx"], hole["cz"], hole["hx"], hole["hz"])
+    else:
+        _static_box(b, f"Ceiling_{zid}", zone_node, sx, t, sz, 0, ceil_ly, 0, ceil_mat)
     # north / south walls  (Z faces in Godot) — span along X
     _build_wall(b, f"WallN_{zid}", zone_node, wall_mat, span_axis="x", span_len=sx, height=sy, thickness=t, lx=0, ly=0, lz=-sz/2 + t/2, door_offset=door.get("N"))
     _build_wall(b, f"WallS_{zid}", zone_node, wall_mat, span_axis="x", span_len=sx, height=sy, thickness=t, lx=0, ly=0, lz= sz/2 - t/2, door_offset=door.get("S"))
@@ -666,11 +899,18 @@ def convert(scene_plan: dict, vr: bool = False) -> str:
             "current": "true",
         })
 
-    # Zones (with doorways cut where zones are adjacent)
+    # Zones (with doorways cut where zones are adjacent, and stairwell holes cut where
+    # a staircase pierces a floor/ceiling)
     zones = scene_plan.get("zones", [])
     doors = _compute_doors(zones)
+    stair_geoms = _staircase_geoms(zones)
+    holes = _stair_holes(stair_geoms)
     for zone in zones:
-        add_zone(b, zone, doors.get(zone["id"]))
+        add_zone(b, zone, doors.get(zone["id"]), holes.get(zone["id"]))
+
+    # Staircases connecting stacked zones (cosmetic treads + walkable ramp at root).
+    for g in stair_geoms:
+        _add_staircase(b, g)
 
     # Secret doors: a zone may declare {"secret_door": {"controlled_by": "<mech id>"}}.
     # For each auto-cut doorway that touches such a zone, drop in a sliding slab that

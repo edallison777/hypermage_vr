@@ -1,0 +1,45 @@
+{
+  "id": "two-floor-test",
+  "name": "Two Floor Test",
+  "description": "A ground hall with a staircase up to a loft (second floor). A gold orb sits on the loft as the reach-it reward. Tests vertical traversal (smooth auto-rise) + the converter's stacked-zone + staircase support.",
+  "scene_type": "exploration",
+  "platforms": ["vr"],
+  "zones": [
+    {
+      "id": "hall",
+      "name": "Ground Hall",
+      "type": "exploration",
+      "bounds": {
+        "center": { "x": 0, "y": 0, "z": 150 },
+        "extents": { "x": 250, "y": 500, "z": 150 }
+      }
+    },
+    {
+      "id": "loft",
+      "name": "Loft",
+      "type": "objective",
+      "staircase": { "from_zone": "hall", "base": { "x": 0, "y": 200 }, "run_axis": "S", "width": 140 },
+      "bounds": {
+        "center": { "x": 0, "y": 0, "z": 450 },
+        "extents": { "x": 250, "y": 500, "z": 150 }
+      },
+      "interactables": [
+        {
+          "id": "loft_orb",
+          "type": "artefact",
+          "position": { "x": 0, "y": -400, "z": 360 },
+          "behaviour": "A golden orb on the loft floor. Reachable only by climbing the staircase."
+        }
+      ]
+    }
+  ],
+  "participant_spawns": [
+    {
+      "position": { "x": 0, "y": 400, "z": 30 },
+      "rotation": { "pitch": 0, "yaw": 180, "roll": 0 },
+      "role": "player"
+    }
+  ],
+  "participant_capacity": { "min": 1, "max": 2, "recommended": 1 },
+  "tags": ["test", "staircase", "second-floor", "locomotion"]
+}

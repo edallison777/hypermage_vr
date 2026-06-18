@@ -14,6 +14,9 @@ const BODY_RADIUS  := 0.22   # torso-height sphere — slides round edges, never
 const HEAD_DROP    := 0.60   # body centre sits this far below the head (keeps it off the floor)
 const PUSH_IMPULSE := 2.5    # shove given to RigidBodies you walk into
 const TOGGLE_ACTION := "by_button"   # B (right) / Y (left) toggles collision for debugging
+const WALKABLE_MASK := 1 << 2   # collision layer 3 — floors/stair ramps (matches WALKABLE_LAYER in the converter)
+const CLIMB_SPEED   := 3.0      # m/s the rig rises/descends to follow the floor/stairs beneath it
+const MAX_STEP_UP   := 0.40     # ignore walkable surfaces more than this above us (overhead ramps/ledges) -> don't get yanked up when walking UNDER the stairs
 
 @onready var origin: XROrigin3D = get_node_or_null("../XROrigin3D")
 @onready var camera: XRCamera3D = get_node_or_null("../XROrigin3D/XRCamera3D")
@@ -62,6 +65,10 @@ func _physics_process(dt: float) -> void:
 		# body also holds the rig back -> you cannot walk through walls.
 		var shift := _body.global_position - head_xz
 		origin.global_position += Vector3(shift.x, 0.0, shift.z)
+
+		# Vertical traversal: probe straight down for the walkable surface under the
+		# head and smoothly raise/lower the rig to stand on it (stairs / second floor).
+		_follow_floor(dt)
 	else:
 		# Collision off (debug): free-fly, no blocking. Keep the body parked
 		# under the head so re-enabling collision doesn't snap the rig.
@@ -72,6 +79,27 @@ func _physics_process(dt: float) -> void:
 			camera.global_position.z)
 
 	_apply_turn(dt)
+
+func _follow_floor(dt: float) -> void:
+	# Downward ray on the walkable layer only -> ignores walls, the player's own body,
+	# and grabbables (the gotcha that makes a naive floor-raycast hit the player sphere).
+	var space := _body.get_world_3d().direct_space_state
+	var from := camera.global_position + Vector3(0.0, 0.2, 0.0)
+	var to := from + Vector3(0.0, -6.0, 0.0)
+	var q := PhysicsRayQueryParameters3D.create(from, to, WALKABLE_MASK)
+	q.exclude = [_body.get_rid()]
+	var hit := space.intersect_ray(q)
+	if hit:
+		# Move the rig (player's feet) toward the surface at a fixed rate -> smooth
+		# ascent up stairs/ramps, smooth descent. No hit (briefly over the stairwell
+		# gap) -> leave Y unchanged so we never fall through the world.
+		var cur: float = origin.global_position.y
+		var target: float = hit.position.y
+		# Only follow surfaces within a step above us. A surface far higher is an
+		# overhead ramp/ledge (e.g. walking UNDER the stairs) -> ignore it and stay
+		# grounded; its underside collider blocks the body from passing through.
+		if target - cur <= MAX_STEP_UP:
+			origin.global_position.y = move_toward(cur, target, CLIMB_SPEED * dt)
 
 func _check_toggle() -> void:
 	var pressed := false
