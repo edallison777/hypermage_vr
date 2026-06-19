@@ -11,6 +11,7 @@ const HealthHUD = preload("res://scripts/health_hud.gd")
 @onready var player_sync:    Node    = $PlayerSync
 @onready var health:         Node    = $HealthManager
 @onready var game_state:     Node    = $GameState
+@onready var leaderboard:    Node    = $LeaderboardClient
 
 var _spawn_pos := Vector3.ZERO
 var _hud: Node = null
@@ -33,6 +34,7 @@ func _ready() -> void:
 	var bus := get_tree().get_first_node_in_group("game_events")
 	if bus:
 		bus.event.connect(_on_health_event)
+		bus.event.connect(_on_game_event)   # F6b: submit score / refresh leaderboard
 
 	_try_auto_login()
 
@@ -131,6 +133,8 @@ func _find_prefixed(n: Node, prefix: String) -> Node:
 
 func _on_auth_success(id_token: String, player_id: String) -> void:
 	_set_status("Finding server...")
+	if leaderboard:
+		leaderboard.configure(id_token)   # F6b: enable score submit / leaderboard
 	matchmaking.start(id_token, player_id)
 
 func _on_auth_failed(error: String) -> void:
@@ -147,6 +151,8 @@ func _on_connected() -> void:
 	_set_status("Connected!")
 	player_sync.setup()
 	_spawn_health_hud()
+	if leaderboard:
+		leaderboard.fetch()   # F6b: show current standings on the in-world scoreboard
 	Audio.play_ambient()
 	await get_tree().create_timer(3.0).timeout
 	if is_instance_valid(status_label):
@@ -179,6 +185,13 @@ func _on_health_event(name: String, payload: Dictionary) -> void:
 		$XROrigin3D.global_position = sp
 		if is_instance_valid(status_label):
 			status_label.visible = false
+
+# F6b: on game end, submit our final (team) score; the client then refreshes the
+# leaderboard, which the in-world scoreboard renders. No-op offline (no id_token).
+func _on_game_event(name: String, payload: Dictionary) -> void:
+	if name == "game:won" or name == "game:lost":
+		if leaderboard:
+			leaderboard.submit(int(payload.get("score", 0)))
 
 func _find_spawn_position() -> Vector3:
 	var n := _find_prefixed(self, "SpawnPoint")

@@ -44,6 +44,12 @@ variable "player_rewards_table_name" {
   default     = ""
 }
 
+variable "player_scores_table_name" {
+  description = "Name of the PlayerScores (leaderboard) DynamoDB table (F6b)"
+  type        = string
+  default     = ""
+}
+
 variable "log_retention_days" {
   description = "CloudWatch log retention in days"
   type        = number

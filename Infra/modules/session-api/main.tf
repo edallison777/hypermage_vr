@@ -130,6 +130,54 @@ resource "aws_api_gateway_integration" "post_session_summary" {
   uri                     = aws_lambda_function.post_session_summary.invoke_arn
 }
 
+# /scores resource — POST player high score (F6b, Cognito-authed)
+resource "aws_api_gateway_resource" "scores" {
+  rest_api_id = aws_api_gateway_rest_api.session_api.id
+  parent_id   = aws_api_gateway_rest_api.session_api.root_resource_id
+  path_part   = "scores"
+}
+
+resource "aws_api_gateway_method" "post_score" {
+  rest_api_id   = aws_api_gateway_rest_api.session_api.id
+  resource_id   = aws_api_gateway_resource.scores.id
+  http_method   = "POST"
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = aws_api_gateway_authorizer.cognito.id
+}
+
+resource "aws_api_gateway_integration" "post_score" {
+  rest_api_id             = aws_api_gateway_rest_api.session_api.id
+  resource_id             = aws_api_gateway_resource.scores.id
+  http_method             = aws_api_gateway_method.post_score.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.post_score.invoke_arn
+}
+
+# /leaderboard resource — GET top-N (F6b, Cognito-authed)
+resource "aws_api_gateway_resource" "leaderboard" {
+  rest_api_id = aws_api_gateway_rest_api.session_api.id
+  parent_id   = aws_api_gateway_rest_api.session_api.root_resource_id
+  path_part   = "leaderboard"
+}
+
+resource "aws_api_gateway_method" "get_leaderboard" {
+  rest_api_id   = aws_api_gateway_rest_api.session_api.id
+  resource_id   = aws_api_gateway_resource.leaderboard.id
+  http_method   = "GET"
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = aws_api_gateway_authorizer.cognito.id
+}
+
+resource "aws_api_gateway_integration" "get_leaderboard" {
+  rest_api_id             = aws_api_gateway_rest_api.session_api.id
+  resource_id             = aws_api_gateway_resource.leaderboard.id
+  http_method             = aws_api_gateway_method.get_leaderboard.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.get_leaderboard.invoke_arn
+}
+
 # API Gateway Deployment
 resource "aws_api_gateway_deployment" "session_api" {
   rest_api_id = aws_api_gateway_rest_api.session_api.id
@@ -149,6 +197,12 @@ resource "aws_api_gateway_deployment" "session_api" {
       aws_api_gateway_resource.matchmaking_cancel_ticket.id,
       aws_api_gateway_method.cancel_matchmaking.id,
       aws_api_gateway_integration.cancel_matchmaking.id,
+      aws_api_gateway_resource.scores.id,
+      aws_api_gateway_method.post_score.id,
+      aws_api_gateway_integration.post_score.id,
+      aws_api_gateway_resource.leaderboard.id,
+      aws_api_gateway_method.get_leaderboard.id,
+      aws_api_gateway_integration.get_leaderboard.id,
     ]))
   }
 
@@ -223,6 +277,26 @@ resource "aws_cloudwatch_log_group" "lambda_post_summary" {
 
   tags = merge(var.tags, {
     Name        = "${var.project_name}-post-session-summary-logs"
+    Environment = var.environment
+  })
+}
+
+resource "aws_cloudwatch_log_group" "lambda_post_score" {
+  name              = "/aws/lambda/${var.project_name}-post-score-${var.environment}"
+  retention_in_days = var.log_retention_days
+
+  tags = merge(var.tags, {
+    Name        = "${var.project_name}-post-score-logs"
+    Environment = var.environment
+  })
+}
+
+resource "aws_cloudwatch_log_group" "lambda_get_leaderboard" {
+  name              = "/aws/lambda/${var.project_name}-get-leaderboard-${var.environment}"
+  retention_in_days = var.log_retention_days
+
+  tags = merge(var.tags, {
+    Name        = "${var.project_name}-get-leaderboard-logs"
     Environment = var.environment
   })
 }
@@ -328,7 +402,12 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
           "dynamodb:UpdateItem",
           "dynamodb:Query"
         ]
-        Resource = var.dynamodb_table_arns
+        # Tables + their GSIs (the F6b leaderboard reads the LeaderboardIndex GSI,
+        # which requires the index ARN, not just the table ARN).
+        Resource = concat(
+          var.dynamodb_table_arns,
+          [for a in var.dynamodb_table_arns : "${a}/index/*"]
+        )
       }
     ]
   })
@@ -351,6 +430,18 @@ data "archive_file" "post_session_summary" {
   type        = "zip"
   source_dir  = "${path.module}/lambda/post-session-summary"
   output_path = "${path.module}/lambda/dist/post-session-summary.zip"
+}
+
+data "archive_file" "post_score" {
+  type        = "zip"
+  source_dir  = "${path.module}/lambda/post-score"
+  output_path = "${path.module}/lambda/dist/post-score.zip"
+}
+
+data "archive_file" "get_leaderboard" {
+  type        = "zip"
+  source_dir  = "${path.module}/lambda/get-leaderboard"
+  output_path = "${path.module}/lambda/dist/get-leaderboard.zip"
 }
 
 # Lambda function: Start Matchmaking
@@ -454,6 +545,68 @@ resource "aws_lambda_function" "post_session_summary" {
   ]
 }
 
+# Lambda function: Post Score (F6b — upsert player high score to the leaderboard)
+resource "aws_lambda_function" "post_score" {
+  filename         = data.archive_file.post_score.output_path
+  function_name    = "${var.project_name}-post-score-${var.environment}"
+  role             = aws_iam_role.lambda.arn
+  handler          = "index.handler"
+  source_code_hash = data.archive_file.post_score.output_base64sha256
+  runtime          = "nodejs20.x"
+  timeout          = 15
+  memory_size      = 256
+
+  environment {
+    variables = {
+      PLAYER_SCORES_TABLE = var.player_scores_table_name
+      ENVIRONMENT         = var.environment
+      LOG_LEVEL           = var.lambda_log_level
+    }
+  }
+
+  tags = merge(var.tags, {
+    Name        = "${var.project_name}-post-score"
+    Environment = var.environment
+  })
+
+  depends_on = [
+    aws_cloudwatch_log_group.lambda_post_score,
+    aws_iam_role_policy.lambda_logs,
+    aws_iam_role_policy.lambda_dynamodb,
+  ]
+}
+
+# Lambda function: Get Leaderboard (F6b — top-N from the LeaderboardIndex GSI)
+resource "aws_lambda_function" "get_leaderboard" {
+  filename         = data.archive_file.get_leaderboard.output_path
+  function_name    = "${var.project_name}-get-leaderboard-${var.environment}"
+  role             = aws_iam_role.lambda.arn
+  handler          = "index.handler"
+  source_code_hash = data.archive_file.get_leaderboard.output_base64sha256
+  runtime          = "nodejs20.x"
+  timeout          = 15
+  memory_size      = 256
+
+  environment {
+    variables = {
+      PLAYER_SCORES_TABLE = var.player_scores_table_name
+      ENVIRONMENT         = var.environment
+      LOG_LEVEL           = var.lambda_log_level
+    }
+  }
+
+  tags = merge(var.tags, {
+    Name        = "${var.project_name}-get-leaderboard"
+    Environment = var.environment
+  })
+
+  depends_on = [
+    aws_cloudwatch_log_group.lambda_get_leaderboard,
+    aws_iam_role_policy.lambda_logs,
+    aws_iam_role_policy.lambda_dynamodb,
+  ]
+}
+
 # Lambda permissions for API Gateway
 resource "aws_lambda_permission" "start_matchmaking" {
   statement_id  = "AllowAPIGatewayInvoke"
@@ -475,6 +628,22 @@ resource "aws_lambda_permission" "post_session_summary" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.post_session_summary.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.session_api.execution_arn}/*/*"
+}
+
+resource "aws_lambda_permission" "post_score" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.post_score.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.session_api.execution_arn}/*/*"
+}
+
+resource "aws_lambda_permission" "get_leaderboard" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.get_leaderboard.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.session_api.execution_arn}/*/*"
 }

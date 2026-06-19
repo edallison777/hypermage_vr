@@ -156,6 +156,60 @@ resource "aws_dynamodb_table" "player_rewards" {
   })
 }
 
+# PlayerScores Table (F6b — leaderboard, 72h rolling TTL)
+# One row per player holding their best score; the LeaderboardIndex GSI lets the
+# leaderboard be read as a top-N descending Query on totalScore. ttl is set by the
+# post-score Lambda to now+72h so the board self-trims (matches the 72h reward model).
+resource "aws_dynamodb_table" "player_scores" {
+  name         = "${var.project_name}-player-scores-${var.environment}"
+  billing_mode = var.billing_mode
+  hash_key     = "playerId"
+
+  attribute {
+    name = "playerId"
+    type = "S"
+  }
+
+  attribute {
+    name = "leaderboardId"
+    type = "S"
+  }
+
+  attribute {
+    name = "totalScore"
+    type = "N"
+  }
+
+  # Top-N leaderboard: Query the partition leaderboardId="global", range totalScore
+  # descending (ScanIndexForward=false, Limit=N).
+  global_secondary_index {
+    name            = "LeaderboardIndex"
+    hash_key        = "leaderboardId"
+    range_key       = "totalScore"
+    projection_type = "ALL"
+  }
+
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
+
+  point_in_time_recovery {
+    enabled = var.enable_point_in_time_recovery
+  }
+
+  server_side_encryption {
+    enabled     = true
+    kms_key_arn = var.kms_key_arn
+  }
+
+  tags = merge(var.tags, {
+    Name        = "${var.project_name}-player-scores"
+    Environment = var.environment
+    TTL         = "72h"
+  })
+}
+
 # CloudWatch Alarms for table monitoring
 resource "aws_cloudwatch_metric_alarm" "player_sessions_read_throttle" {
   count               = var.enable_cloudwatch_alarms ? 1 : 0

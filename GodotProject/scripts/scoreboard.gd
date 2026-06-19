@@ -20,6 +20,7 @@ var _score_lbl: Label3D = null
 var _obj_lbl: Label3D = null
 var _time_lbl: Label3D = null
 var _banner_lbl: Label3D = null
+var _lb_lbl: Label3D = null
 
 func _ready() -> void:
 	_total = get_tree().get_nodes_in_group("objective").size()
@@ -46,7 +47,7 @@ func _mk_label(y: float, size: int, color: Color) -> Label3D:
 func _build() -> void:
 	var back := MeshInstance3D.new()
 	var m := BoxMesh.new()
-	m.size = Vector3(1.4, 0.9, 0.04)
+	m.size = Vector3(1.4, 1.5, 0.04)
 	back.mesh = m
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(0.04, 0.05, 0.08)
@@ -54,12 +55,15 @@ func _build() -> void:
 	back.material_override = mat
 	add_child(back)
 
-	var title := _mk_label(0.34, 40, Color(0.7, 0.8, 1.0))
+	var title := _mk_label(0.64, 40, Color(0.7, 0.8, 1.0))
 	title.text = board_title
-	_score_lbl  = _mk_label(0.16, 48, Color(1, 1, 0.5))
-	_obj_lbl    = _mk_label(0.00, 40, Color(1, 1, 1))
-	_time_lbl   = _mk_label(-0.16, 40, Color(0.8, 0.9, 0.8))
-	_banner_lbl = _mk_label(-0.34, 52, Color(0.5, 1, 0.5))
+	_score_lbl  = _mk_label(0.46, 48, Color(1, 1, 0.5))
+	_obj_lbl    = _mk_label(0.30, 40, Color(1, 1, 1))
+	_time_lbl   = _mk_label(0.14, 40, Color(0.8, 0.9, 0.8))
+	_banner_lbl = _mk_label(-0.04, 52, Color(0.5, 1, 0.5))
+	# Leaderboard (F6b): populated from "leaderboard:loaded"; multi-line, top-anchored.
+	_lb_lbl = _mk_label(-0.20, 30, Color(0.85, 0.85, 0.95))
+	_lb_lbl.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 
 func _on_event(name: String, payload: Dictionary) -> void:
 	match name:
@@ -78,9 +82,21 @@ func _on_event(name: String, payload: Dictionary) -> void:
 			_ended = true
 			_banner("DEFEAT — " + str(payload.get("reason", "")), Color(1.0, 0.4, 0.4))
 			return
+		"leaderboard:loaded":
+			_show_leaderboard(payload.get("entries", []))
+			return
 		_:
 			return
 	_redraw()
+
+func _show_leaderboard(entries: Array) -> void:
+	if _lb_lbl == null:
+		return
+	var lines := ["— LEADERBOARD —"]
+	for e in entries:
+		lines.append("%d. %s  %d" % [int(e.get("rank", 0)),
+				str(e.get("displayName", "?")), int(e.get("score", 0))])
+	_lb_lbl.text = "\n".join(lines)
 
 func _banner(text: String, color: Color) -> void:
 	if _banner_lbl:

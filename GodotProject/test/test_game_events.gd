@@ -109,7 +109,8 @@ func test_interactive_scripts_compile() -> void:
 			"res://scripts/game_state.gd",
 			"res://scripts/objective.gd",
 			"res://scripts/game_rules.gd",
-			"res://scripts/scoreboard.gd"]:
+			"res://scripts/scoreboard.gd",
+			"res://scripts/leaderboard_client.gd"]:
 		# load() returns the resource even on a parse error; can_instantiate() is false
 		# unless the script actually compiled — so this catches parse failures.
 		var s = load(p)

@@ -45,12 +45,23 @@ output "player_rewards_table_id" {
   value       = aws_dynamodb_table.player_rewards.id
 }
 
+output "player_scores_table_name" {
+  description = "PlayerScores (leaderboard) table name"
+  value       = aws_dynamodb_table.player_scores.name
+}
+
+output "player_scores_table_arn" {
+  description = "PlayerScores (leaderboard) table ARN"
+  value       = aws_dynamodb_table.player_scores.arn
+}
+
 output "all_table_arns" {
   description = "List of all DynamoDB table ARNs"
   value = [
     aws_dynamodb_table.player_sessions.arn,
     aws_dynamodb_table.interaction_events.arn,
-    aws_dynamodb_table.player_rewards.arn
+    aws_dynamodb_table.player_rewards.arn,
+    aws_dynamodb_table.player_scores.arn
   ]
 }
 

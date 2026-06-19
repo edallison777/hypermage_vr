@@ -181,6 +181,7 @@ module "session_api" {
   dynamodb_table_arns        = module.dynamodb.all_table_arns
   player_sessions_table_name = module.dynamodb.player_sessions_table_name
   player_rewards_table_name  = module.dynamodb.player_rewards_table_name
+  player_scores_table_name   = module.dynamodb.player_scores_table_name
 
   # Logging
   log_retention_days = 30

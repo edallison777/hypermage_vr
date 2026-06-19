@@ -35,14 +35,17 @@ exports.handler = async (event) => {
         }
 
         const now = new Date().toISOString();
+        // 72h rolling TTL (matches the reward-persistence model) so the board self-trims.
+        const ttl = Math.floor(Date.now() / 1000) + 72 * 60 * 60;
 
         await dynamodb.send(new UpdateCommand({
             TableName: PLAYER_SCORES_TABLE,
             Key: { playerId },
             UpdateExpression: 'SET leaderboardId = :lid, displayName = :dn, ' +
                 'gamesPlayed = if_not_exists(gamesPlayed, :zero) + :one, ' +
-                'lastUpdated = :now, totalScore = :score',
+                'lastUpdated = :now, totalScore = :score, #ttl = :ttl',
             ConditionExpression: 'attribute_not_exists(totalScore) OR totalScore < :score',
+            ExpressionAttributeNames: { '#ttl': 'ttl' },
             ExpressionAttributeValues: {
                 ':lid':   'global',
                 ':dn':    displayName,
@@ -50,6 +53,7 @@ exports.handler = async (event) => {
                 ':zero':  0,
                 ':one':   1,
                 ':now':   now,
+                ':ttl':   ttl,
             },
         }));
 
