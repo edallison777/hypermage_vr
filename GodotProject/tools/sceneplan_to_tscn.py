@@ -195,6 +195,23 @@ class TscnBuilder:
         )
         return rid
 
+    def nav_mesh(self, x0: float, z0: float, x1: float, z1: float, y: float) -> str:
+        """A flat rectangular NavigationMesh (single quad polygon) for an open floor —
+        enough for the open arenas; explicit vertices avoid runtime baking (F8)."""
+        rid = self._id("NavigationMesh")
+        verts = (
+            f"{x0:.4f}, {y:.4f}, {z0:.4f}, "
+            f"{x1:.4f}, {y:.4f}, {z0:.4f}, "
+            f"{x1:.4f}, {y:.4f}, {z1:.4f}, "
+            f"{x0:.4f}, {y:.4f}, {z1:.4f}"
+        )
+        self._sub.append(
+            f'[sub_resource type="NavigationMesh" id="{rid}"]\n'
+            f'vertices = PackedVector3Array({verts})\n'
+            f'polygons = [PackedInt32Array(0, 1, 2, 3)]\n'
+        )
+        return rid
+
     def box_shape(self, sx: float, sy: float, sz: float) -> str:
         rid = self._id("BoxShape3D")
         self._sub.append(
@@ -674,6 +691,17 @@ def add_zone(b: TscnBuilder, zone: dict, doors: list[tuple[str, float]] | None =
     _build_wall(b, f"WallE_{zid}", zone_node, wall_mat, span_axis="z", span_len=sz, height=sy, thickness=t, lx= sx/2 - t/2, ly=0, lz=0, door_offset=door.get("E"))
     _build_wall(b, f"WallW_{zid}", zone_node, wall_mat, span_axis="z", span_len=sz, height=sy, thickness=t, lx=-sx/2 + t/2, ly=0, lz=0, door_offset=door.get("W"))
 
+    # Navigation region (F8): a flat quad over the floor, inset from the walls, so enemy
+    # NavigationAgent3Ds can path across the room. Open-arena navmesh (no obstacle bake).
+    nav_inset = 0.6
+    nav_y = -sy / 2 + t + 0.02
+    hx = max(sx / 2 - nav_inset, 0.3)
+    hz = max(sz / 2 - nav_inset, 0.3)
+    navmesh = b.nav_mesh(-hx, -hz, hx, hz, nav_y)
+    b.node(f"NavRegion_{zid}", "NavigationRegion3D", zone_node, {
+        "navigation_mesh": f'SubResource("{navmesh}")',
+    })
+
     # zone fill-light
     light_range = max(sx, sz) * 0.9
     b.node(f"Light_{zid}", "OmniLight3D", zone_node, {
@@ -755,6 +783,9 @@ def _add_interactable(b: TscnBuilder, obj: dict, zone_node: str, bounds: dict) -
         return
     if otype == "code_lock":
         _add_code_lock(b, obj, oid, zone_node, lx, ly, lz)
+        return
+    if otype == "enemy_spawn":
+        _add_enemy_spawn(b, obj, oid, zone_node, lx, ly, lz)
         return
 
     r, g, b_c = _INTERACTABLE_RGB.get(otype, (0.5, 0.5, 0.5))
@@ -1023,6 +1054,22 @@ def _add_sequence(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
     if "reset_on_wrong" in obj:
         props["reset_on_wrong"] = "true" if obj["reset_on_wrong"] else "false"
     b.node(name, "Node3D", zone_node, props, groups=["sequence_puzzle"])
+
+
+def _add_enemy_spawn(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+                     lx: float, ly: float, lz: float) -> None:
+    """A spawn marker (F8). EnemyManager reads the "enemy_spawn" group and spawns wave
+    enemies at these points. A dim disc on the floor shows the spot."""
+    name = f"EnemySpawn_{oid}"
+    path = f"{zone_node}/{name}"
+    b.node(name, "Node3D", zone_node, {"transform": t3d(lx, ly, lz)}, groups=["enemy_spawn"])
+    mat = b.material(0.45, 0.10, 0.30)
+    mesh = b.cylinder_mesh(0.45, 0.04)
+    b.node("Marker", "MeshInstance3D", path, {
+        "transform": t3d(0, 0.02, 0),
+        "mesh": f'SubResource("{mesh}")',
+        "surface_material_override/0": f'SubResource("{mat}")',
+    })
 
 
 def _add_keypad(b: TscnBuilder, obj: dict, oid: str, zone_node: str,

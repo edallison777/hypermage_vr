@@ -27,6 +27,7 @@ func _ready() -> void:
 	$HealthManager.setup()
 	$GameState.setup()       # after RoomManager so the room's objective nodes exist
 	$CombatManager.setup()   # after RoomManager so the room's target nodes exist
+	$EnemyManager.setup()    # after RoomManager so the room's enemy_spawn markers exist
 
 func _process(delta: float) -> void:
 	if not _ever_had_peer:

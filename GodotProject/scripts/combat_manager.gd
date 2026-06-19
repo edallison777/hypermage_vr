@@ -93,8 +93,12 @@ func _resolve_fire(origin: Vector3, dir: Vector3, damage: int) -> void:
 	if hit.is_empty():
 		return
 	var col = hit.get("collider")
-	if col and col.is_in_group("target"):
+	if col == null:
+		return
+	if col.is_in_group("target"):
 		damage_target(str(col.target_id), damage)
+	elif col.is_in_group("enemy"):
+		col.take_damage(damage)        # F8: enemies take gunfire (authority-side)
 
 # ── Authoritative mutation (pure: directly unit-tested) ────────────────────────────
 

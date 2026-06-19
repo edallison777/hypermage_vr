@@ -14,6 +14,7 @@ const HealthHUD = preload("res://scripts/health_hud.gd")
 @onready var leaderboard:    Node    = $LeaderboardClient
 @onready var combat:         Node    = $CombatManager
 @onready var weapon_mgr:     Node    = $WeaponManager
+@onready var enemy_mgr:      Node    = $EnemyManager
 
 var _spawn_pos := Vector3.ZERO
 var _hud: Node = null
@@ -40,7 +41,7 @@ func _ready() -> void:
 
 	_try_auto_login()
 
-const LOCAL_ROOM_PATH := "res://scenes/generated/input-devices-test.tscn"
+const LOCAL_ROOM_PATH := "res://scenes/generated/enemy-test.tscn"
 
 func _try_auto_login() -> void:
 	if not FileAccess.file_exists(AUTO_LOGIN_PATH):
@@ -103,6 +104,9 @@ func _load_local_room() -> void:
 		combat.setup_offline()
 	if weapon_mgr:
 		weapon_mgr.local_mode = true
+	# Offline: EnemyManager is its own authority; spawns waves at the room's markers.
+	if enemy_mgr:
+		enemy_mgr.setup_offline()
 	_spawn_health_hud()
 	var n := get_tree().get_nodes_in_group("grabbable").size()
 	_set_status("Local room (offline)\n" + LOCAL_ROOM_PATH.get_file() + "\ngrabbables: " + str(n))

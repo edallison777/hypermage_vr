@@ -28,7 +28,8 @@ const HealthManager = preload("res://scripts/health_manager.gd")
 const HealthHUD = preload("res://scripts/health_hud.gd")
 const GameState = preload("res://scripts/game_state.gd")
 const CombatManager = preload("res://scripts/combat_manager.gd")
-const ROOM_PATH := "res://scenes/generated/input-devices-test.tscn"
+const EnemyManager = preload("res://scripts/enemy_manager.gd")
+const ROOM_PATH := "res://scenes/generated/enemy-test.tscn"
 const MOVE_SPEED := 4.0
 const LOOK_SENS := 0.005
 const ENGAGE_RANGE := 4.0     # how close the camera must be to a mechanism handle
@@ -44,6 +45,7 @@ var _drive_value := 0.0
 var _health: Node = null
 var _game: Node = null
 var _combat: Node = null
+var _enemies: Node = null
 
 func _ready() -> void:
 	_bus = get_tree().get_first_node_in_group("game_events")
@@ -130,6 +132,13 @@ func _ready() -> void:
 	_combat = CombatManager.new()
 	add_child(_combat)
 	_combat.setup_offline()
+
+	# F8: enemies. The camera stands in as the "player" so enemies have a target to chase
+	# (and so the combat raycast excludes it). EnemyManager spawns waves at the room markers.
+	_cam.add_to_group("player")
+	_enemies = EnemyManager.new()
+	add_child(_enemies)
+	_enemies.setup_offline()
 
 	print("FlatHarness: ready. WASD/QE move, RMB look, LMB-drag lever, F press nearest button/switch, T lamp, G sfx, H/J/K health, Esc quits.")
 
