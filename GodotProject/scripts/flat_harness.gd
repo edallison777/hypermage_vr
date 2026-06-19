@@ -21,7 +21,7 @@ extends Node3D
 # the lever (LMB) opens the secret door which plays its rumble.
 
 const LightReactor = preload("res://scripts/reactors/light_reactor.gd")
-const ROOM_PATH := "res://scenes/generated/buttons-test.tscn"
+const ROOM_PATH := "res://scenes/generated/platforms-test.tscn"
 const MOVE_SPEED := 4.0
 const LOOK_SENS := 0.005
 const ENGAGE_RANGE := 4.0     # how close the camera must be to a mechanism handle

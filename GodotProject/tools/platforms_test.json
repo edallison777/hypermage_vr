@@ -1,0 +1,23 @@
+{
+  "id": "platforms-test",
+  "name": "Platforms Test",
+  "zones": [
+    {
+      "id": "hall",
+      "type": "exploration",
+      "bounds": {
+        "center": { "x": 0, "y": 0, "z": 250 },
+        "extents": { "x": 300, "y": 300, "z": 250 }
+      },
+      "interactables": [
+        { "id": "drift",   "type": "platform", "mode": "auto",   "position": { "x": -150, "y": 150, "z": 30 }, "height": 250, "size": 1.8, "auto_period": 9.0 },
+        { "id": "lift",    "type": "platform", "mode": "toggle",  "position": { "x": 150,  "y": -150, "z": 30 }, "height": 220, "size": 1.8, "controlled_by": "btn_lift", "speed": 0.4 },
+        { "id": "btn_lift","type": "button",   "position": { "x": 150,  "y": -260, "z": 110 } },
+        { "id": "orb",     "type": "artefact", "position": { "x": 0,    "y": 0,    "z": 110 } }
+      ]
+    }
+  ],
+  "participant_spawns": [
+    { "role": "player", "position": { "x": 0, "y": -300, "z": 0 } }
+  ]
+}

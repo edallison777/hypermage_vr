@@ -697,6 +697,9 @@ def _add_interactable(b: TscnBuilder, obj: dict, zone_node: str, bounds: dict) -
     if otype == "lamp":
         _add_lamp(b, obj, oid, zone_node, lx, ly, lz)
         return
+    if otype == "platform":
+        _add_platform(b, obj, oid, zone_node, lx, ly, lz)
+        return
 
     r, g, b_c = _INTERACTABLE_RGB.get(otype, (0.5, 0.5, 0.5))
     mat = b.material(r, g, b_c)
@@ -938,6 +941,50 @@ def _add_proximity(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
     b.node("Area", "Area3D", path, {"transform": t3d(0, size / 2.0, 0)})
     b.node("Shape", "CollisionShape3D", f"{path}/Area", {
         "shape": f'SubResource("{shape}")',
+    })
+
+
+def _add_platform(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+                  lx: float, ly: float, lz: float) -> None:
+    """A rideable rising/lowering platform (AnimatableBody3D on the WALKABLE layer so
+    locomotion's floor-probe carries the player). ScenePlan fields:
+      mode: "auto"|"toggle"|"mechanism"; height: vertical travel (UE cm, default 250);
+      size / size_x / size_z: deck footprint (m); controlled_by: mechanism or button id;
+      event: bus event for toggle; speed; auto_period."""
+    script = b.script_resource("res://scripts/moving_platform.gd")
+    name = f"Platform_{oid}"
+    path = f"{zone_node}/{name}"
+    sx = float(obj.get("size_x", obj.get("size", 1.6)))
+    sz = float(obj.get("size_z", obj.get("size", 1.6)))
+    deck = 0.20
+    mode = str(obj.get("mode", "auto"))
+    height_m = float(obj.get("height", 250)) / 100.0
+    props: dict[str, str] = {
+        "transform": t3d(lx, ly, lz),
+        "script": f'ExtResource("{script}")',
+        "collision_layer": str(WALKABLE_LAYER),
+        "mode": f'"{mode}"',
+        "travel": v3(0.0, height_m, 0.0),
+    }
+    if "speed" in obj:
+        props["speed"] = f'{float(obj["speed"]):.4f}'
+    if "auto_period" in obj:
+        props["auto_period"] = f'{float(obj["auto_period"]):.4f}'
+    if mode == "mechanism":
+        props["mechanism_id"] = f'"{obj.get("controlled_by", "")}"'
+    elif mode == "toggle":
+        props["source_id"] = f'"{obj.get("controlled_by", "")}"'
+        props["trigger_event"] = f'"{obj.get("event", "interact:button")}"'
+    b.node(name, "AnimatableBody3D", zone_node, props)
+    deck_mat = b.material(0.42, 0.44, 0.52)
+    deck_mesh = b.box_mesh(sx, deck, sz)
+    deck_shape = b.box_shape(sx, deck, sz)
+    b.node("Mesh", "MeshInstance3D", path, {
+        "mesh": f'SubResource("{deck_mesh}")',
+        "surface_material_override/0": f'SubResource("{deck_mat}")',
+    })
+    b.node("Collision", "CollisionShape3D", path, {
+        "shape": f'SubResource("{deck_shape}")',
     })
 
 

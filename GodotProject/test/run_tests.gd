@@ -16,6 +16,7 @@ const SUITES: Array[String] = [
 	"res://test/test_game_events.gd",
 	"res://test/test_audio_haptics.gd",
 	"res://test/test_interactables.gd",
+	"res://test/test_platform.gd",
 ]
 
 var _done := false
