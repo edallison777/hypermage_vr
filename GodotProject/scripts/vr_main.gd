@@ -24,7 +24,7 @@ func _ready() -> void:
 
 	_try_auto_login()
 
-const LOCAL_ROOM_PATH := "res://scenes/generated/two-floor-test.tscn"
+const LOCAL_ROOM_PATH := "res://scenes/generated/secret-door-test.tscn"
 
 func _try_auto_login() -> void:
 	if not FileAccess.file_exists(AUTO_LOGIN_PATH):
@@ -69,6 +69,10 @@ func _load_local_room() -> void:
 	var mm := get_node_or_null("MechanismManager")
 	if mm:
 		mm.local_mode = true
+	# Offline: discrete events emit locally (no server peer to sequence them).
+	var bus := get_tree().get_first_node_in_group("game_events")
+	if bus:
+		bus.local_mode = true
 	var n := get_tree().get_nodes_in_group("grabbable").size()
 	_set_status("Local room (offline)\n" + LOCAL_ROOM_PATH.get_file() + "\ngrabbables: " + str(n))
 	await get_tree().create_timer(4.0).timeout

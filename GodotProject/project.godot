@@ -14,6 +14,10 @@ config/name="HyperMageVR_Godot"
 run/main_scene="res://scenes/main_vr.tscn"
 config/features=PackedStringArray("4.6", "Mobile")
 
+[autoload]
+
+GameEvents="*res://scripts/game_events.gd"
+
 [rendering]
 
 renderer/rendering_method="mobile"
