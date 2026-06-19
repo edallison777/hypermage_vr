@@ -64,6 +64,17 @@ def v3(x: float, y: float, z: float) -> str:
     return f"Vector3({x:.4f}, {y:.4f}, {z:.4f})"
 
 
+def t3d_yaw(lx: float, ly: float, lz: float, yaw_deg: float) -> str:
+    """Transform3D with a yaw (rotation about Y) and translation. Used to face panels /
+    keypads / hidden-writing toward the player."""
+    yaw = math.radians(yaw_deg)
+    c, s = math.cos(yaw), math.sin(yaw)
+    return (
+        f"Transform3D({c:.5f}, 0, {s:.5f}, 0, 1, 0, {-s:.5f}, 0, {c:.5f}, "
+        f"{lx:.4f}, {ly:.4f}, {lz:.4f})"
+    )
+
+
 def col(r: float, g: float, b: float, a: float = 1.0) -> str:
     return f"Color({r:.3f}, {g:.3f}, {b:.3f}, {a:.3f})"
 
@@ -733,6 +744,18 @@ def _add_interactable(b: TscnBuilder, obj: dict, zone_node: str, bounds: dict) -
     if otype == "ammo":
         _add_ammo(b, obj, oid, zone_node, lx, ly, lz)
         return
+    if otype == "keypad":
+        _add_keypad(b, obj, oid, zone_node, lx, ly, lz)
+        return
+    if otype == "torch":
+        _add_torch(b, obj, oid, zone_node, lx, ly, lz)
+        return
+    if otype == "hidden_writing":
+        _add_hidden_writing(b, obj, oid, zone_node, lx, ly, lz)
+        return
+    if otype == "code_lock":
+        _add_code_lock(b, obj, oid, zone_node, lx, ly, lz)
+        return
 
     r, g, b_c = _INTERACTABLE_RGB.get(otype, (0.5, 0.5, 0.5))
     mat = b.material(r, g, b_c)
@@ -1002,6 +1025,93 @@ def _add_sequence(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
     b.node(name, "Node3D", zone_node, props, groups=["sequence_puzzle"])
 
 
+def _add_keypad(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+                lx: float, ly: float, lz: float) -> None:
+    """A keypad console with a paired display (input-devices feature). keypad.gd builds
+    its keys + display procedurally. ScenePlan fields: mode ("numeric"|"letter"),
+    yaw (degrees, to face the player)."""
+    script = b.script_resource("res://scripts/keypad.gd")
+    name = f"Keypad_{oid}"
+    b.node(name, "Node3D", zone_node, {
+        "transform": t3d_yaw(lx, ly, lz, float(obj.get("yaw", 0.0))),
+        "script": f'ExtResource("{script}")',
+        "keypad_id": f'"{oid}"',
+        "mode": f'"{obj.get("mode", "numeric")}"',
+    }, groups=["keypad"])
+
+
+def _add_torch(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+               lx: float, ly: float, lz: float) -> None:
+    """A grabbable torch (input-devices feature). RigidBody3D in group "grabbable";
+    torch.gd adds the SpotLight + translucent cone (toggled by GRIP while held).
+    ScenePlan fields: cone_range, cone_angle (deg), cone_color [r,g,b]."""
+    script = b.script_resource("res://scripts/torch.gd")
+    name = f"Torch_{oid}"
+    path = f"{zone_node}/{name}"
+    props: dict[str, str] = {
+        "transform": t3d(lx, ly + 0.1, lz),
+        "script": f'ExtResource("{script}")',
+        "mass": "0.6",
+        "continuous_cd": "true",
+        "cone_range": f'{float(obj.get("cone_range", 5.0)):.4f}',
+        "cone_angle_deg": f'{float(obj.get("cone_angle", 14.0)):.4f}',
+    }
+    c = obj.get("cone_color")
+    if isinstance(c, list) and len(c) >= 3:
+        props["cone_color"] = col(c[0], c[1], c[2])
+    b.node(name, "RigidBody3D", zone_node, props, groups=["grabbable", "torch"])
+    body_mat = b.material(0.20, 0.20, 0.24)
+    body_mesh = b.cylinder_mesh(0.035, 0.22)
+    shape = b.box_shape(0.08, 0.22, 0.08)
+    b.node("Mesh", "MeshInstance3D", path, {
+        "mesh": f'SubResource("{body_mesh}")',
+        "surface_material_override/0": f'SubResource("{body_mat}")',
+    })
+    b.node("Collision", "CollisionShape3D", path, {"shape": f'SubResource("{shape}")'})
+    # A bright lens at the -Z emitting end so the torch reads directionally.
+    lens_mat = b.material(0.95, 0.95, 0.70)
+    lens_mesh = b.cylinder_mesh(0.034, 0.02)
+    b.node("Lens", "MeshInstance3D", path, {
+        "transform": "Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0, -0.11)",
+        "mesh": f'SubResource("{lens_mesh}")',
+        "surface_material_override/0": f'SubResource("{lens_mat}")',
+    })
+
+
+def _add_hidden_writing(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+                        lx: float, ly: float, lz: float) -> None:
+    """Concealed text revealed by a torch cone (input-devices feature). ScenePlan fields:
+    text, reveal_mode ("latch"|"while_lit"), yaw (degrees), color [r,g,b]."""
+    script = b.script_resource("res://scripts/hidden_writing.gd")
+    name = f"Hidden_{oid}"
+    props: dict[str, str] = {
+        "transform": t3d_yaw(lx, ly, lz, float(obj.get("yaw", 0.0))),
+        "script": f'ExtResource("{script}")',
+        "text": f'"{obj.get("text", "")}"',
+        "reveal_mode": f'"{obj.get("reveal_mode", "latch")}"',
+    }
+    c = obj.get("color")
+    if isinstance(c, list) and len(c) >= 3:
+        props["writing_color"] = col(c[0], c[1], c[2])
+    b.node(name, "Node3D", zone_node, props, groups=["hidden_writing"])
+
+
+def _add_code_lock(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+                   lx: float, ly: float, lz: float) -> None:
+    """Invisible reactor: fires opened_event when a keypad enters the matching code
+    (input-devices feature). ScenePlan fields: keypad (id), code, opened_event."""
+    script = b.script_resource("res://scripts/reactors/code_lock.gd")
+    name = f"CodeLock_{oid}"
+    b.node(name, "Node3D", zone_node, {
+        "transform": t3d(lx, ly, lz),
+        "script": f'ExtResource("{script}")',
+        "lock_id": f'"{oid}"',
+        "keypad_id": f'"{obj.get("keypad", "")}"',
+        "code": f'"{obj.get("code", "")}"',
+        "opened_event": f'"{obj.get("opened_event", "lock:opened")}"',
+    }, groups=["code_lock"])
+
+
 def _add_gun(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
              lx: float, ly: float, lz: float) -> None:
     """An equippable hitscan weapon (F7). Group "weapon"; grip-to-equip, trigger-to-fire
@@ -1159,15 +1269,8 @@ def _add_scoreboard(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
     title; yaw (degrees, to face the panel into the room)."""
     script = b.script_resource("res://scripts/scoreboard.gd")
     name = f"Scoreboard_{oid}"
-    yaw = math.radians(float(obj.get("yaw", 0.0)))
-    cy, sy = math.cos(yaw), math.sin(yaw)
-    # Rotation about Y by yaw, with translation (lx,ly,lz).
-    rot = (
-        f"Transform3D({cy:.5f}, 0, {sy:.5f}, 0, 1, 0, {-sy:.5f}, 0, {cy:.5f}, "
-        f"{lx:.4f}, {ly:.4f}, {lz:.4f})"
-    )
     props: dict[str, str] = {
-        "transform": rot,
+        "transform": t3d_yaw(lx, ly, lz, float(obj.get("yaw", 0.0))),
         "script": f'ExtResource("{script}")',
     }
     if "title" in obj:

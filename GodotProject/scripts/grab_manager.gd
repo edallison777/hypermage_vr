@@ -178,6 +178,7 @@ func _grab(side: String, ctrl: Node3D) -> void:
 		# Stop the held object colliding with the player body so you can carry it.
 		best.set_meta("orig_layer", best.collision_layer)
 		best.collision_layer = 0
+		best.set_meta("held_by", side)   # so held tools (torch) know which hand holds them
 		_held[side] = best
 		Audio.play_3d("grab", best.global_position, -2.0)
 		Haptics.pulse(side, 0.6, 0.05)
@@ -190,6 +191,7 @@ func _throw(side: String) -> void:
 	_held.erase(side)
 	if not is_instance_valid(obj):
 		return
+	obj.set_meta("held_by", "")
 	var vel: Vector3 = _vel.get(side, Vector3.ZERO) * THROW_MULT
 	obj.collision_layer = obj.get_meta("orig_layer", 1)   # restore body collision
 	obj.freeze = false

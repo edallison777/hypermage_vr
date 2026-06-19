@@ -22,6 +22,8 @@ const SUITES: Array[String] = [
 	"res://test/test_game_state.gd",
 	"res://test/test_weapon.gd",
 	"res://test/test_combat.gd",
+	"res://test/test_keypad.gd",
+	"res://test/test_hidden_writing.gd",
 ]
 
 var _done := false
