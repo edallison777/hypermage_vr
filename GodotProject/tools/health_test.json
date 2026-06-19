@@ -10,9 +10,9 @@
         "extents": { "x": 300, "y": 300, "z": 150 }
       },
       "interactables": [
-        { "id": "lava", "type": "hazard", "position": { "x": 0, "y": 0, "z": 0 },
+        { "id": "lava", "type": "hazard", "position": { "x": 0, "y": 200, "z": 0 },
           "size": 2.0, "damage_per_second": 20, "interval": 0.5 },
-        { "id": "spike", "type": "hazard", "position": { "x": 0, "y": -100, "z": 0 },
+        { "id": "spike", "type": "hazard", "position": { "x": 0, "y": 50, "z": 0 },
           "size": 1.0, "damage_per_second": 40, "instant": true }
       ]
     }
