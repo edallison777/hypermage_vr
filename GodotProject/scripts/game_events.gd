@@ -43,6 +43,13 @@ func fire(name: String, payload: Dictionary = {}) -> void:
 	else:
 		rpc_id(1, "_ingest", name, payload)
 
+# Emit an event LOCALLY only (no networking). For events DERIVED deterministically
+# on every peer from already-consistent input — e.g. a sequence puzzle that solves
+# from the same server-sequenced button events on each peer, so re-broadcasting would
+# double-fire. Reactions wired to such an event react once per peer, consistently.
+func fire_local(name: String, payload: Dictionary = {}) -> void:
+	event.emit(name, payload)
+
 # Convenience subscriber: invoke `callable(payload)` only for events whose name
 # matches `name`. (No unsubscribe in F0 — reactors live for the scene lifetime.)
 func on(name: String, callable: Callable) -> void:

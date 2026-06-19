@@ -105,10 +105,19 @@ def loop_drone(freqs: list[float], dur: float, amp: float = 0.35,
     return out
 
 
+def arpeggio(freqs: list[float], note: float = 0.09) -> list[float]:
+    """Concatenated decaying tones — a little ascending chime for success cues."""
+    out: list[float] = []
+    for f in freqs:
+        out += tone(f, note, decay=16.0, amp=0.5)
+    return out
+
+
 def main() -> None:
     random.seed(1)
     print("Generating placeholder SFX ->", OUT)
     _write("ui_click", tone(1200.0, 0.05, decay=45.0, amp=0.5))
+    _write("success", arpeggio([659.25, 830.61, 987.77, 1318.51]))   # E5 G#5 B5 E6
     _write("lever_tick", tone(2000.0, 0.02, decay=120.0, amp=0.45))
     _write("grab", thunk(0.10))
     _write("throw", whoosh(0.28))

@@ -21,7 +21,7 @@ extends Node3D
 # the lever (LMB) opens the secret door which plays its rumble.
 
 const LightReactor = preload("res://scripts/reactors/light_reactor.gd")
-const ROOM_PATH := "res://scenes/generated/platforms-test.tscn"
+const ROOM_PATH := "res://scenes/generated/sequence-test.tscn"
 const MOVE_SPEED := 4.0
 const LOOK_SENS := 0.005
 const ENGAGE_RANGE := 4.0     # how close the camera must be to a mechanism handle
@@ -69,25 +69,21 @@ func _ready() -> void:
 	else:
 		push_warning("FlatHarness: could not load room " + ROOM_PATH)
 
-	# Proof target: a lamp toggled by a reactor when "test:toggle_light" fires.
+	# (Rooms now carry their own reactors — indicator lamps wired to the relevant
+	# events — so the harness no longer adds a global proof lamp. The T key keeps a
+	# bare bus->LightReactor smoke test on its own dim lamp for quick bus checks.)
 	var lamp := OmniLight3D.new()
 	lamp.name = "ProofLamp"
-	lamp.position = Vector3(0, 2.2, -2.0)
-	lamp.omni_range = 8.0
-	lamp.light_energy = 4.0
-	lamp.light_color = Color(1.0, 0.45, 0.2)
+	lamp.position = Vector3(0, 3.2, 0)
+	lamp.omni_range = 5.0
+	lamp.light_energy = 2.0
+	lamp.light_color = Color(0.4, 0.6, 1.0)
+	lamp.visible = false
 	add_child(lamp)
-
 	var reactor := LightReactor.new()
-	reactor.trigger_event = "test:toggle_light"
-	add_child(reactor)               # _ready hooks the bus
+	reactor.trigger_event = "test:toggle_light"     # only the T key, not gameplay events
+	add_child(reactor)
 	reactor.light_path = lamp.get_path()
-
-	# F2: a button press also toggles the lamp (proves interactable -> bus -> reactor).
-	var btn_reactor := LightReactor.new()
-	btn_reactor.trigger_event = "interact:button"
-	add_child(btn_reactor)
-	btn_reactor.light_path = lamp.get_path()
 
 	# Ground reference + sun so the scene is lit even if the room is dim.
 	var sun := DirectionalLight3D.new()

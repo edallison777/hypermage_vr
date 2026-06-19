@@ -24,7 +24,7 @@ func _ready() -> void:
 
 	_try_auto_login()
 
-const LOCAL_ROOM_PATH := "res://scenes/generated/platforms-test.tscn"
+const LOCAL_ROOM_PATH := "res://scenes/generated/sequence-test.tscn"
 
 func _try_auto_login() -> void:
 	if not FileAccess.file_exists(AUTO_LOGIN_PATH):

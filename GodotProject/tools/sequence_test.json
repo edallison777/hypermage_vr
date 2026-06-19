@@ -1,0 +1,28 @@
+{
+  "id": "sequence-test",
+  "name": "Sequence Test",
+  "zones": [
+    {
+      "id": "hall",
+      "type": "exploration",
+      "bounds": {
+        "center": { "x": 0, "y": 0, "z": 150 },
+        "extents": { "x": 300, "y": 300, "z": 150 }
+      },
+      "interactables": [
+        { "id": "b1", "type": "button", "position": { "x": -120, "y": 270, "z": 120 } },
+        { "id": "b2", "type": "button", "position": { "x": -40,  "y": 270, "z": 120 } },
+        { "id": "b3", "type": "button", "position": { "x": 40,   "y": 270, "z": 120 } },
+        { "id": "b4", "type": "button", "position": { "x": 120,  "y": 270, "z": 120 } },
+        { "id": "seq1", "type": "sequence", "position": { "x": 0, "y": 0, "z": 150 },
+          "order": ["b3", "b1", "b4", "b2"], "solved_event": "sequence:solved" },
+        { "id": "lamp_solve", "type": "lamp", "position": { "x": 0, "y": 100, "z": 250 },
+          "controlled_by": "seq1", "event": "sequence:solved" },
+        { "id": "orb", "type": "artefact", "position": { "x": 0, "y": -200, "z": 110 } }
+      ]
+    }
+  ],
+  "participant_spawns": [
+    { "role": "player", "position": { "x": 0, "y": -250, "z": 0 } }
+  ]
+}

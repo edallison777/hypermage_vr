@@ -700,6 +700,9 @@ def _add_interactable(b: TscnBuilder, obj: dict, zone_node: str, bounds: dict) -
     if otype == "platform":
         _add_platform(b, obj, oid, zone_node, lx, ly, lz)
         return
+    if otype == "sequence":
+        _add_sequence(b, obj, oid, zone_node, lx, ly, lz)
+        return
 
     r, g, b_c = _INTERACTABLE_RGB.get(otype, (0.5, 0.5, 0.5))
     mat = b.material(r, g, b_c)
@@ -942,6 +945,31 @@ def _add_proximity(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
     b.node("Shape", "CollisionShape3D", f"{path}/Area", {
         "shape": f'SubResource("{shape}")',
     })
+
+
+def _add_sequence(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+                  lx: float, ly: float, lz: float) -> None:
+    """An invisible ordered-interaction puzzle. ScenePlan fields: order (list of
+    interactable ids), watch_event (default interact:button), solved_event (default
+    sequence:solved), reset_on_wrong (default true). Wire a reactor (lamp/platform/
+    door) to solved_event with source_id == this puzzle's id."""
+    script = b.script_resource("res://scripts/sequence_puzzle.gd")
+    name = f"Sequence_{oid}"
+    order = obj.get("order", [])
+    order_str = "[" + ", ".join(f'"{str(x)}"' for x in order) + "]"
+    props: dict[str, str] = {
+        "transform": t3d(lx, ly, lz),
+        "script": f'ExtResource("{script}")',
+        "puzzle_id": f'"{oid}"',
+        "order": order_str,
+    }
+    if "watch_event" in obj:
+        props["watch_event"] = f'"{obj["watch_event"]}"'
+    if "solved_event" in obj:
+        props["solved_event"] = f'"{obj["solved_event"]}"'
+    if "reset_on_wrong" in obj:
+        props["reset_on_wrong"] = "true" if obj["reset_on_wrong"] else "false"
+    b.node(name, "Node3D", zone_node, props, groups=["sequence_puzzle"])
 
 
 def _add_platform(b: TscnBuilder, obj: dict, oid: str, zone_node: str,

@@ -75,8 +75,8 @@ Status: ✅ done · 🔨 in progress · ⬜ not started. (Commit hashes for comp
 | **F0** | Event bus + base `Interactable`/`Reactor` contracts; test runner + flat-mode harness | — | ✅ `fe6efe9` |
 | **F1** | Sound (spatial 3D + ambient) and haptics primitives | F0 | ✅ `b2a5055` |
 | **F2** | Simple interactables: buttons, pressure plates, toggle switches, proximity volumes | F0 | ✅ `d44b170` |
-| **F3** | Rising/lowering platforms | F0, F2 | 🔨 in progress |
-| **F4** | Sequence puzzle (ordered interaction, resets on wrong order) | F0, F2 | ⬜ |
+| **F3** | Rising/lowering platforms | F0, F2 | ✅ `3fe628f` |
+| **F4** | Sequence puzzle (ordered interaction, resets on wrong order) | F0, F2 | ✅ this commit |
 | **F5** | Health/damage model (server-authoritative) + death/respawn + HUD | F0, F1 | ⬜ |
 | **F6** | Point scoring + objectives + win/lose + DynamoDB persistence/leaderboard | F0, F5 | ⬜ |
 | **F7** | Guns: projectiles/beams, VFX, holster, ammo pickups | F0, F1, F5 | ⬜ |
