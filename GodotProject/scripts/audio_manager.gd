@@ -13,7 +13,7 @@ const Diag = preload("res://scripts/debug_flags.gd")
 # missing (e.g. assets not imported) calls no-op.
 
 const SFX_DIR := "res://assets/audio/sfx/"
-const SFX_NAMES := ["ui_click", "success", "hurt", "grab", "throw", "lever_tick", "door_rumble", "ambient"]
+const SFX_NAMES := ["ui_click", "success", "hurt", "shot", "grab", "throw", "lever_tick", "door_rumble", "ambient"]
 const LOOPING := ["ambient"]            # streams that loop forever when played
 const MAX_CONCURRENT := 24
 # The looping streams are imported as PCM (compress/mode=0) so data.size() is the true

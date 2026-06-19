@@ -1,0 +1,38 @@
+{
+  "id": "weapon-test",
+  "name": "Weapon Test",
+  "game_rules": { "time_limit": 180, "max_team_deaths": 3 },
+  "zones": [
+    {
+      "id": "range",
+      "type": "combat",
+      "bounds": {
+        "center": { "x": 0, "y": 0, "z": 150 },
+        "extents": { "x": 300, "y": 300, "z": 150 }
+      },
+      "interactables": [
+        { "id": "pistol", "type": "gun", "position": { "x": 0, "y": -200, "z": 100 },
+          "max_ammo": 12, "damage": 25, "fire_cooldown": 0.25 },
+
+        { "id": "t1", "type": "target", "position": { "x": -150, "y": 250, "z": 130 }, "size": 0.5, "max_hp": 50 },
+        { "id": "t2", "type": "target", "position": { "x": 0,    "y": 250, "z": 130 }, "size": 0.5, "max_hp": 50 },
+        { "id": "t3", "type": "target", "position": { "x": 150,  "y": 250, "z": 130 }, "size": 0.5, "max_hp": 50 },
+
+        { "id": "obj1", "type": "objective", "position": { "x": 0, "y": 0, "z": 150 },
+          "trigger_event": "target:destroyed", "match_id": "t1", "points": 100 },
+        { "id": "obj2", "type": "objective", "position": { "x": 0, "y": 0, "z": 150 },
+          "trigger_event": "target:destroyed", "match_id": "t2", "points": 100 },
+        { "id": "obj3", "type": "objective", "position": { "x": 0, "y": 0, "z": 150 },
+          "trigger_event": "target:destroyed", "match_id": "t3", "points": 100 },
+
+        { "id": "ammo1", "type": "ammo", "position": { "x": 150, "y": -200, "z": 0 }, "size": 0.8 },
+
+        { "id": "board", "type": "scoreboard", "position": { "x": 0, "y": 260, "z": 200 },
+          "title": "FIRING RANGE", "yaw": 0 }
+      ]
+    }
+  ],
+  "participant_spawns": [
+    { "role": "player", "position": { "x": 0, "y": -250, "z": 0 } }
+  ]
+}

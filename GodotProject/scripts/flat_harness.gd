@@ -17,6 +17,7 @@ extends Node3D
 #   G           play a one-shot 3D SFX at the camera (F1 audio check)
 #   H / J       F5 health: take 20 damage / heal 20 (drives the wrist HUD)
 #   K           F5: lethal hit -> death -> auto-respawn after the delay
+#   B           F7: fire a hitscan shot along the camera forward (hits targets)
 #   Esc         quit
 #
 # F1 audio is also exercised passively: an ambient bed plays on start, and driving
@@ -26,7 +27,8 @@ const LightReactor = preload("res://scripts/reactors/light_reactor.gd")
 const HealthManager = preload("res://scripts/health_manager.gd")
 const HealthHUD = preload("res://scripts/health_hud.gd")
 const GameState = preload("res://scripts/game_state.gd")
-const ROOM_PATH := "res://scenes/generated/objective-test.tscn"
+const CombatManager = preload("res://scripts/combat_manager.gd")
+const ROOM_PATH := "res://scenes/generated/weapon-test.tscn"
 const MOVE_SPEED := 4.0
 const LOOK_SENS := 0.005
 const ENGAGE_RANGE := 4.0     # how close the camera must be to a mechanism handle
@@ -41,6 +43,7 @@ var _driving: Node = null     # mechanism currently being driven by the mouse
 var _drive_value := 0.0
 var _health: Node = null
 var _game: Node = null
+var _combat: Node = null
 
 func _ready() -> void:
 	_bus = get_tree().get_first_node_in_group("game_events")
@@ -122,6 +125,13 @@ func _ready() -> void:
 	add_child(_game)
 	_game.setup_offline()
 
+	# F7: CombatManager authority (offline). B fires a hitscan shot along the camera
+	# forward (no controllers in flat mode) so the raycast -> target -> destroy ->
+	# objective -> score path can be driven on the PC.
+	_combat = CombatManager.new()
+	add_child(_combat)
+	_combat.setup_offline()
+
 	print("FlatHarness: ready. WASD/QE move, RMB look, LMB-drag lever, F press nearest button/switch, T lamp, G sfx, H/J/K health, Esc quits.")
 
 func _unhandled_input(e: InputEvent) -> void:
@@ -169,6 +179,11 @@ func _unhandled_input(e: InputEvent) -> void:
 		elif e.keycode == KEY_K and _health:
 			_health.apply_damage(_health.local_id(), 999, "test")
 			print("FlatHarness: lethal hit -> respawn")
+		elif e.keycode == KEY_B and _combat:
+			# Fire a hitscan shot from the camera (flat mode has no controllers/weapon).
+			_combat.request_fire(_cam.global_position, -_cam.global_transform.basis.z, 25)
+			Audio.play_3d("shot", _cam.global_position)
+			print("FlatHarness: fired from camera")
 		elif e.keycode == KEY_ESCAPE:
 			get_tree().quit()
 

@@ -724,6 +724,15 @@ def _add_interactable(b: TscnBuilder, obj: dict, zone_node: str, bounds: dict) -
     if otype == "scoreboard":
         _add_scoreboard(b, obj, oid, zone_node, lx, ly, lz)
         return
+    if otype == "gun":
+        _add_gun(b, obj, oid, zone_node, lx, ly, lz)
+        return
+    if otype == "target":
+        _add_target(b, obj, oid, zone_node, lx, ly, lz)
+        return
+    if otype == "ammo":
+        _add_ammo(b, obj, oid, zone_node, lx, ly, lz)
+        return
 
     r, g, b_c = _INTERACTABLE_RGB.get(otype, (0.5, 0.5, 0.5))
     mat = b.material(r, g, b_c)
@@ -991,6 +1000,97 @@ def _add_sequence(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
     if "reset_on_wrong" in obj:
         props["reset_on_wrong"] = "true" if obj["reset_on_wrong"] else "false"
     b.node(name, "Node3D", zone_node, props, groups=["sequence_puzzle"])
+
+
+def _add_gun(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+             lx: float, ly: float, lz: float) -> None:
+    """An equippable hitscan weapon (F7). Group "weapon"; grip-to-equip, trigger-to-fire
+    via weapon_manager. Barrel points along -Z (controller forward). ScenePlan fields:
+    max_ammo, damage, fire_range, fire_cooldown."""
+    script = b.script_resource("res://scripts/weapon.gd")
+    name = f"Gun_{oid}"
+    path = f"{zone_node}/{name}"
+    props: dict[str, str] = {
+        "transform": t3d(lx, ly, lz),
+        "script": f'ExtResource("{script}")',
+        "weapon_id": f'"{oid}"',
+        "max_ammo": str(int(obj.get("max_ammo", 12))),
+        "damage": str(int(obj.get("damage", 25))),
+        "fire_range": f'{float(obj.get("fire_range", 50.0)):.4f}',
+        "fire_cooldown": f'{float(obj.get("fire_cooldown", 0.25)):.4f}',
+    }
+    b.node(name, "Node3D", zone_node, props, groups=["weapon"])
+    body_mat = b.material(0.14, 0.14, 0.17)
+    body_mesh = b.box_mesh(0.05, 0.12, 0.20)
+    b.node("Body", "MeshInstance3D", path, {
+        "mesh": f'SubResource("{body_mesh}")',
+        "surface_material_override/0": f'SubResource("{body_mat}")',
+    })
+    barrel_mesh = b.box_mesh(0.035, 0.035, 0.24)
+    b.node("Barrel", "MeshInstance3D", path, {
+        "transform": t3d(0, 0.045, -0.16),
+        "mesh": f'SubResource("{barrel_mesh}")',
+        "surface_material_override/0": f'SubResource("{body_mat}")',
+    })
+    b.node("Muzzle", "Node3D", path, {"transform": t3d(0, 0.045, -0.30)})
+    b.node("AmmoLabel", "Label3D", path, {
+        "transform": t3d(0, 0.13, 0),
+        "text": '"12/12"',
+        "billboard": "1",
+        "font_size": "30",
+        "pixel_size": "0.0015",
+        "modulate": col(0.8, 1.0, 0.8),
+        "outline_size": "4",
+    })
+
+
+def _add_target(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+                lx: float, ly: float, lz: float) -> None:
+    """A destructible target (F7). StaticBody3D (so the combat raycast hits it directly),
+    group "target". ScenePlan fields: size (m, default 0.5), max_hp (default 50)."""
+    script = b.script_resource("res://scripts/target.gd")
+    name = f"Target_{oid}"
+    path = f"{zone_node}/{name}"
+    size = float(obj.get("size", 0.5))
+    b.node(name, "StaticBody3D", zone_node, {
+        "transform": t3d(lx, ly, lz),
+        "script": f'ExtResource("{script}")',
+        "target_id": f'"{oid}"',
+        "max_hp": str(int(obj.get("max_hp", 50))),
+    }, groups=["target"])
+    mat = b.material(0.80, 0.30, 0.20)
+    mesh = b.box_mesh(size, size, size)
+    shape = b.box_shape(size, size, size)
+    b.node("Mesh", "MeshInstance3D", path, {
+        "mesh": f'SubResource("{mesh}")',
+        "surface_material_override/0": f'SubResource("{mat}")',
+    })
+    b.node("Collision", "CollisionShape3D", path, {"shape": f'SubResource("{shape}")'})
+
+
+def _add_ammo(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+              lx: float, ly: float, lz: float) -> None:
+    """An ammo pickup (F7). Walk into it to reload the equipped weapon; consumes itself.
+    ScenePlan fields: size (detection cube side, m, default 0.8)."""
+    script = b.script_resource("res://scripts/ammo_pickup.gd")
+    name = f"Ammo_{oid}"
+    path = f"{zone_node}/{name}"
+    size = float(obj.get("size", 0.8))
+    b.node(name, "Node3D", zone_node, {
+        "transform": t3d(lx, ly, lz),
+        "script": f'ExtResource("{script}")',
+        "pickup_id": f'"{oid}"',
+    }, groups=["ammo_pickup"])
+    mat = b.material(0.20, 0.80, 0.35)
+    mesh = b.box_mesh(0.22, 0.22, 0.22)
+    b.node("Icon", "MeshInstance3D", path, {
+        "transform": t3d(0, 0.20, 0),
+        "mesh": f'SubResource("{mesh}")',
+        "surface_material_override/0": f'SubResource("{mat}")',
+    })
+    shape = b.box_shape(size, size, size)
+    b.node("Area", "Area3D", path, {"transform": t3d(0, size / 2.0, 0)})
+    b.node("Shape", "CollisionShape3D", f"{path}/Area", {"shape": f'SubResource("{shape}")'})
 
 
 def _add_hazard(b: TscnBuilder, obj: dict, oid: str, zone_node: str,

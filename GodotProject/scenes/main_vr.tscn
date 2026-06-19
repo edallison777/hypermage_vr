@@ -14,6 +14,8 @@
 [ext_resource type="Script" path="res://scripts/health_manager.gd" id="Script_health"]
 [ext_resource type="Script" path="res://scripts/game_state.gd" id="Script_gamestate"]
 [ext_resource type="Script" path="res://scripts/leaderboard_client.gd" id="Script_leaderboard"]
+[ext_resource type="Script" path="res://scripts/combat_manager.gd" id="Script_combat"]
+[ext_resource type="Script" path="res://scripts/weapon_manager.gd" id="Script_weapon"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 
@@ -94,3 +96,9 @@ script = ExtResource("Script_gamestate")
 
 [node name="LeaderboardClient" type="Node" parent="."]
 script = ExtResource("Script_leaderboard")
+
+[node name="CombatManager" type="Node" parent="."]
+script = ExtResource("Script_combat")
+
+[node name="WeaponManager" type="Node" parent="."]
+script = ExtResource("Script_weapon")

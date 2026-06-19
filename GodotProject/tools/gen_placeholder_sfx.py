@@ -119,6 +119,18 @@ def hurt(dur: float = 0.20) -> list[float]:
     return out
 
 
+def shot(dur: float = 0.16) -> list[float]:
+    """A sharp noisy crack with a low body — weapon fire (F7)."""
+    out = []
+    for i in range(_n(dur)):
+        t = i / RATE
+        env = math.exp(-34.0 * t)
+        noise = random.random() * 2 - 1
+        body = 0.5 * _sine(130.0, t)
+        out.append((0.7 * noise + body) * env * 0.9)
+    return out
+
+
 def arpeggio(freqs: list[float], note: float = 0.09) -> list[float]:
     """Concatenated decaying tones — a little ascending chime for success cues."""
     out: list[float] = []
@@ -147,6 +159,7 @@ def main() -> None:
     # hurt last so adding it doesn't perturb the shared RNG stream that grab/throw draw
     # from (inserting earlier would regenerate those device-verified WAVs).
     _write("hurt", hurt(0.20))                                       # F5: damage cue
+    _write("shot", shot(0.16))                                       # F7: weapon fire
     print("Done.")
 
 

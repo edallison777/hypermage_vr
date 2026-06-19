@@ -12,6 +12,8 @@ const HealthHUD = preload("res://scripts/health_hud.gd")
 @onready var health:         Node    = $HealthManager
 @onready var game_state:     Node    = $GameState
 @onready var leaderboard:    Node    = $LeaderboardClient
+@onready var combat:         Node    = $CombatManager
+@onready var weapon_mgr:     Node    = $WeaponManager
 
 var _spawn_pos := Vector3.ZERO
 var _hud: Node = null
@@ -38,7 +40,7 @@ func _ready() -> void:
 
 	_try_auto_login()
 
-const LOCAL_ROOM_PATH := "res://scenes/generated/objective-test.tscn"
+const LOCAL_ROOM_PATH := "res://scenes/generated/weapon-test.tscn"
 
 func _try_auto_login() -> void:
 	if not FileAccess.file_exists(AUTO_LOGIN_PATH):
@@ -95,6 +97,12 @@ func _load_local_room() -> void:
 	# that the room (and its objective nodes) is in the tree.
 	if game_state:
 		game_state.setup_offline()
+	# Offline: CombatManager is its own authority (seeds target health from the room);
+	# WeaponManager runs its input loop without a server peer.
+	if combat:
+		combat.setup_offline()
+	if weapon_mgr:
+		weapon_mgr.local_mode = true
 	_spawn_health_hud()
 	var n := get_tree().get_nodes_in_group("grabbable").size()
 	Audio.play_ambient()
