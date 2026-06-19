@@ -172,6 +172,18 @@ class TscnBuilder:
         )
         return rid
 
+    def material_rgba(self, r: float, g: float, b: float, a: float) -> str:
+        """Translucent, unshaded material — used for hazard volumes so the danger
+        zone reads as a coloured glow you can see (and walk into) through."""
+        rid = self._id("StandardMaterial3D")
+        self._sub.append(
+            f'[sub_resource type="StandardMaterial3D" id="{rid}"]\n'
+            f'transparency = 1\n'
+            f'shading_mode = 0\n'
+            f'albedo_color = {col(r, g, b, a)}\n'
+        )
+        return rid
+
     def box_shape(self, sx: float, sy: float, sz: float) -> str:
         rid = self._id("BoxShape3D")
         self._sub.append(
@@ -703,6 +715,9 @@ def _add_interactable(b: TscnBuilder, obj: dict, zone_node: str, bounds: dict) -
     if otype == "sequence":
         _add_sequence(b, obj, oid, zone_node, lx, ly, lz)
         return
+    if otype == "hazard":
+        _add_hazard(b, obj, oid, zone_node, lx, ly, lz)
+        return
 
     r, g, b_c = _INTERACTABLE_RGB.get(otype, (0.5, 0.5, 0.5))
     mat = b.material(r, g, b_c)
@@ -970,6 +985,45 @@ def _add_sequence(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
     if "reset_on_wrong" in obj:
         props["reset_on_wrong"] = "true" if obj["reset_on_wrong"] else "false"
     b.node(name, "Node3D", zone_node, props, groups=["sequence_puzzle"])
+
+
+def _add_hazard(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+                lx: float, ly: float, lz: float) -> None:
+    """A damaging volume (F5). An Area3D that hurts the local player while they stand
+    in it; damage is decided by the server (health_manager.gd). ScenePlan fields:
+      size / size_x / size_y / size_z: box extents (m, default 2m cube on the floor);
+      damage_per_second (default 20); interval (DoT cadence s, default 0.5);
+      instant (bool — one bite on entry instead of damage-over-time)."""
+    script = b.script_resource("res://scripts/interactables/hazard_volume.gd")
+    name = f"Hazard_{oid}"
+    path = f"{zone_node}/{name}"
+    sx = float(obj.get("size_x", obj.get("size", 2.0)))
+    sy = float(obj.get("size_y", obj.get("size", 2.0)))
+    sz = float(obj.get("size_z", obj.get("size", 2.0)))
+    props: dict[str, str] = {
+        "transform": t3d(lx, ly, lz),
+        "script": f'ExtResource("{script}")',
+        "interactable_id": f'"{oid}"',
+        "damage_per_second": f'{float(obj.get("damage_per_second", 20.0)):.4f}',
+        "interval": f'{float(obj.get("interval", 0.5)):.4f}',
+        "instant": "true" if obj.get("instant") else "false",
+    }
+    b.node(name, "Node3D", zone_node, props, groups=["interactable", "hazard"])
+    # Translucent red glow so the danger reads visually (placeholder art).
+    glow_mat = b.material_rgba(0.90, 0.12, 0.10, 0.30)
+    glow_mesh = b.box_mesh(sx, sy, sz)
+    b.node("Glow", "MeshInstance3D", path, {
+        "transform": t3d(0, sy / 2.0, 0),
+        "mesh": f'SubResource("{glow_mesh}")',
+        "surface_material_override/0": f'SubResource("{glow_mat}")',
+    })
+    # Detection box (default Area3D mask = layer 1 -> player CharacterBody). The script
+    # filters to group "player", so grabbables/avatars resting in it don't trigger it.
+    shape = b.box_shape(sx, sy, sz)
+    b.node("Area", "Area3D", path, {"transform": t3d(0, sy / 2.0, 0)})
+    b.node("Shape", "CollisionShape3D", f"{path}/Area", {
+        "shape": f'SubResource("{shape}")',
+    })
 
 
 def _add_platform(b: TscnBuilder, obj: dict, oid: str, zone_node: str,

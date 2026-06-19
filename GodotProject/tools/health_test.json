@@ -1,0 +1,23 @@
+{
+  "id": "health-test",
+  "name": "Health Test",
+  "zones": [
+    {
+      "id": "arena",
+      "type": "combat",
+      "bounds": {
+        "center": { "x": 0, "y": 0, "z": 150 },
+        "extents": { "x": 300, "y": 300, "z": 150 }
+      },
+      "interactables": [
+        { "id": "lava", "type": "hazard", "position": { "x": 0, "y": 0, "z": 0 },
+          "size": 2.0, "damage_per_second": 20, "interval": 0.5 },
+        { "id": "spike", "type": "hazard", "position": { "x": 0, "y": -100, "z": 0 },
+          "size": 1.0, "damage_per_second": 40, "instant": true }
+      ]
+    }
+  ],
+  "participant_spawns": [
+    { "role": "player", "position": { "x": 0, "y": -250, "z": 0 } }
+  ]
+}

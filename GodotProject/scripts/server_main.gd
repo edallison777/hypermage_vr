@@ -24,6 +24,7 @@ func _ready() -> void:
 	# Children' _ready ran before us (child-first order); trigger deferred inits now
 	$PlayerSync.setup()
 	$RoomManager.setup()
+	$HealthManager.setup()
 
 func _process(delta: float) -> void:
 	if not _ever_had_peer:

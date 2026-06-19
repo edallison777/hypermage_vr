@@ -11,6 +11,7 @@
 [ext_resource type="Script" path="res://scripts/interactable_manager.gd" id="Script_interact"]
 [ext_resource type="Script" path="res://scripts/locomotion.gd" id="Script_locomotion"]
 [ext_resource type="Script" path="res://scripts/controller_hands.gd" id="Script_hands"]
+[ext_resource type="Script" path="res://scripts/health_manager.gd" id="Script_health"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 
@@ -82,3 +83,6 @@ script = ExtResource("Script_locomotion")
 
 [node name="ControllerHands" type="Node" parent="."]
 script = ExtResource("Script_hands")
+
+[node name="HealthManager" type="Node" parent="."]
+script = ExtResource("Script_health")

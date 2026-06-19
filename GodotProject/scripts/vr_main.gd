@@ -2,11 +2,17 @@ extends Node3D
 
 const AUTO_LOGIN_PATH := "user://AutoLogin.txt"
 
+const HealthHUD = preload("res://scripts/health_hud.gd")
+
 @onready var status_label:   Label3D = $StatusLabel
 @onready var cognito:        Node    = $CognitoAuth
 @onready var matchmaking:    Node    = $MatchmakingClient
 @onready var game_network:   Node    = $GameNetwork
 @onready var player_sync:    Node    = $PlayerSync
+@onready var health:         Node    = $HealthManager
+
+var _spawn_pos := Vector3.ZERO
+var _hud: Node = null
 
 func _ready() -> void:
 	var xr = XRServer.find_interface("OpenXR")
@@ -22,9 +28,14 @@ func _ready() -> void:
 	game_network.connected_to_server.connect(_on_connected)
 	game_network.connection_failed.connect(_on_connection_failed)
 
+	# F5: react to authoritative health results for OUR player (death / respawn).
+	var bus := get_tree().get_first_node_in_group("game_events")
+	if bus:
+		bus.event.connect(_on_health_event)
+
 	_try_auto_login()
 
-const LOCAL_ROOM_PATH := "res://scenes/generated/sequence-test.tscn"
+const LOCAL_ROOM_PATH := "res://scenes/generated/health-test.tscn"
 
 func _try_auto_login() -> void:
 	if not FileAccess.file_exists(AUTO_LOGIN_PATH):
@@ -57,6 +68,7 @@ func _load_local_room() -> void:
 	for child in room.get_children():
 		if child.name.begins_with("SpawnPoint"):
 			$XROrigin3D.global_position = child.global_position
+			_spawn_pos = child.global_position
 			print("VRMain: moved XROrigin to spawn ", child.global_position)
 			break
 	# Drop the rig onto the visual floor (the spawn marker's Y may float above the
@@ -73,6 +85,10 @@ func _load_local_room() -> void:
 	var bus := get_tree().get_first_node_in_group("game_events")
 	if bus:
 		bus.local_mode = true
+	# Offline: HealthManager is its own authority; register the lone local player.
+	if health:
+		health.setup_offline()
+	_spawn_health_hud()
 	var n := get_tree().get_nodes_in_group("grabbable").size()
 	Audio.play_ambient()
 	_set_status("Local room (offline)\n" + LOCAL_ROOM_PATH.get_file() + "\ngrabbables: " + str(n))
@@ -125,10 +141,43 @@ func _on_matchmaking_failed(error: String) -> void:
 func _on_connected() -> void:
 	_set_status("Connected!")
 	player_sync.setup()
+	_spawn_health_hud()
 	Audio.play_ambient()
 	await get_tree().create_timer(3.0).timeout
 	if is_instance_valid(status_label):
 		status_label.visible = false
+
+# ── F5 health: HUD + death/respawn ────────────────────────────────────────────────
+
+func _spawn_health_hud() -> void:
+	if _hud != null:
+		return
+	_hud = HealthHUD.new()
+	# Wrist readout: parent under the left controller, tilted up toward the face.
+	var left := get_node_or_null("XROrigin3D/LeftController")
+	if left:
+		left.add_child(_hud)
+		(_hud as Node3D).position = Vector3(0.0, 0.04, 0.05)
+		(_hud as Node3D).rotation_degrees = Vector3(-55.0, 0.0, 0.0)
+	else:
+		add_child(_hud)
+
+func _on_health_event(name: String, payload: Dictionary) -> void:
+	var local_id: int = health.local_id() if health else 1
+	if int(payload.get("peer", -1)) != local_id:
+		return
+	if name == "health:died":
+		_set_status("You died...\nrespawning")
+	elif name == "health:respawned":
+		# Move our rig back to a spawn point (the authority restored HP; we reposition).
+		var sp := _spawn_pos if _spawn_pos != Vector3.ZERO else _find_spawn_position()
+		$XROrigin3D.global_position = sp
+		if is_instance_valid(status_label):
+			status_label.visible = false
+
+func _find_spawn_position() -> Vector3:
+	var n := _find_prefixed(self, "SpawnPoint")
+	return (n as Node3D).global_position if n is Node3D else $XROrigin3D.global_position
 
 func _on_connection_failed(reason: String) -> void:
 	_set_status("Connection failed:\n" + reason)

@@ -76,8 +76,8 @@ Status: ✅ done · 🔨 in progress · ⬜ not started. (Commit hashes for comp
 | **F1** | Sound (spatial 3D + ambient) and haptics primitives | F0 | ✅ `b2a5055` |
 | **F2** | Simple interactables: buttons, pressure plates, toggle switches, proximity volumes | F0 | ✅ `d44b170` |
 | **F3** | Rising/lowering platforms | F0, F2 | ✅ `3fe628f` |
-| **F4** | Sequence puzzle (ordered interaction, resets on wrong order) | F0, F2 | ✅ this commit |
-| **F5** | Health/damage model (server-authoritative) + death/respawn + HUD | F0, F1 | ⬜ |
+| **F4** | Sequence puzzle (ordered interaction, resets on wrong order) | F0, F2 | ✅ `8e6e4e4` |
+| **F5** | Health/damage model (server-authoritative) + death/respawn + HUD | F0, F1 | ✅ this commit |
 | **F6** | Point scoring + objectives + win/lose + DynamoDB persistence/leaderboard | F0, F5 | ⬜ |
 | **F7** | Guns: projectiles/beams, VFX, holster, ammo pickups | F0, F1, F5 | ⬜ |
 | **F8** | Enemies: NavMesh, take/inflict damage, spawn waves, difficulty | F0, F5, F7 | ⬜ |
@@ -202,6 +202,61 @@ slots in beside `_ingest` for F5/F6 without changing callers.
   `test_interactive_scripts_compile`).
 - Use `const X = preload(...)` not `class_name` (headless registry unreliable).
 - Keep new diagnostics behind `debug_flags.gd` `Diag.ON`.
+
+---
+
+## 4b. F5 — Health/damage + death/respawn + HUD (BUILT ✅ 2026-06-19)
+
+**Goal:** server-authoritative player health, environmental damage, a death→respawn
+loop, and a wrist HUD — the shared dependency for guns (F7) and enemies (F8).
+
+**Authority (the locked decision, realised).** HP is decided ONLY on the server.
+- `scripts/health_manager.gd` (`/root/HMVRGame/HealthManager`, group `"health"`, in
+  both `main_vr.tscn` and `server_main.tscn`; `server_main.gd` calls its `setup()`).
+  Owns `_hp`/`_dead` dicts keyed by peer id. Pure, directly-unit-tested mutations:
+  `register / apply_damage / heal / revive` (clamp 0..MAX_HP=100, fire death exactly
+  once on the 0-crossing, schedule a `RESPAWN_DELAY=3s` auto-revive).
+- Intent path: a client calls `request_damage(amount, source)` → `rpc_id(1,_sv_request)`
+  → server gates it (alive? per-(peer,source) cooldown 0.2s — anti-spam, kept OUT of
+  `apply_damage` so that stays pure) → `apply_damage`.
+- Results broadcast as discrete bus events through the F0 GameEvents relay (server
+  `fire` → `_deliver` to all, server-sequenced): `health:changed {peer,hp,max}`,
+  `health:died {peer,source}`, `health:respawned {peer,hp,max}`. Single source of
+  truth → HUD/feedback derive identically on every peer. (The "damage dealt is a
+  discrete event" intent from §2; the *validation* lives in HealthManager, not the
+  generic relay.) Offline (local room / flat harness): `setup_offline()` makes the
+  node self-authoritative and the bus emits locally.
+
+**Damage source — `scripts/interactables/hazard_volume.gd`** (converter type `hazard`,
+`_add_hazard`). An Area3D that hurts the LOCAL player only: detection is client-side
+(filters bodies in the new `"player"` group — `locomotion.gd` now adds its CharacterBody
+to it), so each client reports just its own damage as intent. `instant=false` →
+damage-over-time (`damage_per_second` every `interval`); `instant=true` → one bite on
+entry. Translucent-red glow (`material_rgba`) so the danger reads. Hit feedback: `hurt`
+SFX (new placeholder) + both-hand haptic — predicted locally; authoritative HP returns
+over the bus.
+
+**HUD — `scripts/health_hud.gd`** (NOT converter-generated; it's part of the local
+rig like locomotion). World-space green→red fill bar + numeric label; binds to the bus
+filtered to the local peer; shows `DOWN` on death. VR: vr_main parents it to the
+LeftController as a wrist readout (tilt tuned on device); flat harness parents it to the
+camera. Defaults to full HP so the join race (server register arriving before the HUD
+connects) reads correctly.
+
+**Death/respawn loop.** `vr_main._on_health_event` (local peer): on `health:died` shows
+a status; on `health:respawned` moves the XROrigin back to a SpawnPoint (the authority
+already restored HP). Auto-respawn after 3s; in flat mode `K` forces a lethal hit.
+
+**Testing.** `test/test_health.gd` (7 tests, in the runner — total 31/31 green
+headless): damage/clamp/die-once, dead-ignores-damage, revive restores+emits, heal
+clamp + ignored-while-dead, changed-payload. `tools/health_test.json` → `health-test.tscn`
+(a DoT "lava" pit + an instant "spike"); it's now the offline `LOCAL_ROOM_PATH` and the
+flat-harness `ROOM_PATH`. Flat keys: `H` -20, `J` +20, `K` lethal→respawn (the harness
+has no VR body so hazards don't auto-fire there — keys exercise the manager+HUD+respawn).
+
+**Device test remaining (next session, headset):** wrist HUD readability/placement,
+hurt haptic+SFX on entering the pit, death→respawn loop in VR, and a 2-client check that
+one player's damage/death does NOT affect the other's HUD (per-peer filtering).
 
 ---
 

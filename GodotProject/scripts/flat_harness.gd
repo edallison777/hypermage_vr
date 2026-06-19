@@ -15,13 +15,17 @@ extends Node3D
 #               so its value_changed reactions (e.g. the secret door) fire on the PC
 #   T           fire "test:toggle_light" on the bus -> LightReactor toggles the lamp
 #   G           play a one-shot 3D SFX at the camera (F1 audio check)
+#   H / J       F5 health: take 20 damage / heal 20 (drives the wrist HUD)
+#   K           F5: lethal hit -> death -> auto-respawn after the delay
 #   Esc         quit
 #
 # F1 audio is also exercised passively: an ambient bed plays on start, and driving
 # the lever (LMB) opens the secret door which plays its rumble.
 
 const LightReactor = preload("res://scripts/reactors/light_reactor.gd")
-const ROOM_PATH := "res://scenes/generated/sequence-test.tscn"
+const HealthManager = preload("res://scripts/health_manager.gd")
+const HealthHUD = preload("res://scripts/health_hud.gd")
+const ROOM_PATH := "res://scenes/generated/health-test.tscn"
 const MOVE_SPEED := 4.0
 const LOOK_SENS := 0.005
 const ENGAGE_RANGE := 4.0     # how close the camera must be to a mechanism handle
@@ -34,6 +38,7 @@ var _pitch := 0.0
 var _looking := false
 var _driving: Node = null     # mechanism currently being driven by the mouse
 var _drive_value := 0.0
+var _health: Node = null
 
 func _ready() -> void:
 	_bus = get_tree().get_first_node_in_group("game_events")
@@ -98,7 +103,17 @@ func _ready() -> void:
 
 	Audio.play_ambient()       # F1: looping ambient bed
 
-	print("FlatHarness: ready. WASD/QE move, RMB look, LMB-drag lever, F press nearest button/switch, T lamp, G sfx, Esc quits.")
+	# F5: a self-authoritative HealthManager + wrist HUD (parented to the camera in
+	# flat mode). H/J/K drive damage/heal/death so the HUD and respawn loop can be
+	# exercised on the PC. (Hazard auto-damage needs the VR player body, absent here.)
+	_health = HealthManager.new()
+	add_child(_health)
+	_health.setup_offline()
+	var hud := HealthHUD.new()
+	_cam.add_child(hud)
+	hud.position = Vector3(0.0, -0.18, -0.6)
+
+	print("FlatHarness: ready. WASD/QE move, RMB look, LMB-drag lever, F press nearest button/switch, T lamp, G sfx, H/J/K health, Esc quits.")
 
 func _unhandled_input(e: InputEvent) -> void:
 	if e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_RIGHT:
@@ -136,6 +151,15 @@ func _unhandled_input(e: InputEvent) -> void:
 			if n:
 				n.activate("left")
 				print("FlatHarness: activated ", n.name)
+		elif e.keycode == KEY_H and _health:
+			_health.apply_damage(_health.local_id(), 20, "test")
+			print("FlatHarness: -20 HP")
+		elif e.keycode == KEY_J and _health:
+			_health.heal(_health.local_id(), 20)
+			print("FlatHarness: +20 HP")
+		elif e.keycode == KEY_K and _health:
+			_health.apply_damage(_health.local_id(), 999, "test")
+			print("FlatHarness: lethal hit -> respawn")
 		elif e.keycode == KEY_ESCAPE:
 			get_tree().quit()
 

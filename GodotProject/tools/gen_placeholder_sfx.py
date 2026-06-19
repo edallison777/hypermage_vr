@@ -105,6 +105,20 @@ def loop_drone(freqs: list[float], dur: float, amp: float = 0.35,
     return out
 
 
+def hurt(dur: float = 0.20) -> list[float]:
+    """A short harsh descending buzz + noise — taking damage (F5)."""
+    out = []
+    for i in range(_n(dur)):
+        t = i / RATE
+        x = i / _n(dur)
+        freq = 320.0 - 180.0 * x                   # pitch falls as it plays
+        env = math.exp(-7.0 * t)
+        body = 0.6 * _sine(freq, t) + 0.3 * _sine(freq * 1.5, t)   # slightly dissonant
+        noise = 0.3 * (random.random() * 2 - 1)
+        out.append((body + noise) * env * 0.7)
+    return out
+
+
 def arpeggio(freqs: list[float], note: float = 0.09) -> list[float]:
     """Concatenated decaying tones — a little ascending chime for success cues."""
     out: list[float] = []
@@ -130,6 +144,9 @@ def main() -> None:
     # exactly -> sample-perfect loop. Pitched into a warm, audible pad (pure sub-bass
     # rolls off on PC speakers).
     _write("ambient", loop_drone([100.0, 150.0, 225.0, 300.0], 2.0, amp=0.25))
+    # hurt last so adding it doesn't perturb the shared RNG stream that grab/throw draw
+    # from (inserting earlier would regenerate those device-verified WAVs).
+    _write("hurt", hurt(0.20))                                       # F5: damage cue
     print("Done.")
 
 

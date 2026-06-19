@@ -33,6 +33,7 @@ func _ready() -> void:
 		return
 	_body = CharacterBody3D.new()
 	_body.name = "PlayerBody"
+	_body.add_to_group("player")   # F5: hazards detect the local player by this group
 	var col := CollisionShape3D.new()
 	var sphere := SphereShape3D.new()
 	sphere.radius = BODY_RADIUS
