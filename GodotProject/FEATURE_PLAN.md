@@ -77,9 +77,9 @@ Status: ✅ done · 🔨 in progress · ⬜ not started. (Commit hashes for comp
 | **F2** | Simple interactables: buttons, pressure plates, toggle switches, proximity volumes | F0 | ✅ `d44b170` |
 | **F3** | Rising/lowering platforms | F0, F2 | ✅ `3fe628f` |
 | **F4** | Sequence puzzle (ordered interaction, resets on wrong order) | F0, F2 | ✅ `8e6e4e4` |
-| **F5** | Health/damage model (server-authoritative) + death/respawn + HUD | F0, F1 | ✅ this commit |
-| **F6** | Point scoring + objectives + win/lose + DynamoDB persistence/leaderboard | F0, F5 | ⬜ |
-| **F7** | Guns: projectiles/beams, VFX, holster, ammo pickups | F0, F1, F5 | ⬜ |
+| **F5** | Health/damage model (server-authoritative) + death/respawn + HUD | F0, F1 | ✅ `caa4752` |
+| **F6** | Point scoring + objectives + win/lose + DynamoDB persistence/leaderboard | F0, F5 | ✅ `df23cbb` (F6a) · `a07d84a` (F6b leaderboard, backend live/API-verified) |
+| **F7** | Guns: projectiles/beams, VFX, holster, ammo pickups | F0, F1, F5 | ✅ `3b075fa` (hitscan; physical projectiles deferred) |
 | **F8** | Enemies: NavMesh, take/inflict damage, spawn waves, difficulty | F0, F5, F7 | ⬜ |
 | **F9** | Realistic graphics pass + comfort/accessibility (teleport, vignette, settings) | all | ⬜ |
 
