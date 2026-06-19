@@ -25,7 +25,8 @@ extends Node3D
 const LightReactor = preload("res://scripts/reactors/light_reactor.gd")
 const HealthManager = preload("res://scripts/health_manager.gd")
 const HealthHUD = preload("res://scripts/health_hud.gd")
-const ROOM_PATH := "res://scenes/generated/health-test.tscn"
+const GameState = preload("res://scripts/game_state.gd")
+const ROOM_PATH := "res://scenes/generated/objective-test.tscn"
 const MOVE_SPEED := 4.0
 const LOOK_SENS := 0.005
 const ENGAGE_RANGE := 4.0     # how close the camera must be to a mechanism handle
@@ -39,6 +40,7 @@ var _looking := false
 var _driving: Node = null     # mechanism currently being driven by the mouse
 var _drive_value := 0.0
 var _health: Node = null
+var _game: Node = null
 
 func _ready() -> void:
 	_bus = get_tree().get_first_node_in_group("game_events")
@@ -112,6 +114,13 @@ func _ready() -> void:
 	var hud := HealthHUD.new()
 	_cam.add_child(hud)
 	hud.position = Vector3(0.0, -0.18, -0.6)
+
+	# F6: GameState authority (offline). begin() scans the room's objective/rules nodes,
+	# so add it after the room is in the tree. Press buttons (F) to complete objectives;
+	# the room's scoreboard reacts. K (lethal x4) exercises the death-cap lose.
+	_game = GameState.new()
+	add_child(_game)
+	_game.setup_offline()
 
 	print("FlatHarness: ready. WASD/QE move, RMB look, LMB-drag lever, F press nearest button/switch, T lamp, G sfx, H/J/K health, Esc quits.")
 

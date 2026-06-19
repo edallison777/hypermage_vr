@@ -1,0 +1,36 @@
+{
+  "id": "objective-test",
+  "name": "Objective Test",
+  "game_rules": { "time_limit": 180, "max_team_deaths": 3 },
+  "zones": [
+    {
+      "id": "arena",
+      "type": "objective",
+      "bounds": {
+        "center": { "x": 0, "y": 0, "z": 150 },
+        "extents": { "x": 300, "y": 300, "z": 150 }
+      },
+      "interactables": [
+        { "id": "b1", "type": "button", "position": { "x": -120, "y": 270, "z": 120 } },
+        { "id": "b2", "type": "button", "position": { "x": 0,    "y": 270, "z": 120 } },
+        { "id": "b3", "type": "button", "position": { "x": 120,  "y": 270, "z": 120 } },
+
+        { "id": "obj1", "type": "objective", "position": { "x": 0, "y": 0, "z": 150 },
+          "trigger_event": "interact:button", "match_id": "b1", "points": 100 },
+        { "id": "obj2", "type": "objective", "position": { "x": 0, "y": 0, "z": 150 },
+          "trigger_event": "interact:button", "match_id": "b2", "points": 100 },
+        { "id": "obj3", "type": "objective", "position": { "x": 0, "y": 0, "z": 150 },
+          "trigger_event": "interact:button", "match_id": "b3", "points": 150, "optional": true },
+
+        { "id": "board", "type": "scoreboard", "position": { "x": 0, "y": 260, "z": 220 },
+          "title": "MISSION", "yaw": 0 },
+
+        { "id": "lava", "type": "hazard", "position": { "x": 220, "y": 0, "z": 0 },
+          "size": 1.5, "damage_per_second": 30, "interval": 0.5 }
+      ]
+    }
+  ],
+  "participant_spawns": [
+    { "role": "player", "position": { "x": 0, "y": -250, "z": 0 } }
+  ]
+}

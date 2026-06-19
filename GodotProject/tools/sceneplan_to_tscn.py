@@ -718,6 +718,12 @@ def _add_interactable(b: TscnBuilder, obj: dict, zone_node: str, bounds: dict) -
     if otype == "hazard":
         _add_hazard(b, obj, oid, zone_node, lx, ly, lz)
         return
+    if otype == "objective":
+        _add_objective(b, obj, oid, zone_node, lx, ly, lz)
+        return
+    if otype == "scoreboard":
+        _add_scoreboard(b, obj, oid, zone_node, lx, ly, lz)
+        return
 
     r, g, b_c = _INTERACTABLE_RGB.get(otype, (0.5, 0.5, 0.5))
     mat = b.material(r, g, b_c)
@@ -1026,6 +1032,49 @@ def _add_hazard(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
     })
 
 
+def _add_objective(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+                   lx: float, ly: float, lz: float) -> None:
+    """An invisible objective marker (F6). GameState scans the "objective" group and
+    credits it when `trigger_event` fires (payload.id == match_id, if set). ScenePlan
+    fields: trigger_event (default interact:button), match_id, points (default 100),
+    optional (bool)."""
+    script = b.script_resource("res://scripts/objective.gd")
+    name = f"Objective_{oid}"
+    props: dict[str, str] = {
+        "transform": t3d(lx, ly, lz),
+        "script": f'ExtResource("{script}")',
+        "objective_id": f'"{oid}"',
+        "trigger_event": f'"{obj.get("trigger_event", "interact:button")}"',
+        "match_id": f'"{obj.get("match_id", "")}"',
+        "points": str(int(obj.get("points", 100))),
+        "optional": "true" if obj.get("optional") else "false",
+    }
+    b.node(name, "Node3D", zone_node, props, groups=["objective"])
+
+
+def _add_scoreboard(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+                    lx: float, ly: float, lz: float) -> None:
+    """A wall-mounted scoreboard panel (F6) that displays score / objective progress /
+    countdown / win-lose, all derived from the GameState bus events. ScenePlan fields:
+    title; yaw (degrees, to face the panel into the room)."""
+    script = b.script_resource("res://scripts/scoreboard.gd")
+    name = f"Scoreboard_{oid}"
+    yaw = math.radians(float(obj.get("yaw", 0.0)))
+    cy, sy = math.cos(yaw), math.sin(yaw)
+    # Rotation about Y by yaw, with translation (lx,ly,lz).
+    rot = (
+        f"Transform3D({cy:.5f}, 0, {sy:.5f}, 0, 1, 0, {-sy:.5f}, 0, {cy:.5f}, "
+        f"{lx:.4f}, {ly:.4f}, {lz:.4f})"
+    )
+    props: dict[str, str] = {
+        "transform": rot,
+        "script": f'ExtResource("{script}")',
+    }
+    if "title" in obj:
+        props["board_title"] = f'"{obj["title"]}"'
+    b.node(name, "Node3D", zone_node, props)
+
+
 def _add_platform(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
                   lx: float, ly: float, lz: float) -> None:
     """A rideable rising/lowering platform (AnimatableBody3D on the WALKABLE layer so
@@ -1199,6 +1248,17 @@ def convert(scene_plan: dict, vr: bool = False) -> str:
             cfg = secret_by_zone.get(geom["a_id"]) or secret_by_zone.get(geom["b_id"])
             if cfg:
                 _add_secret_door(b, geom, cfg)
+
+    # Game rules (F6): optional lose conditions for the round. Emitted as an invisible
+    # node GameState scans from the "game_rules" group.
+    rules = scene_plan.get("game_rules")
+    if rules:
+        rules_script = b.script_resource("res://scripts/game_rules.gd")
+        b.node("GameRules", "Node3D", ".", {
+            "script": f'ExtResource("{rules_script}")',
+            "time_limit": f'{float(rules.get("time_limit", 0.0)):.4f}',
+            "max_team_deaths": str(int(rules.get("max_team_deaths", -1))),
+        })
 
     # Spawns / VR rig
     spawns = scene_plan.get("participant_spawns", [])
