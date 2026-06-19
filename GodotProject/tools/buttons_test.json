@@ -1,0 +1,25 @@
+{
+  "id": "buttons-test",
+  "name": "Buttons Test",
+  "zones": [
+    {
+      "id": "hall",
+      "type": "exploration",
+      "bounds": {
+        "center": { "x": 0, "y": 0, "z": 150 },
+        "extents": { "x": 300, "y": 300, "z": 150 }
+      },
+      "interactables": [
+        { "id": "btn_a",  "type": "button",         "position": { "x": 60,   "y": 100,  "z": 120 } },
+        { "id": "sw_a",   "type": "switch",          "position": { "x": -150, "y": 250,  "z": 130 } },
+        { "id": "plate_a","type": "pressure_plate",  "position": { "x": 150,  "y": -100, "z": 30 }, "size": 0.9 },
+        { "id": "prox_a", "type": "proximity",       "position": { "x": 0,    "y": 0,    "z": 30 }, "size": 2.0 },
+        { "id": "lamp_a", "type": "lamp",            "position": { "x": 60,   "y": 100,  "z": 200 }, "controlled_by": "btn_a", "event": "interact:button" },
+        { "id": "orb",    "type": "artefact",        "position": { "x": 150,  "y": -100, "z": 120 } }
+      ]
+    }
+  ],
+  "participant_spawns": [
+    { "role": "player", "position": { "x": 0, "y": -250, "z": 0 } }
+  ]
+}

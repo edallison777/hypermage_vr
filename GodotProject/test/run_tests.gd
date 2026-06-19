@@ -15,6 +15,7 @@ extends SceneTree
 const SUITES: Array[String] = [
 	"res://test/test_game_events.gd",
 	"res://test/test_audio_haptics.gd",
+	"res://test/test_interactables.gd",
 ]
 
 var _done := false
@@ -42,12 +43,17 @@ func _process(_delta: float) -> bool:
 			suite.checks = 0
 			suite.call(n)
 			total += 1
-			if suite.failures.is_empty():
-				print("  PASS  ", n, "  (", suite.checks, " checks)")
-			else:
+			if not suite.failures.is_empty():
 				failed += 1
 				for f in suite.failures:
 					print("  FAIL  ", n, ": ", f)
+			elif suite.checks == 0:
+				# A test that ran no assertions almost certainly errored mid-method
+				# (GDScript runtime errors abort silently) — treat as failure, not pass.
+				failed += 1
+				print("  FAIL  ", n, ": no checks ran (method errored or is empty)")
+			else:
+				print("  PASS  ", n, "  (", suite.checks, " checks)")
 		suite.free()
 	print("")
 	print("Tests: ", total, "   Failed: ", failed)

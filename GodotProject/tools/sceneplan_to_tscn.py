@@ -682,6 +682,22 @@ def _add_interactable(b: TscnBuilder, obj: dict, zone_node: str, bounds: dict) -
         _add_mechanism(b, oid, otype, zone_node, lx, ly, lz)
         return
 
+    if otype == "button":
+        _add_button(b, oid, zone_node, lx, ly, lz)
+        return
+    if otype == "switch":
+        _add_switch(b, oid, zone_node, lx, ly, lz)
+        return
+    if otype == "pressure_plate":
+        _add_pressure_plate(b, obj, oid, zone_node, lx, ly, lz)
+        return
+    if otype == "proximity":
+        _add_proximity(b, obj, oid, zone_node, lx, ly, lz)
+        return
+    if otype == "lamp":
+        _add_lamp(b, obj, oid, zone_node, lx, ly, lz)
+        return
+
     r, g, b_c = _INTERACTABLE_RGB.get(otype, (0.5, 0.5, 0.5))
     mat = b.material(r, g, b_c)
 
@@ -819,6 +835,139 @@ def _add_mechanism(
         "pixel_size": "0.0015",
         "modulate": col(1, 1, 1),
         "outline_size": "4",
+    })
+
+
+# ── F2 simple interactables (buttons / switches / plates / proximity) ───────────
+# Each emits a node tree whose script (extending interactable.gd) fires a discrete
+# "interact:<verb>" event on the GameEvents bus. lx/ly/lz = zone-local position; the
+# author places them at the intended height (no implicit offset).
+
+def _add_button(b: TscnBuilder, oid: str, zone_node: str,
+                lx: float, ly: float, lz: float) -> None:
+    script = b.script_resource("res://scripts/interactables/push_button.gd")
+    name = f"Button_{oid}"
+    path = f"{zone_node}/{name}"
+    b.node(name, "Node3D", zone_node, {
+        "transform": t3d(lx, ly, lz),
+        "script": f'ExtResource("{script}")',
+        "interactable_id": f'"{oid}"',
+    }, groups=["interactable", "hand_touch"])
+    base_mat = b.material(0.18, 0.18, 0.20)
+    base_mesh = b.cylinder_mesh(0.08, 0.04)
+    b.node("Base", "MeshInstance3D", path, {
+        "transform": t3d(0, 0.02, 0),
+        "mesh": f'SubResource("{base_mesh}")',
+        "surface_material_override/0": f'SubResource("{base_mat}")',
+    })
+    cap_mat = b.material(0.85, 0.16, 0.12)
+    cap_mesh = b.cylinder_mesh(0.06, 0.03)
+    b.node("Cap", "MeshInstance3D", path, {
+        "transform": t3d(0, 0.055, 0),
+        "mesh": f'SubResource("{cap_mesh}")',
+        "surface_material_override/0": f'SubResource("{cap_mat}")',
+    })
+
+
+def _add_switch(b: TscnBuilder, oid: str, zone_node: str,
+                lx: float, ly: float, lz: float) -> None:
+    script = b.script_resource("res://scripts/interactables/toggle_switch.gd")
+    name = f"Switch_{oid}"
+    path = f"{zone_node}/{name}"
+    b.node(name, "Node3D", zone_node, {
+        "transform": t3d(lx, ly, lz),
+        "script": f'ExtResource("{script}")',
+        "interactable_id": f'"{oid}"',
+    }, groups=["interactable", "hand_touch"])
+    base_mat = b.material(0.18, 0.18, 0.20)
+    base_mesh = b.box_mesh(0.12, 0.18, 0.05)
+    b.node("Base", "MeshInstance3D", path, {
+        "mesh": f'SubResource("{base_mesh}")',
+        "surface_material_override/0": f'SubResource("{base_mat}")',
+    })
+    # Lever node pivots about local X; the bar is offset up so the tilt reads clearly.
+    b.node("Lever", "Node3D", path, {"transform": t3d(0, 0, 0.035)})
+    bar_mat = b.material(0.85, 0.80, 0.20)
+    bar_mesh = b.box_mesh(0.04, 0.12, 0.04)
+    b.node("Bar", "MeshInstance3D", f"{path}/Lever", {
+        "transform": t3d(0, 0.05, 0),
+        "mesh": f'SubResource("{bar_mesh}")',
+        "surface_material_override/0": f'SubResource("{bar_mat}")',
+    })
+
+
+def _add_pressure_plate(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+                        lx: float, ly: float, lz: float) -> None:
+    script = b.script_resource("res://scripts/interactables/pressure_plate.gd")
+    name = f"Plate_{oid}"
+    path = f"{zone_node}/{name}"
+    size = float(obj.get("size", 0.8))          # square plate side (m)
+    b.node(name, "Node3D", zone_node, {
+        "transform": t3d(lx, ly, lz),
+        "script": f'ExtResource("{script}")',
+        "interactable_id": f'"{oid}"',
+    }, groups=["interactable"])
+    plate_mat = b.material(0.35, 0.30, 0.15)
+    plate_mesh = b.box_mesh(size, 0.06, size)
+    b.node("Plate", "MeshInstance3D", path, {
+        "transform": t3d(0, 0.03, 0),
+        "mesh": f'SubResource("{plate_mesh}")',
+        "surface_material_override/0": f'SubResource("{plate_mat}")',
+    })
+    # Detection box just above the plate (default Area3D mask = layer 1 -> player body
+    # + grabbables). Sized a touch inside the plate footprint.
+    shape = b.box_shape(size * 0.9, 0.30, size * 0.9)
+    b.node("Area", "Area3D", path, {"transform": t3d(0, 0.20, 0)})
+    b.node("Shape", "CollisionShape3D", f"{path}/Area", {
+        "shape": f'SubResource("{shape}")',
+    })
+
+
+def _add_proximity(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+                   lx: float, ly: float, lz: float) -> None:
+    script = b.script_resource("res://scripts/interactables/proximity_volume.gd")
+    name = f"Proximity_{oid}"
+    path = f"{zone_node}/{name}"
+    size = float(obj.get("size", 2.0))          # cube side (m), sitting on the floor
+    b.node(name, "Node3D", zone_node, {
+        "transform": t3d(lx, ly, lz),
+        "script": f'ExtResource("{script}")',
+        "interactable_id": f'"{oid}"',
+    }, groups=["interactable"])
+    shape = b.box_shape(size, size, size)
+    b.node("Area", "Area3D", path, {"transform": t3d(0, size / 2.0, 0)})
+    b.node("Shape", "CollisionShape3D", f"{path}/Area", {
+        "shape": f'SubResource("{shape}")',
+    })
+
+
+def _add_lamp(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+             lx: float, ly: float, lz: float) -> None:
+    """An indicator lamp wired to an interactable: toggles its light when the named
+    event fires for `controlled_by`. The in-world proof of interactable->bus->reactor."""
+    script = b.script_resource("res://scripts/reactors/indicator_lamp.gd")
+    name = f"Lamp_{oid}"
+    path = f"{zone_node}/{name}"
+    src = str(obj.get("controlled_by", ""))
+    ev = str(obj.get("event", "interact:button"))
+    b.node(name, "Node3D", zone_node, {
+        "transform": t3d(lx, ly, lz),
+        "script": f'ExtResource("{script}")',
+        "trigger_event": f'"{ev}"',
+        "source_id": f'"{src}"',
+        "light_path": 'NodePath("Lamp")',
+    }, groups=["reactor"])
+    bulb_mat = b.material(0.90, 0.85, 0.50)
+    bulb_mesh = b.sphere_mesh(0.08)
+    b.node("Bulb", "MeshInstance3D", path, {
+        "mesh": f'SubResource("{bulb_mesh}")',
+        "surface_material_override/0": f'SubResource("{bulb_mat}")',
+    })
+    b.node("Lamp", "OmniLight3D", path, {
+        "omni_range": "5.0",
+        "light_energy": "4.0",
+        "light_color": col(1.0, 0.6, 0.25),
+        "visible": "false",
     })
 
 

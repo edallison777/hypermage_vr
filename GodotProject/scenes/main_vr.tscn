@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://scripts/room_manager.gd" id="Script_room"]
 [ext_resource type="Script" path="res://scripts/grab_manager.gd" id="Script_grab"]
 [ext_resource type="Script" path="res://scripts/mechanism_manager.gd" id="Script_mech"]
+[ext_resource type="Script" path="res://scripts/interactable_manager.gd" id="Script_interact"]
 [ext_resource type="Script" path="res://scripts/locomotion.gd" id="Script_locomotion"]
 [ext_resource type="Script" path="res://scripts/controller_hands.gd" id="Script_hands"]
 
@@ -72,6 +73,9 @@ script = ExtResource("Script_grab")
 
 [node name="MechanismManager" type="Node" parent="."]
 script = ExtResource("Script_mech")
+
+[node name="InteractableManager" type="Node" parent="."]
+script = ExtResource("Script_interact")
 
 [node name="Locomotion" type="Node" parent="."]
 script = ExtResource("Script_locomotion")

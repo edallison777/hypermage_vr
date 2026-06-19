@@ -21,7 +21,7 @@ extends Node3D
 # the lever (LMB) opens the secret door which plays its rumble.
 
 const LightReactor = preload("res://scripts/reactors/light_reactor.gd")
-const ROOM_PATH := "res://scenes/generated/secret-door-test.tscn"
+const ROOM_PATH := "res://scenes/generated/buttons-test.tscn"
 const MOVE_SPEED := 4.0
 const LOOK_SENS := 0.005
 const ENGAGE_RANGE := 4.0     # how close the camera must be to a mechanism handle
@@ -83,6 +83,12 @@ func _ready() -> void:
 	add_child(reactor)               # _ready hooks the bus
 	reactor.light_path = lamp.get_path()
 
+	# F2: a button press also toggles the lamp (proves interactable -> bus -> reactor).
+	var btn_reactor := LightReactor.new()
+	btn_reactor.trigger_event = "interact:button"
+	add_child(btn_reactor)
+	btn_reactor.light_path = lamp.get_path()
+
 	# Ground reference + sun so the scene is lit even if the room is dim.
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-50, -30, 0)
@@ -96,7 +102,7 @@ func _ready() -> void:
 
 	Audio.play_ambient()       # F1: looping ambient bed
 
-	print("FlatHarness: ready. WASD/QE move, RMB look, LMB-drag drives lever, T lamp, G sfx, Esc quits.")
+	print("FlatHarness: ready. WASD/QE move, RMB look, LMB-drag lever, F press nearest button/switch, T lamp, G sfx, Esc quits.")
 
 func _unhandled_input(e: InputEvent) -> void:
 	if e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_RIGHT:
@@ -128,8 +134,25 @@ func _unhandled_input(e: InputEvent) -> void:
 		elif e.keycode == KEY_G:
 			Audio.play_3d("ui_click", _cam.global_position)
 			print("FlatHarness: played ui_click")
+		elif e.keycode == KEY_F:
+			# Flat mode has no VR hands -> "press" the nearest button/switch directly.
+			var n := _nearest_hand_touch()
+			if n:
+				n.activate("left")
+				print("FlatHarness: activated ", n.name)
 		elif e.keycode == KEY_ESCAPE:
 			get_tree().quit()
+
+func _nearest_hand_touch() -> Node:
+	var best: Node = null
+	var best_d := 999.0
+	for n in get_tree().get_nodes_in_group("hand_touch"):
+		if n.has_method("handle_global_position") and n.has_method("activate"):
+			var d: float = _cam.global_position.distance_to(n.handle_global_position())
+			if d < best_d:
+				best_d = d
+				best = n
+	return best
 
 func _nearest_mechanism() -> Node:
 	var best: Node = null
