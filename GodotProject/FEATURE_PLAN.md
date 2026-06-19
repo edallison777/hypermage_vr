@@ -80,7 +80,7 @@ Status: ✅ done · 🔨 in progress · ⬜ not started. (Commit hashes for comp
 | **F5** | Health/damage model (server-authoritative) + death/respawn + HUD | F0, F1 | ✅ `caa4752` |
 | **F6** | Point scoring + objectives + win/lose + DynamoDB persistence/leaderboard | F0, F5 | ✅ `df23cbb` (F6a) · `a07d84a` (F6b leaderboard, backend live/API-verified) |
 | **F7** | Guns: projectiles/beams, VFX, holster, ammo pickups | F0, F1, F5 | ✅ `3b075fa` (hitscan; physical projectiles deferred) |
-| **F8** | Enemies: NavMesh, take/inflict damage, spawn waves, difficulty | F0, F5, F7 | ⬜ |
+| **F8** | Enemies: NavMesh, take/inflict damage, spawn waves, difficulty | F0, F5, F7 | ✅ `e2f7b90` (offline device-verified; networked puppet sync with the server test) |
 | **F9** | Realistic graphics pass + comfort/accessibility (teleport, vignette, settings) | all | ⬜ |
 
 Known follow-up (not yet scheduled): **throwing physics/feel** needs improving — flagged
