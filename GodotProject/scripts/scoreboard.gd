@@ -31,11 +31,15 @@ func _ready() -> void:
 
 func _mk_label(y: float, size: int, color: Color) -> Label3D:
 	var l := Label3D.new()
-	l.position = Vector3(0.0, y, 0.0)
+	# Sit the text just IN FRONT of the 0.04 m-deep backing panel (front face at +0.02);
+	# at z=0 the opaque panel occludes it (reads as a blank black screen).
+	l.position = Vector3(0.0, y, 0.03)
 	l.font_size = size
 	l.pixel_size = 0.0015
 	l.modulate = color
 	l.outline_size = 6
+	# Render the HUD text on top regardless of the panel depth, so it never clips.
+	l.no_depth_test = true
 	add_child(l)
 	return l
 
