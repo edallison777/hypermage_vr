@@ -23,12 +23,16 @@ var hp: int = 0
 
 const GRAVITY := 12.0
 
+const STUCK_LIMIT := 12.0       # despawn if no progress toward the player for this long
+
 var _mgr: Node = null
 var _health: Node = null
 var _agent: NavigationAgent3D = null
 var _atk_t := 0.0
 var _mat: StandardMaterial3D = null
 var _flash_t := 0.0
+var _best_dist := INF           # closest planar distance to a player reached so far
+var _stuck_t := 0.0             # time since that closest approach improved
 
 func _ready() -> void:
 	add_to_group("enemy")
@@ -89,6 +93,17 @@ func _physics_process(delta: float) -> void:
 	var to_player := tpos - global_position
 	to_player.y = 0.0
 	var planar := to_player.length()
+
+	# Stuck watchdog: if we never get closer to the player (wedged in geometry / outside
+	# the navigable area), despawn so we don't keep the wave from ever clearing.
+	if planar < _best_dist - 0.1:
+		_best_dist = planar
+		_stuck_t = 0.0
+	else:
+		_stuck_t += delta
+		if _stuck_t >= STUCK_LIMIT and _mgr:
+			_mgr.on_enemy_died(self)
+			return
 
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
