@@ -106,7 +106,6 @@ func _ready() -> void:
 	_cam.position = spawn + Vector3(0, 1.7, 0)
 	add_child(_cam)
 
-	Audio.play_ambient()       # F1: looping ambient bed
 
 	# F5: a self-authoritative HealthManager + wrist HUD (parented to the camera in
 	# flat mode). H/J/K drive damage/heal/death so the HUD and respawn loop can be

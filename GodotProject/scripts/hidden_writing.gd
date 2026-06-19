@@ -27,6 +27,9 @@ func _ready() -> void:
 	_label.pixel_size = 0.004
 	_label.outline_size = 8
 	_label.modulate = Color(writing_color.r, writing_color.g, writing_color.b, 0.0)
+	# The OUTLINE renders even when the fill alpha is 0, so it must be faded too —
+	# otherwise the hidden text leaks through as an outline before it's discovered.
+	_label.outline_modulate = Color(0, 0, 0, 0.0)
 	_label.no_depth_test = true
 	add_child(_label)
 
@@ -61,3 +64,4 @@ func _process(delta: float) -> void:
 		_alpha = move_toward(_alpha, target, FADE_SPEED * delta)
 		if _label:
 			_label.modulate.a = _alpha
+			_label.outline_modulate.a = _alpha

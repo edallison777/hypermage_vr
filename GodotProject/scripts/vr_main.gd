@@ -105,7 +105,6 @@ func _load_local_room() -> void:
 		weapon_mgr.local_mode = true
 	_spawn_health_hud()
 	var n := get_tree().get_nodes_in_group("grabbable").size()
-	Audio.play_ambient()
 	_set_status("Local room (offline)\n" + LOCAL_ROOM_PATH.get_file() + "\ngrabbables: " + str(n))
 	await get_tree().create_timer(4.0).timeout
 	if is_instance_valid(status_label):
@@ -161,7 +160,6 @@ func _on_connected() -> void:
 	_spawn_health_hud()
 	if leaderboard:
 		leaderboard.fetch()   # F6b: show current standings on the in-world scoreboard
-	Audio.play_ambient()
 	await get_tree().create_timer(3.0).timeout
 	if is_instance_valid(status_label):
 		status_label.visible = false

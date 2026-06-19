@@ -22,6 +22,13 @@
           "position": { "x": -150, "y": 100, "z": 210 },
           "controlled_by": "lock1", "event": "lock:opened" },
 
+        { "id": "lock2", "type": "code_lock",
+          "position": { "x": 0, "y": 0, "z": 150 },
+          "keypad": "kp_txt", "code": "SECRET", "opened_event": "lock:opened" },
+        { "id": "lock_lamp2", "type": "lamp",
+          "position": { "x": 150, "y": 100, "z": 210 },
+          "controlled_by": "lock2", "event": "lock:opened" },
+
         { "id": "torch1", "type": "torch", "position": { "x": 0, "y": -150, "z": 120 },
           "cone_color": [0.5, 0.8, 1.0], "cone_range": 5.0, "cone_angle": 14 },
 
