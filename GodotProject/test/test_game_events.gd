@@ -89,6 +89,11 @@ func test_interactive_scripts_compile() -> void:
 	# flat_harness.gd loops forever and vr_main.gd needs a scene, so they can't run
 	# under the headless runner — but load() still compiles them, surfacing parse
 	# errors as a null return. Guards the F0 edits to those files.
+	# Includes the scripts that reference the Audio/Haptics autoload globals — a null
+	# return would mean those globals don't resolve under the headless runner.
 	for p in ["res://scripts/flat_harness.gd", "res://scripts/vr_main.gd",
-			"res://scripts/reactors/light_reactor.gd"]:
+			"res://scripts/reactors/light_reactor.gd",
+			"res://scripts/audio_manager.gd", "res://scripts/haptics.gd",
+			"res://scripts/grab_manager.gd", "res://scripts/mechanism_manager.gd",
+			"res://scripts/secret_door.gd"]:
 		check(load(p) != null, "compiles: " + p)

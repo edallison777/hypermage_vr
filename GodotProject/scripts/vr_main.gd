@@ -74,6 +74,7 @@ func _load_local_room() -> void:
 	if bus:
 		bus.local_mode = true
 	var n := get_tree().get_nodes_in_group("grabbable").size()
+	Audio.play_ambient()
 	_set_status("Local room (offline)\n" + LOCAL_ROOM_PATH.get_file() + "\ngrabbables: " + str(n))
 	await get_tree().create_timer(4.0).timeout
 	if is_instance_valid(status_label):
@@ -124,6 +125,7 @@ func _on_matchmaking_failed(error: String) -> void:
 func _on_connected() -> void:
 	_set_status("Connected!")
 	player_sync.setup()
+	Audio.play_ambient()
 	await get_tree().create_timer(3.0).timeout
 	if is_instance_valid(status_label):
 		status_label.visible = false

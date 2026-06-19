@@ -24,6 +24,8 @@ var _closed_position: Vector3 = Vector3.ZERO
 var _mech: Node = null
 var _target: float = 0.0   # latest mechanism value (0..1)
 var _cur: float = 0.0      # smoothed open amount the slab is actually at
+var _was_moving: bool = false
+var _rumble_cooldown: float = 0.0   # gate so rapid start/stop can't re-thud
 
 func _ready() -> void:
 	# We move the slab ourselves (kinematic teleport each physics frame) rather
@@ -50,7 +52,14 @@ func _on_value(v: float) -> void:
 	_target = clampf(v, 0.0, 1.0)
 
 func _physics_process(delta: float) -> void:
+	_rumble_cooldown = maxf(0.0, _rumble_cooldown - delta)
 	if _cur == _target:
+		_was_moving = false
 		return
+	if not _was_moving:
+		_was_moving = true                       # grinding-stone thud as it starts
+		if _rumble_cooldown <= 0.0:
+			_rumble_cooldown = 0.8
+			Audio.play_3d("door_rumble", global_position, -2.0)
 	_cur = move_toward(_cur, _target, delta * speed)
 	position = _closed_position + open_offset * _cur

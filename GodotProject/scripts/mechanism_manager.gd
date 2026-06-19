@@ -16,6 +16,7 @@ var _left:  Node3D = null
 var _right: Node3D = null
 var _engaged: Dictionary = {}                       # "left"|"right" -> Mechanism node
 var _down: Dictionary = {"left": false, "right": false}
+var _last_step: Dictionary = {}                     # "left"|"right" -> last detent step
 var _timer: float = 0.0
 # Set true by vr_main in offline/local mode (no server peer).
 var local_mode: bool = false
@@ -85,6 +86,12 @@ func _handle(side: String, ctrl: Node3D, trig: float) -> void:
 		var m = _engaged[side]
 		if is_instance_valid(m):
 			m.drive(ctrl.global_position)
+			# Detent feedback: a tick + light pulse each 0.1 of travel.
+			var step := int(m.value * 10.0)
+			if _last_step.get(side, -1) != step:
+				_last_step[side] = step
+				Haptics.pulse(side, 0.3, 0.02)
+				Audio.play_3d("lever_tick", m.handle_global_position(), -4.0)
 
 func _diag() -> void:
 	var n := get_tree().get_nodes_in_group("mechanism").size()

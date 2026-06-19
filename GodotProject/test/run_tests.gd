@@ -14,6 +14,7 @@ extends SceneTree
 
 const SUITES: Array[String] = [
 	"res://test/test_game_events.gd",
+	"res://test/test_audio_haptics.gd",
 ]
 
 var _done := false

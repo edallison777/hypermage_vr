@@ -179,6 +179,8 @@ func _grab(side: String, ctrl: Node3D) -> void:
 		best.set_meta("orig_layer", best.collision_layer)
 		best.collision_layer = 0
 		_held[side] = best
+		Audio.play_3d("grab", best.global_position, -2.0)
+		Haptics.pulse(side, 0.6, 0.05)
 		print("GrabManager: grabbed " + best.name + " @ " + str(snapped(best_d, 0.01)) + "m")
 
 func _throw(side: String) -> void:
@@ -195,6 +197,8 @@ func _throw(side: String) -> void:
 	obj.angular_velocity = Vector3.ZERO
 	if not local_mode:
 		rpc_id(1, "do_throw", str(obj.get_path()), obj.global_transform, vel)
+	Audio.play_3d("throw", obj.global_position, -3.0)
+	Haptics.pulse(side, 0.4, 0.08)
 	print("GrabManager: threw " + obj.name + " @ " + str(snapped(vel.length(), 0.1)) + " m/s")
 
 # ── Server relay ──────────────────────────────────────────────────────────────

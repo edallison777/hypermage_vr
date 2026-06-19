@@ -14,7 +14,11 @@ extends Node3D
 #   left-mouse  hold + drag up/down : drive the nearest lever/wheel (value 0..1),
 #               so its value_changed reactions (e.g. the secret door) fire on the PC
 #   T           fire "test:toggle_light" on the bus -> LightReactor toggles the lamp
+#   G           play a one-shot 3D SFX at the camera (F1 audio check)
 #   Esc         quit
+#
+# F1 audio is also exercised passively: an ambient bed plays on start, and driving
+# the lever (LMB) opens the secret door which plays its rumble.
 
 const LightReactor = preload("res://scripts/reactors/light_reactor.gd")
 const ROOM_PATH := "res://scenes/generated/secret-door-test.tscn"
@@ -90,7 +94,9 @@ func _ready() -> void:
 	_cam.position = spawn + Vector3(0, 1.7, 0)
 	add_child(_cam)
 
-	print("FlatHarness: ready. WASD/QE move, RMB look, LMB-drag drives nearest lever/wheel, T lamp, Esc quits.")
+	Audio.play_ambient()       # F1: looping ambient bed
+
+	print("FlatHarness: ready. WASD/QE move, RMB look, LMB-drag drives lever, T lamp, G sfx, Esc quits.")
 
 func _unhandled_input(e: InputEvent) -> void:
 	if e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_RIGHT:
@@ -119,6 +125,9 @@ func _unhandled_input(e: InputEvent) -> void:
 		if e.keycode == KEY_T and _bus:
 			_bus.fire("test:toggle_light", {})
 			print("FlatHarness: fired test:toggle_light")
+		elif e.keycode == KEY_G:
+			Audio.play_3d("ui_click", _cam.global_position)
+			print("FlatHarness: played ui_click")
 		elif e.keycode == KEY_ESCAPE:
 			get_tree().quit()
 
