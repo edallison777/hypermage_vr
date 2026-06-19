@@ -45,8 +45,9 @@ func test_wave_count_scales_with_difficulty() -> void:
 	var m = EnemyManager.new()
 	add_child(m)
 	check_eq(m.wave_count(1), 3, "wave 1 = BASE_COUNT")
-	check_eq(m.wave_count(2), 5, "wave 2 = +PER_WAVE")
-	check_eq(m.wave_count(3), 7, "wave 3 = +2*PER_WAVE")
+	check_eq(m.wave_count(2), 4, "wave 2 = +PER_WAVE")
+	check_eq(m.wave_count(3), 5, "wave 3 = +2*PER_WAVE")
+	check_eq(m.wave_count(20), 5, "count is capped at MAX_COUNT")
 	m.free()
 
 func test_nearest_player_target() -> void:

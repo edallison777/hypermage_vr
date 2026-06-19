@@ -13,6 +13,7 @@ func _ready() -> void:
 	_area = get_node_or_null("Area")
 	if _area:
 		_area.body_entered.connect(_on_enter)
+		_area.body_exited.connect(_on_exit)
 
 func _on_enter(b: Node) -> void:
 	if _used or not b.is_in_group("player"):
@@ -22,10 +23,12 @@ func _on_enter(b: Node) -> void:
 		if str(w.equipped_by) != "":
 			w.reload()
 			reloaded = true
-	if not reloaded:
-		return                          # nothing equipped — leave the pickup for later
+	if reloaded:
+		Audio.play_3d("ui_click", global_position, 0.0, 1.5)
+	# Repeatable refill STATION: arm it once used; it re-arms when you step off, so you
+	# can top up every wave (a one-shot pickup left you dry once the waves escalated).
 	_used = true
-	Audio.play_3d("ui_click", global_position, 0.0, 1.5)
-	visible = false
-	if _area:
-		_area.monitoring = false
+
+func _on_exit(b: Node) -> void:
+	if b.is_in_group("player"):
+		_used = false

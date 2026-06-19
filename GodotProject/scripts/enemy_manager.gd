@@ -12,8 +12,9 @@ const Diag = preload("res://scripts/debug_flags.gd")
 const Enemy = preload("res://scripts/enemy.gd")
 
 const BASE_COUNT  := 3       # enemies in wave 1
-const PER_WAVE    := 2       # extra enemies per subsequent wave (difficulty)
-const WAVE_DELAY  := 5.0     # seconds between clearing a wave and the next
+const PER_WAVE    := 1       # extra enemies per subsequent wave (difficulty)
+const MAX_COUNT   := 5       # cap concurrent enemies so it plateaus (stays winnable)
+const WAVE_DELAY  := 6.0     # seconds between clearing a wave and the next
 const FIRST_DELAY := 3.0     # grace before wave 1
 
 var local_mode := false
@@ -32,6 +33,24 @@ func _ready() -> void:
 	add_to_group("enemy_manager")
 	_bus = get_tree().get_first_node_in_group("game_events")
 	_health = get_tree().get_first_node_in_group("health")
+	if _bus:
+		_bus.event.connect(_on_event)
+
+# When the local player dies, clear the field so the respawn isn't an instant re-death,
+# and let a fresh wave come after the usual delay (breathing room).
+func _on_event(name: String, _payload: Dictionary) -> void:
+	if name == "health:died" and _authority():
+		if Diag.ON:
+			print("EnemyManager: player died -> clearing ", _alive.size(), " enemies")
+		_clear_all()
+		_between = true
+		_timer = WAVE_DELAY
+
+func _clear_all() -> void:
+	for e in _alive.values():
+		if is_instance_valid(e):
+			e.queue_free()
+	_alive.clear()
 
 func setup() -> void:
 	if multiplayer.is_server():
@@ -80,6 +99,13 @@ func nearest_player_target(from: Vector3) -> Dictionary:
 func _local_peer() -> int:
 	return _health.local_id() if _health else 1
 
+# Restore players to full between waves (a breather + reward for clearing a wave).
+func _heal_players_full() -> void:
+	if _health == null:
+		_health = get_tree().get_first_node_in_group("health")
+	if _health:
+		_health.heal(_local_peer(), _health.max_hp())
+
 # ── Wave loop (authority) ──────────────────────────────────────────────────────────
 
 func _process(delta: float) -> void:
@@ -93,21 +119,22 @@ func _process(delta: float) -> void:
 	elif _alive.is_empty():
 		_between = true
 		_timer = WAVE_DELAY
+		_heal_players_full()       # wave cleared -> recover for the next one
 
 func _start_wave() -> void:
 	_wave += 1
-	var count := BASE_COUNT + (_wave - 1) * PER_WAVE
+	var count := wave_count(_wave)
 	for i in count:
-		_spawn_one()
+		_spawn_one(i)
 	if _bus:
 		_bus.fire("wave:started", {"wave": _wave, "count": count})
 	if Diag.ON:
 		print("EnemyManager: wave ", _wave, " -> ", count, " enemies")
 
 func wave_count(wave_num: int) -> int:
-	return BASE_COUNT + maxi(0, wave_num - 1) * PER_WAVE
+	return mini(BASE_COUNT + maxi(0, wave_num - 1) * PER_WAVE, MAX_COUNT)
 
-func _spawn_one() -> void:
+func _spawn_one(idx: int) -> void:
 	if _spawns.is_empty():
 		return
 	var e = Enemy.new()
@@ -115,12 +142,20 @@ func _spawn_one() -> void:
 	_next_id += 1
 	e.set_authority(true)
 	e._mgr = self
-	# Harder waves -> tougher/faster enemies (difficulty).
-	e.max_hp = 30 + (_wave - 1) * 10
-	e.speed = 2.0 + minf(_wave - 1, 4) * 0.25
+	# Harder waves -> tougher/faster enemies, but capped so they stay slower than the
+	# player (locomotion ~3.0 m/s) — you can always kite — and not bullet sponges.
+	e.max_hp = 30 + mini(_wave - 1, 6) * 8
+	e.speed = 2.0 + minf(_wave - 1, 5) * 0.08
 	get_parent().add_child(e)
-	e.global_position = _spawns[randi() % _spawns.size()] + Vector3(0, 0.9, 0)
+	# Round-robin across the markers + a golden-angle ring offset so enemies NEVER spawn
+	# on top of one another (overlapping capsules used to launch each other skyward).
+	var marker: Vector3 = _spawns[idx % _spawns.size()]
+	var ang := idx * 2.39996
+	var off := Vector3(cos(ang), 0.0, sin(ang)) * 0.7
+	e.global_position = marker + off + Vector3(0, 1.0, 0)
 	_alive[e.enemy_id] = e
+	if Diag.ON:
+		print("EnemyManager: spawned ", e.enemy_id, " at ", e.global_position)
 	if _bus:
 		_bus.fire("enemy:spawned", {"id": e.enemy_id})
 
@@ -128,6 +163,8 @@ func on_enemy_died(e: Node) -> void:
 	if not _alive.has(e.enemy_id):
 		return
 	_alive.erase(e.enemy_id)
+	if Diag.ON:
+		print("EnemyManager: ", e.enemy_id, " died; alive now ", _alive.size())
 	Audio.play_3d("success", (e as Node3D).global_position, -4.0, 1.2)
 	if _bus:
 		_bus.fire("enemy:died", {"id": e.enemy_id})

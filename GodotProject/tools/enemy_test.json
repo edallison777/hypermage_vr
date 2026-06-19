@@ -7,20 +7,20 @@
       "type": "combat",
       "bounds": {
         "center": { "x": 0, "y": 0, "z": 150 },
-        "extents": { "x": 350, "y": 300, "z": 200 }
+        "extents": { "x": 500, "y": 500, "z": 150 }
       },
       "interactables": [
-        { "id": "pistol", "type": "gun", "position": { "x": 0, "y": -200, "z": 100 },
+        { "id": "pistol", "type": "gun", "position": { "x": 0, "y": -300, "z": 100 },
           "max_ammo": 20, "damage": 15, "fire_cooldown": 0.2 },
-        { "id": "ammo1", "type": "ammo", "position": { "x": 150, "y": -200, "z": 0 }, "size": 0.8 },
+        { "id": "ammo1", "type": "ammo", "position": { "x": 150, "y": -300, "z": 0 }, "size": 0.9 },
 
-        { "id": "es1", "type": "enemy_spawn", "position": { "x": -250, "y": 230, "z": 0 } },
-        { "id": "es2", "type": "enemy_spawn", "position": { "x": 250,  "y": 230, "z": 0 } },
-        { "id": "es3", "type": "enemy_spawn", "position": { "x": 0,    "y": 230, "z": 0 } }
+        { "id": "es1", "type": "enemy_spawn", "position": { "x": -400, "y": 400, "z": 0 } },
+        { "id": "es2", "type": "enemy_spawn", "position": { "x": 400,  "y": 400, "z": 0 } },
+        { "id": "es3", "type": "enemy_spawn", "position": { "x": 0,    "y": 400, "z": 0 } }
       ]
     }
   ],
   "participant_spawns": [
-    { "role": "player", "position": { "x": 0, "y": -250, "z": 0 } }
+    { "role": "player", "position": { "x": 0, "y": -400, "z": 0 } }
   ]
 }

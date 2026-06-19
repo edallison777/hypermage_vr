@@ -13,9 +13,9 @@ const Diag = preload("res://scripts/debug_flags.gd")
 
 @export var max_hp: int = 30
 @export var speed: float = 2.0
-@export var damage: int = 10
+@export var damage: int = 5
 @export var attack_range: float = 1.3
-@export var attack_cooldown: float = 1.5
+@export var attack_cooldown: float = 2.0
 
 var enemy_id: String = ""
 var authority: bool = false
@@ -36,7 +36,11 @@ var _stuck_t := 0.0             # time since that closest approach improved
 
 func _ready() -> void:
 	add_to_group("enemy")
-	collision_layer = 1
+	# Own layer (bit 5) so enemies DON'T collide with each other — overlapping capsules
+	# used to shove one another vertically into the sky. Mask bit 1 = walls/floor/player
+	# only, so they're still blocked by walls and stand on the floor. The combat raycast
+	# uses an all-layer mask, so enemies on bit 5 are still shootable.
+	collision_layer = 1 << 4
 	collision_mask = 1
 	hp = max_hp
 	_build_body()
@@ -89,6 +93,12 @@ func _physics_process(delta: float) -> void:
 	var tgt: Dictionary = _mgr.nearest_player_target(global_position)
 	if tgt.is_empty():
 		return
+	# Safety: if an enemy ever falls out of the world (shoved off an edge / bad spawn),
+	# despawn it immediately rather than letting it plummet and wait out the stuck timer.
+	if global_position.y < -5.0 and _mgr:
+		_mgr.on_enemy_died(self)
+		return
+
 	var tpos: Vector3 = tgt["pos"]
 	var to_player := tpos - global_position
 	to_player.y = 0.0
@@ -102,6 +112,8 @@ func _physics_process(delta: float) -> void:
 	else:
 		_stuck_t += delta
 		if _stuck_t >= STUCK_LIMIT and _mgr:
+			if Diag.ON:
+				print("Enemy ", enemy_id, " stuck-despawn at ", global_position)
 			_mgr.on_enemy_died(self)
 			return
 
@@ -110,31 +122,35 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y = 0.0
 
-	if planar <= attack_range:
+	# Attack uses TRUE 3D distance so an enemy that's somehow above/below can't bite the
+	# player from off-screen (the old planar-only check let sky-launched enemies hit).
+	if global_position.distance_to(tpos) <= attack_range:
 		velocity.x = 0.0
 		velocity.z = 0.0
-		move_and_slide()
 		_atk_t -= delta
 		if _atk_t <= 0.0:
 			_atk_t = attack_cooldown
 			_attack(int(tgt.get("peer", 1)))
-		return
+	else:
+		var dir := to_player / planar if planar > 0.001 else Vector3.ZERO   # direct fallback
+		var nav_map := _agent.get_navigation_map()
+		if nav_map.is_valid() and NavigationServer3D.map_get_iteration_id(nav_map) > 0:
+			_agent.target_position = tpos
+			var nd := _agent.get_next_path_position() - global_position
+			nd.y = 0.0
+			if nd.length() > 0.05:
+				dir = nd.normalized()
+		velocity.x = dir.x * speed
+		velocity.z = dir.z * speed
 
-	var dir := to_player / planar          # direct fallback
-	var nav_map := _agent.get_navigation_map()
-	if nav_map.is_valid() and NavigationServer3D.map_get_iteration_id(nav_map) > 0:
-		_agent.target_position = tpos
-		var nd := _agent.get_next_path_position() - global_position
-		nd.y = 0.0
-		if nd.length() > 0.05:
-			dir = nd.normalized()
-	velocity.x = dir.x * speed
-	velocity.z = dir.z * speed
 	move_and_slide()
+	# Enemies never travel upward — clamp any upward velocity a collision injected, so a
+	# capsule can never get shoved into the sky.
+	velocity.y = minf(velocity.y, 0.0)
 
 func _attack(peer: int) -> void:
 	if _health:
 		_health.apply_damage(peer, damage, "enemy:" + enemy_id)
 	Audio.play_3d("hurt", global_position, -2.0, 0.7)
 	if Diag.ON:
-		print("Enemy: ", enemy_id, " bit peer ", peer)
+		print("Enemy ", enemy_id, " bit peer ", peer)
