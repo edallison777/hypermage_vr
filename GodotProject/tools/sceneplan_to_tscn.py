@@ -127,6 +127,10 @@ class TscnBuilder:
         self._nodes: list[str] = []
         self._counter = 0
         self._ext_by_path: dict[str, str] = {}
+        # Bake-ready mode (F9 hero-scene manual bake): when True the room shell is emitted
+        # lightmap-ready (UV2 + STATIC gi_mode), lights bake their indirect, and a
+        # LightmapGI node is added — so the only editor step is select-Bake-Lightmaps + save.
+        self.bake = False
 
     # ── external resource factories ───────────────────────────────────────────
 
@@ -148,12 +152,14 @@ class TscnBuilder:
         self._counter += 1
         return f"{prefix}_{self._counter}"
 
-    def box_mesh(self, sx: float, sy: float, sz: float) -> str:
+    def box_mesh(self, sx: float, sy: float, sz: float, uv2: bool = False) -> str:
         rid = self._id("BoxMesh")
-        self._sub.append(
-            f'[sub_resource type="BoxMesh" id="{rid}"]\n'
-            f'size = {v3(sx, sy, sz)}\n'
-        )
+        body = f'size = {v3(sx, sy, sz)}\n'
+        if uv2:
+            # Primitive meshes generate a lightmap-ready second UV set when asked — this
+            # is what makes the box room bakeable WITHOUT any ArrayMesh/unwrap step.
+            body += 'add_uv2 = true\n'
+        self._sub.append(f'[sub_resource type="BoxMesh" id="{rid}"]\n' + body)
         return rid
 
     def sphere_mesh(self, radius: float) -> str:
@@ -193,6 +199,17 @@ class TscnBuilder:
             f'shading_mode = 0\n'
             f'albedo_color = {col(r, g, b, a)}\n'
         )
+        return rid
+
+    def raw_sub(self, rtype: str, props: dict[str, str]) -> str:
+        """Generic sub-resource: emit any resource type from a {prop: value-string} dict.
+        Used for Environment / Sky / ProceduralSkyMaterial which have many fields."""
+        rid = self._id(rtype)
+        lines = [f'[sub_resource type="{rtype}" id="{rid}"]']
+        for k, v in props.items():
+            lines.append(f"{k} = {v}")
+        lines.append("")
+        self._sub.append("\n".join(lines))
         return rid
 
     def nav_mesh(self, x0: float, z0: float, x1: float, z1: float, y: float) -> str:
@@ -404,17 +421,20 @@ def _static_box(
     `layer` overrides the StaticBody's collision_layer (used to flag walkable
     surfaces so locomotion's downward floor-probe can find them — see WALKABLE_LAYER).
     """
-    mesh_rid  = b.box_mesh(sx, sy, sz)
+    mesh_rid  = b.box_mesh(sx, sy, sz, uv2=b.bake)
     shape_rid = b.box_shape(sx, sy, sz)
     body_props: dict[str, str] = {"transform": t3d(lx, ly, lz)}
     if layer is not None:
         body_props["collision_layer"] = str(layer)
     b.node(name, "StaticBody3D", parent, body_props)
     sub = f"{parent}/{name}"
-    b.node("Mesh", "MeshInstance3D", sub, {
+    mesh_props: dict[str, str] = {
         "mesh": f'SubResource("{mesh_rid}")',
         "surface_material_override/0": f'SubResource("{mat_rid}")',
-    })
+    }
+    if b.bake:
+        mesh_props["gi_mode"] = "1"   # GI_MODE_STATIC — included in the lightmap bake
+    b.node("Mesh", "MeshInstance3D", sub, mesh_props)
     b.node("Collision", "CollisionShape3D", sub, {
         "shape": f'SubResource("{shape_rid}")',
     })
@@ -704,10 +724,28 @@ def add_zone(b: TscnBuilder, zone: dict, doors: list[tuple[str, float]] | None =
 
     # zone fill-light
     light_range = max(sx, sz) * 0.9
-    b.node(f"Light_{zid}", "OmniLight3D", zone_node, {
+    omni_props: dict[str, str] = {
         "transform": t3d(0, sy * 0.35, 0),
         "omni_range": f"{light_range:.3f}",
         "light_energy": "1.2",
+    }
+    if b.bake:
+        # Bake the indirect bounce into the lightmap while the light stays realtime for
+        # direct (so dynamic props/players are still lit normally) — visually safe.
+        omni_props["light_bake_mode"] = "2"   # BAKE_DYNAMIC (static indirect + dynamic direct)
+    b.node(f"Light_{zid}", "OmniLight3D", zone_node, omni_props)
+
+    # F9 reflection probe — one per zone, sized to the interior, baked ONCE on-device at
+    # load (the Quest has a real GPU/RD, so the headless-PC bake limitation doesn't apply
+    # here). interior=true + box_projection give correct in-room reflections; keep the
+    # count low (one per room) to bound the load-time bake cost.
+    b.node(f"ReflectionProbe_{zid}", "ReflectionProbe", zone_node, {
+        "transform":      t3d(0, 0, 0),
+        "update_mode":    "0",                       # ONCE
+        "size":           v3(sx - 0.1, sy - 0.1, sz - 0.1),
+        "interior":       "true",
+        "box_projection": "true",
+        "enable_shadows": "true",
     })
 
     # interactables
@@ -1446,10 +1484,118 @@ def _add_secret_door(b: TscnBuilder, geom: dict, cfg: dict) -> None:
     })
 
 
+# ── F9 environment (runtime-lit realism) ───────────────────────────────────────
+# Headless lightmap baking is infeasible in stock Godot (see FEATURE_PLAN §4c.1), so
+# "amazing" comes from a runtime-lit rig: a procedural/HDRI sky (→ image-based ambient
+# + sky reflections), ACES tonemapping, depth fog, ONE directional sun shadow, and
+# per-zone reflection probes (baked on-device at load). All converter-generated.
+
+# Built-in lighting presets. Each is a starting palette the ScenePlan can override.
+_ENV_PRESETS: dict[str, dict] = {
+    "day": {
+        "sky_top": (0.30, 0.48, 0.82), "sky_horizon": (0.70, 0.80, 0.92),
+        "ground_horizon": (0.66, 0.63, 0.58), "ground_bottom": (0.32, 0.29, 0.25),
+        "sun_angle": (-55.0, 35.0), "sun_energy": 1.0, "sun_color": (1.0, 0.97, 0.90),
+        "ambient_energy": 1.0, "sky_energy": 1.0,
+        "fog_color": (0.70, 0.78, 0.88), "fog_density": 0.006,
+    },
+    "dusk": {
+        "sky_top": (0.16, 0.18, 0.40), "sky_horizon": (0.92, 0.55, 0.32),
+        "ground_horizon": (0.40, 0.30, 0.26), "ground_bottom": (0.16, 0.13, 0.12),
+        "sun_angle": (-12.0, 20.0), "sun_energy": 1.2, "sun_color": (1.0, 0.72, 0.45),
+        "ambient_energy": 0.7, "sky_energy": 0.8,
+        "fog_color": (0.85, 0.55, 0.40), "fog_density": 0.012,
+    },
+    "night": {
+        "sky_top": (0.02, 0.03, 0.08), "sky_horizon": (0.06, 0.08, 0.16),
+        "ground_horizon": (0.05, 0.06, 0.10), "ground_bottom": (0.01, 0.02, 0.04),
+        "sun_angle": (-50.0, 200.0), "sun_energy": 0.25, "sun_color": (0.55, 0.62, 0.85),
+        "ambient_energy": 0.35, "sky_energy": 0.4,
+        "fog_color": (0.06, 0.08, 0.14), "fog_density": 0.010,
+    },
+    "cave": {  # interior/underground: dim, cool, no real sky — sun is just a fill
+        "sky_top": (0.04, 0.05, 0.07), "sky_horizon": (0.10, 0.10, 0.12),
+        "ground_horizon": (0.08, 0.08, 0.09), "ground_bottom": (0.02, 0.02, 0.03),
+        "sun_angle": (-60.0, 40.0), "sun_energy": 0.3, "sun_color": (0.75, 0.80, 0.95),
+        "ambient_energy": 0.45, "sky_energy": 0.5,
+        "fog_color": (0.05, 0.06, 0.08), "fog_density": 0.020,
+    },
+}
+
+_TONEMAP = {"linear": 0, "reinhard": 1, "filmic": 2, "aces": 3, "agx": 4}
+
+
+def _sun_transform(pitch_deg: float, yaw_deg: float, ty: float = 20.0) -> str:
+    """Directional-light Transform3D from pitch (about X) + yaw (about Y). Reuses the
+    column-basis serialisation of t3d_axes. The light emits along its local -Z."""
+    p, y = math.radians(pitch_deg), math.radians(yaw_deg)
+    cp, sp = math.cos(p), math.sin(p)
+    cy, sy = math.cos(y), math.sin(y)
+    xa = (cy, 0.0, -sy)
+    ya = (sy * sp, cp, cy * sp)
+    za = (sy * cp, -sp, cy * cp)
+    return t3d_axes(xa, ya, za, (0.0, ty, 0.0))
+
+
+def _resolve_env(env_cfg: dict) -> dict:
+    """Merge a ScenePlan `environment` block over its named preset (default 'day')."""
+    preset_name = str(env_cfg.get("preset", "day")).lower()
+    cfg = dict(_ENV_PRESETS.get(preset_name, _ENV_PRESETS["day"]))
+    # tuple/list overrides
+    for key in ("sky_top", "sky_horizon", "ground_horizon", "ground_bottom",
+                "sun_color", "fog_color", "sun_angle"):
+        if key in env_cfg:
+            cfg[key] = tuple(env_cfg[key])
+    # scalar overrides
+    for key in ("sun_energy", "ambient_energy", "sky_energy", "fog_density"):
+        if key in env_cfg:
+            cfg[key] = float(env_cfg[key])
+    cfg["tonemap"] = str(env_cfg.get("tonemap", "aces")).lower()
+    cfg["fog_enabled"] = bool(env_cfg.get("fog", True))
+    return cfg
+
+
+def _add_environment(b: TscnBuilder, cfg: dict) -> None:
+    """Emit the WorldEnvironment (procedural sky + sky ambient/reflections + tonemap +
+    fog). Sun is a separate DirectionalLight (emitted in convert) whose disc the
+    procedural sky draws."""
+    sky_mat = b.raw_sub("ProceduralSkyMaterial", {
+        "sky_top_color":           col(*cfg["sky_top"]),
+        "sky_horizon_color":       col(*cfg["sky_horizon"]),
+        "sky_energy_multiplier":   f'{cfg["sky_energy"]:.3f}',
+        "ground_horizon_color":    col(*cfg["ground_horizon"]),
+        "ground_bottom_color":     col(*cfg["ground_bottom"]),
+        "ground_energy_multiplier": f'{cfg["sky_energy"]:.3f}',
+        "sun_angle_max":           "8.0",
+    })
+    sky = b.raw_sub("Sky", {"sky_material": f'SubResource("{sky_mat}")'})
+
+    env_props: dict[str, str] = {
+        "background_mode":        "2",                       # Sky
+        "sky":                    f'SubResource("{sky}")',
+        "ambient_light_source":   "3",                       # AMBIENT_SOURCE_SKY
+        "ambient_light_energy":   f'{cfg["ambient_energy"]:.3f}',
+        "reflected_light_source": "2",                       # REFLECTION_SOURCE_SKY
+        "tonemap_mode":           str(_TONEMAP.get(cfg["tonemap"], 3)),
+        "tonemap_white":          "1.0",
+    }
+    if cfg["fog_enabled"]:
+        env_props.update({
+            "fog_enabled":     "true",
+            "fog_light_color": col(*cfg["fog_color"]),
+            "fog_density":     f'{cfg["fog_density"]:.4f}',
+            "fog_sky_affect":  "0.4",
+            "fog_aerial_perspective": "0.5",
+        })
+    env = b.raw_sub("Environment", env_props)
+    b.node("WorldEnvironment", "WorldEnvironment", ".", {"environment": f'SubResource("{env}")'})
+
+
 # ── Main converter ─────────────────────────────────────────────────────────────
 
-def convert(scene_plan: dict, vr: bool = False) -> str:
+def convert(scene_plan: dict, vr: bool = False, bake: bool = False) -> str:
     b = TscnBuilder()
+    b.bake = bake
     name = scene_plan.get("name", "GeneratedScene").replace(" ", "_")
 
     # VR init script ext_resource
@@ -1462,12 +1608,27 @@ def convert(scene_plan: dict, vr: bool = False) -> str:
         root_props["script"] = f'ExtResource("{script_rid}")'
     b.node(name, "Node3D", None, root_props or None)
 
-    # Global fill light
-    b.node("SunLight", "DirectionalLight3D", ".", {
-        "transform": "Transform3D(0.866, -0.5, 0, 0, 0, -1, 0.5, 0.866, 0, 0, 20, 0)",
-        "light_energy": "0.5",
-        "shadow_enabled": "true",
-    })
+    # F9 runtime-lit environment: procedural sky (→ sky ambient + reflections), ACES
+    # tonemap, depth fog. ScenePlan may carry an optional "environment" block (preset +
+    # overrides); absent, every scene still gets the lit "day" default (strictly better
+    # than the old sky-less void).
+    env_cfg = _resolve_env(scene_plan.get("environment", {}))
+    _add_environment(b, env_cfg)
+
+    # The sun: ONE directional shadow-caster, angled/coloured from the env. The procedural
+    # sky draws its disc. (Mobile/Compatibility: a single directional shadow is the cheap,
+    # standard VR approach — tune the shadow map size / cull on device.)
+    sun_pitch, sun_yaw = env_cfg["sun_angle"]
+    sun_props: dict[str, str] = {
+        "transform":          _sun_transform(sun_pitch, sun_yaw),
+        "light_color":        col(*env_cfg["sun_color"]),
+        "light_energy":       f'{env_cfg["sun_energy"]:.3f}',
+        "shadow_enabled":     "true",
+        "directional_shadow_mode": "1",   # orthogonal (cheapest; 1 split)
+    }
+    if bake:
+        sun_props["light_bake_mode"] = "2"   # BAKE_DYNAMIC: bake indirect, keep realtime direct
+    b.node("SunLight", "DirectionalLight3D", ".", sun_props)
 
     # Editor preview camera — skipped in VR mode (XRCamera3D takes its place)
     if not vr:
@@ -1488,6 +1649,20 @@ def convert(scene_plan: dict, vr: bool = False) -> str:
     # Staircases connecting stacked zones (cosmetic treads + walkable ramp at root).
     for g in stair_geoms:
         _add_staircase(b, g)
+
+    # F9 bake-ready: a configured LightmapGI so the only editor step is select-it +
+    # "Bake Lightmaps" + Ctrl+S. environment_mode=1 (SCENE) folds the sky ambient into the
+    # bounce; denoiser on for a clean result. Geometry is already UV2+STATIC (room shell).
+    if bake:
+        b.node("LightmapGI", "LightmapGI", ".", {
+            "quality":          "1",      # medium (balance speed vs quality)
+            "bounces":          "3",
+            "directional":      "false",
+            "interior":         "false",  # let the scene env give a little ambient fill
+            "environment_mode": "1",      # SCENE — use the WorldEnvironment sky
+            "use_denoiser":     "true",
+            "texel_scale":      "1.0",
+        })
 
     # Secret doors: a zone may declare {"secret_door": {"controlled_by": "<mech id>"}}.
     # For each auto-cut doorway that touches such a zone, drop in a sliding slab that
@@ -1546,6 +1721,11 @@ def main() -> None:
         "--vr", action="store_true",
         help="Include XR rig (XROrigin3D + XRCamera3D) for Quest 3 deployment",
     )
+    parser.add_argument(
+        "--bake", action="store_true",
+        help="Emit a bake-ready hero scene (UV2 + STATIC room shell + LightmapGI node). "
+             "Open it in the editor, select LightmapGI, click Bake Lightmaps, Ctrl+S.",
+    )
     args = parser.parse_args()
 
     if args.input == "-":
@@ -1553,7 +1733,7 @@ def main() -> None:
     else:
         scene_plan = json.loads(Path(args.input).read_text(encoding="utf-8"))
 
-    tscn = convert(scene_plan, vr=args.vr)
+    tscn = convert(scene_plan, vr=args.vr, bake=args.bake)
 
     scene_id  = scene_plan.get("id", str(uuid.uuid4()))
     out_path  = Path(args.output) if args.output else Path("scenes/generated") / f"{scene_id}.tscn"

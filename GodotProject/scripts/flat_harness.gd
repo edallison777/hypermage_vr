@@ -54,16 +54,8 @@ func _ready() -> void:
 	else:
 		push_warning("FlatHarness: no GameEvents bus (autoload missing?)")
 
-	# Lit environment so geometry is visible (the generated rooms carry no sky/ambient).
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.05, 0.06, 0.09)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.6, 0.6, 0.65)
-	env.ambient_light_energy = 1.0
-	var we := WorldEnvironment.new()
-	we.environment = env
-	add_child(we)
+	# (F9: generated rooms now carry their own WorldEnvironment — procedural sky, ambient,
+	# fog, ACES tonemap — and a SunLight, so the harness no longer injects its own env/sun.)
 
 	# Load the room so there's something to look at.
 	var spawn := Vector3(0, 0, 1)
@@ -96,11 +88,6 @@ func _ready() -> void:
 	reactor.trigger_event = "test:toggle_light"     # only the T key, not gameplay events
 	add_child(reactor)
 	reactor.light_path = lamp.get_path()
-
-	# Ground reference + sun so the scene is lit even if the room is dim.
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-50, -30, 0)
-	add_child(sun)
 
 	_cam = Camera3D.new()
 	_cam.current = true

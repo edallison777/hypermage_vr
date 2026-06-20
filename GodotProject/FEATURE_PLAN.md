@@ -81,7 +81,7 @@ Status: ✅ done · 🔨 in progress · ⬜ not started. (Commit hashes for comp
 | **F6** | Point scoring + objectives + win/lose + DynamoDB persistence/leaderboard | F0, F5 | ✅ `df23cbb` (F6a) · `a07d84a` (F6b leaderboard, backend live/API-verified) |
 | **F7** | Guns: projectiles/beams, VFX, holster, ammo pickups | F0, F1, F5 | ✅ `3b075fa` (hitscan; physical projectiles deferred) |
 | **F8** | Enemies: NavMesh, take/inflict damage, spawn waves, difficulty | F0, F5, F7 | ✅ `e2f7b90` (offline device-verified; networked puppet sync with the server test) |
-| **F9** | Realistic graphics pass + comfort/accessibility (teleport, vignette, settings) | all | ⬜ |
+| **F9** | Realistic graphics pass + comfort/accessibility (teleport, vignette, settings) — **plan in §4c** | all | ⬜ |
 
 Known follow-up (not yet scheduled): **throwing physics/feel** needs improving — flagged
 during F2 device testing; address standalone or within F7.
@@ -257,6 +257,165 @@ has no VR body so hazards don't auto-fire there — keys exercise the manager+HU
 **Device test remaining (next session, headset):** wrist HUD readability/placement,
 hurt haptic+SFX on entering the pit, death→respawn loop in VR, and a 2-client check that
 one player's damage/death does NOT affect the other's HUD (per-peer filtering).
+
+---
+
+## 4c. F9 — Realistic graphics pass + comfort/accessibility (PLANNED)
+
+**Goal:** make generated worlds look *amazing* on Quest 3 standalone, and ship the
+comfort/accessibility options a VR title needs — without abandoning the
+converter-generated principle and without dropping below 90fps.
+
+### 4c.0 The platform reframe (why this is an art/technique problem, not an engine one)
+On **standalone Quest 3** the GPU is a mobile tile renderer and we run Godot's
+`gl_compatibility` (Forward Mobile at best). There is **no realtime GI, no Nanite/Lumen
+equivalent, no fat post-process stack** — and Unreal on standalone Quest would face the
+same wall (it would give us its *mobile forward* renderer, not Lumen). The Quest titles
+that genuinely look amazing (Red Matter 2, Walkabout, Demeo) win on **baked lighting +
+disciplined materials + a great sky and fog**, not horsepower. So F9 is an art-direction
+and pipeline problem. **Original intent was baked realism** (baked GI = soft bounced light
++ contact shadows, ~free at runtime). **The de-risk probe (§4c.1) killed the *automated*
+bake path; the primary is now runtime-lit realism (§4c.3), with a manual editor bake
+reserved for a handful of hero scenes only.**
+
+### 4c.1 De-risk RESULT (2026-06-20): headless lightmap baking is NOT feasible in stock Godot
+`tools/probe_bake.gd` + `probe_bake2.gd` tested it directly on the installed Godot
+**4.6.2-stable** and found, decisively:
+- **`RenderingServer.get_rendering_device()` is NULL** under `--headless` AND under
+  `--display-driver headless --rendering-driver vulkan` (offscreen Vulkan gives no RD,
+  empty video adapter). The GPU lightmapper (`LightmapperRD`) needs an RD → cannot run.
+- **`LightmapGI.bake()` is not bound to script** — `has_method("bake")` is false and
+  ClassDB lists only `set/get_bake_quality`. Baking is a C++ *editor-plugin* action, not
+  reachable from a `-s` runner even with an RD. (`ArrayMesh.lightmap_unwrap()` DOES work
+  headlessly — only the bake itself is blocked.)
+
+**Conclusion:** there is no fully-automated, no-window, script-driven lightmap bake in
+stock Godot 4.6.2. A `tools/bake_lightmaps.gd` headless stage (the old "one architectural
+piece") **cannot exist** without a GDExtension that calls the internal bake (heavy/fragile,
+rejected) or a human clicking Bake in the editor.
+
+**Decision (replaces the old §4c.1 plan):**
+1. **Primary = runtime-lit realism (§4c.3)** — sky + image-based ambient + ONE directional
+   shadow + height fog + `ReflectionProbe`s + good materials + AO baked into textures
+   *offline in Blender* (not via Godot lightmaps). 100% converter-generated, no editor, no
+   RD-on-PC needed. `ReflectionProbe update_mode = ONCE` bakes **on-device at load** (the
+   Quest has a real GPU/RD — the headless-PC limitation doesn't apply there).
+2. **Hero-scene bake (optional, accepted bend of §1.3) — IMPLEMENTED (2026-06-20):** the
+   converter `--bake` flag emits a *bake-ready* scene so the only editor work is **open →
+   select LightmapGI → Bake Lightmaps → Ctrl+S**. All the fiddly prep is headless: primitive
+   `BoxMesh.add_uv2=true` gives lightmap UV2 with NO ArrayMesh/unwrap; room shell is
+   `gi_mode=STATIC`; sun+omnis are `light_bake_mode=2` (BAKE_DYNAMIC — bake indirect bounce,
+   keep realtime direct so dynamic props stay lit); a configured `LightmapGI` node is added.
+   For a *small, curated* set of showcase rooms only; the baked lightmap ships as a committed
+   artifact. NOT part of the automated generate→ship flow. Try it on
+   `scenes/generated/ancient-dungeon-bake.tscn` (regen: `… tools/ancient_dungeon.json --bake
+   -o scenes/generated/ancient-dungeon-bake.tscn`). Property names probe-verified
+   (`tools/probe_bakeready.gd`). Expect harmless "no UV2" warnings for small dynamic props.
+3. VoxelGI/SDFGI remain unavailable on `gl_compatibility`/mobile — out, as before.
+
+Probe scripts kept (`tools/probe_bake.gd`, `tools/probe_bake2.gd`) so the finding is
+re-verifiable if we ever change Godot version.
+
+### 4c.2 Materials — PBR, but conditioned for tile GPUs
+- StandardMaterial3D with albedo/normal/ORM (occlusion-roughness-metallic packed) — the
+  converter already drives material params; extend the ScenePlan material block to carry
+  texture refs + roughness/metallic/normal-scale.
+- **Tile-GPU discipline:** texture **atlasing** and shared materials to cut draw calls and
+  state changes; `KHR_texture_basisu` / compressed (ETC2/ASTC) textures sized to actual
+  on-screen need (mostly ≤1–2K); **no per-pixel features we don't need** (parallax, SSS).
+  Cull/`gi_mode` set so baked statics never pay realtime lighting.
+- **Reflections sell "real" cheaply in VR:** a few `ReflectionProbe`s (baked `ONCE`,
+  interior placement from ScenePlan zones) >>> any screen-space trick on this GPU.
+
+### 4c.3 Environment — the cheapest big wins (`sky` + `fog` + probes)
+Highest perceived-quality-per-millisecond, and it works even on the no-bake fallback path:
+- **HDRI sky** via a panorama `Sky` (Poly Haven CC0 HDRIs, §4c.4). A good sky + image-based
+  ambient lifts *everything* and gives free environment reflection for the probes.
+- **Height/volumetric-ish fog** (`Environment` fog + depth/height params) for depth and mood —
+  cheap, and a classic Quest "looks expensive" trick.
+- Tuned `Environment`: ambient light from the sky, mild tonemap (Filmic/ACES), gentle glow
+  *only if* it profiles clean on device (fullscreen passes are the tile-GPU tax).
+- Converter: a top-level `environment` block in the ScenePlan → emit `WorldEnvironment` +
+  `Sky` + fog. Sensible defaults so existing scenes gain a sky/fog with no authoring.
+
+### 4c.4 Asset sourcing + the perf-conditioning pipeline
+**Principle: coherence beats variety for looking amazing.** Curated assets anchor the
+look; the in-house AI pipeline feeds *variety later*, not the hero look.
+- **Curated, in priority order:** **Poly Haven (CC0)** HDRIs + PBR textures first (the sky
+  is the biggest single win); **Fab / Quixel Megascans** (free) photoreal materials + hero
+  props; Godot Asset Library / Kenney as gap-fillers. Track licences in the asset catalogue.
+- **AI pipeline (defer to a stretch):** the existing Phase-7 Meshy→Blender→`asset-catalogue`
+  path stays in the plan but is *not* trusted to carry the hero look — its output is too
+  inconsistent in poly budget/quality. Route it through the same conditioning stage below
+  and use it for bespoke props once the baked look is proven.
+- **Perf-conditioning stage (new, shared by curated AND AI assets):** a headless Blender/Godot
+  step that **decimates** to a Quest poly budget, generates **LODs**, bakes/atlases textures,
+  and **UV2-unwraps** for lightmapping — producing Quest-ready glTF the converter references.
+  This is what makes any source asset shippable; it's the asset analogue of the bake stage.
+
+### 4c.5 Comfort / accessibility (independent sub-phase — easy, ship alongside)
+Separable from the art work and low-risk; a real VR title needs these:
+- **Locomotion comfort:** add a **teleport** option beside the existing smooth locomotion;
+  **snap-turn** (configurable degrees) alongside smooth turn; **comfort vignette** (tunnelling)
+  on smooth move/turn, intensity configurable.
+- **Settings menu** (world-space, converter-independent — part of the rig like the HUD):
+  locomotion mode, turn mode, vignette intensity, **handedness** (swap interaction/locomotion
+  hands), height calibration, audio volumes (ties to F1 `Audio`/`Haptics`). Persist to a
+  user config file.
+- **Accessibility:** seated/standing toggle, one-handed-friendly fallbacks where feasible,
+  subtitle/caption surface for narration (ties to Phase-8 audio).
+
+### 4c.6 Perf budget & validation (non-negotiable: 90fps)
+- Profile **on device**, early and often — the build→reboot→sideload loop (~10 min) applies;
+  reboot the Quest after each APK (controller doze wedge, per `godot-controller-oracle`).
+- Watch GPU frame time, draw calls, overdraw (transparency/fog are the usual culprits),
+  and texture memory. Each visual feature lands only if it profiles clean; back any feature
+  out that can't hold 90fps. Maintain the **"art spends the budget last"** rule from §1.
+
+### 4c.7 Testing
+- **Off-headset:** the converter's environment/material/conditioning emission runs headless
+  and is checkable — generated scene contains the WorldEnvironment/Sky/fog/DirectionalLight/
+  ReflectionProbe nodes; conditioned assets meet the poly/texture budget (assert in a
+  tool/test). Covered by converter unit tests (a `tools/graphics_test.json` → generated
+  scene). The **PC flat harness** renders it (real RD on PC desktop) so the look is viewable
+  without a headset.
+- **On-headset:** the things only VR shows — baked-light quality and seams, sky/fog read,
+  reflection correctness, comfort options (teleport/snap/vignette actually relieve
+  discomfort), settings persistence, and the 90fps hold under a populated scene.
+
+### 4c.8 Risks / open decisions
+- ~~Headless `LightmapGI` reliability~~ — **RESOLVED (negative): not feasible in stock Godot
+  4.6.2** (§4c.1). Primary path is now runtime-lit; this risk is retired.
+- **Runtime directional shadow cost** is the new top perf risk — ONE directional shadow is
+  the standard mobile-VR approach (cheap), but shadow map size + cull distance must be tuned
+  on device. Profile early.
+- **`ReflectionProbe` bakes on-device at load** — adds a one-time hitch when a room loads;
+  use `update_mode = ONCE`, keep probe count low, accept the load-time cost.
+- **AO comes from textures, not Godot lightmaps** — bake AO into the albedo/ORM offline in
+  Blender (the conditioning stage, §4c.4). Procedural box rooms get a cheap baked-in vertex
+  AO or a subtle SSAO only if it profiles clean.
+- **Hero-scene manual bake** is an accepted, conscious bend of §1.3 — limited to a curated
+  few showcase rooms, never the automated generate→ship flow.
+
+### 4c.9 Suggested build order (definition of done)
+1. **De-risk: DONE** (2026-06-20) — headless bake proven infeasible; pivoted to runtime-lit.
+2. **Environment rig: DONE on PC** (2026-06-20) — converter now emits a `WorldEnvironment`
+   (procedural sky → sky ambient + sky reflections, ACES tonemap, depth fog), a parameterised
+   `SunLight` (one directional shadow), and a per-zone `ReflectionProbe` (`update_mode=ONCE`).
+   Optional ScenePlan `environment` block: `preset` (day/dusk/night/cave) + colour/energy/fog
+   overrides (`_ENV_PRESETS` + `_resolve_env`). All 61 tests green; all scenes regenerate.
+   Rendered `forest-clearing` off-headset via `tools/screenshot_room.gd` (needs a REAL GPU,
+   not `--headless`): clear improvement vs the old flat fullbright — soft sky-ambient gradient,
+   sky-tinted floor, tonemap, fog. NOTE: enclosed rooms get NO direct sun (walls block it) →
+   interiors are sky-ambient + OmniLight lit; the sun shadow only matters for open/sky-facing
+   scenes. **Device 90fps check still pending** (the ReflectionProbe on-device load bake + fog
+   overdraw are the things to profile). Flat-harness env/sun removed (rooms self-light now).
+3. **Materials** — extend the ScenePlan material block (albedo/normal/ORM, roughness/metallic);
+   shared/atlased materials; emissive support.
+4. **Asset conditioning stage** (decimate/LOD/atlas/UV2 + offline AO) on a curated hero asset set.
+5. **Comfort/accessibility sub-phase** (teleport, snap-turn, vignette, settings, handedness)
+   — can proceed in parallel; it's independent of the art work.
+6. **Profile, tune, hold 90fps**; commit per the usual recipe; device-verify.
 
 ---
 

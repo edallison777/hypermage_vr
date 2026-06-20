@@ -13,3 +13,6 @@ android/
 
 # Editor metadata
 .mono/
+
+# F9 room-preview screenshots (tools/screenshot_room.gd output)
+tools/_room_preview.png
