@@ -1,0 +1,158 @@
+{
+  "id": "waterfall",
+  "name": "Misty Falls",
+  "description": "F9 outdoor showcase: a rural waterfall at misty dawn — a cliff pouring a custom-shader water sheet into a plunge pool over a pebble bed, drifting spray, framed by mossy boulders. Heavy fog + low pale sun. Built on the converter's new open-zone + water/waterfall/mist/rock primitives.",
+  "scene_type": "exploration",
+  "platforms": ["vr"],
+  "environment": {
+    "preset": "dawn",
+    "fog": true,
+    "glow": true,
+    "ambient_energy": 1.0
+  },
+  "zones": [
+    {
+      "id": "glen",
+      "name": "Waterfall Glen",
+      "type": "exploration",
+      "open": true,
+      "bounds": {
+        "center": { "x": 0, "y": 0, "z": 20 },
+        "extents": { "x": 2000, "y": 2000, "z": 50 }
+      },
+      "materials": {
+        "floor": {
+          "color": [1, 1, 1], "roughness": 1.0, "metallic": 0.0, "triplanar": true, "tiling": 0.5, "normal_scale": 0.8,
+          "albedo": "res://assets/textures/forrest_ground_01/forrest_ground_01_diff_1k.jpg",
+          "normal": "res://assets/textures/forrest_ground_01/forrest_ground_01_nor_gl_1k.jpg",
+          "orm":    "res://assets/textures/forrest_ground_01/forrest_ground_01_arm_1k.jpg"
+        }
+      },
+      "interactables": [
+        {
+          "id": "cliff",
+          "type": "cliff",
+          "position": { "x": 0, "y": 1200, "z": 400 },
+          "size": [24, 10, 6],
+          "material": {
+            "color": [1, 1, 1], "roughness": 1.0, "metallic": 0.0, "triplanar": true, "tiling": 0.2, "normal_scale": 1.0,
+            "albedo": "res://assets/textures/cliff_side/cliff_side_diff_1k.jpg",
+            "normal": "res://assets/textures/cliff_side/cliff_side_nor_gl_1k.jpg",
+            "orm":    "res://assets/textures/cliff_side/cliff_side_arm_1k.jpg"
+          },
+          "behaviour": "The rock face the river pours over. Tall cliff, base sunk below the ground, cliff_side PBR (world-triplanar)."
+        },
+        {
+          "id": "riverbed",
+          "type": "rock",
+          "position": { "x": 0, "y": 600, "z": -15 },
+          "size": [16, 0.3, 11],
+          "material": {
+            "color": [1, 1, 1], "roughness": 1.0, "metallic": 0.0, "triplanar": true, "tiling": 0.7, "normal_scale": 0.9,
+            "albedo": "res://assets/textures/pebbles/pebbles_diff_1k.jpg",
+            "normal": "res://assets/textures/pebbles/pebbles_nor_gl_1k.jpg",
+            "orm":    "res://assets/textures/pebbles/pebbles_arm_1k.jpg"
+          },
+          "behaviour": "Pebble bed under the plunge pool — visible through the semi-transparent water. Top flush with the ground."
+        },
+        {
+          "id": "pool",
+          "type": "water",
+          "position": { "x": 0, "y": 600, "z": 5 },
+          "size": [14, 10],
+          "deep_color": [0.10, 0.20, 0.24],
+          "shallow_color": [0.30, 0.45, 0.48],
+          "sky_tint": [0.80, 0.84, 0.87],
+          "foam_color": [0.92, 0.96, 0.97],
+          "ripple_scale": 2.6, "ripple_speed": 0.28, "normal_strength": 0.35,
+          "fresnel_power": 4.0, "foam_amount": 0.06, "surface_alpha": 0.86, "sparkle": 0.6,
+          "behaviour": "Plunge pool — water_surface shader: animated ripples, fresnel sky reflection (misty dawn tint), faint drifting foam, sun sparkle."
+        },
+        {
+          "id": "falls",
+          "type": "waterfall",
+          "position": { "x": 0, "y": 890, "z": 400 },
+          "size": [5, 9],
+          "water_color": [0.55, 0.68, 0.72],
+          "foam_color": [0.93, 0.97, 0.98],
+          "flow_speed": 1.8, "streak_scale": 7.0, "streak_stretch": 16.0,
+          "foam_amount": 0.5, "foam_emission": 0.22, "base_alpha": 0.82, "fresnel_power": 2.5,
+          "behaviour": "The hero falling sheet — water_fall shader: scrolling foam streaks, bright impact/base foam, fresnel rim glow in the haze. Hangs just in front of the cliff face, base into the pool."
+        },
+        {
+          "id": "spray",
+          "type": "mist",
+          "position": { "x": 0, "y": 820, "z": 60 },
+          "extents": [3.0, 0.5, 1.3],
+          "amount": 32, "lifetime": 4.0, "rise": 0.5,
+          "velocity_min": 0.3, "velocity_max": 0.9, "spread": 40.0,
+          "scale_min": 1.4, "scale_max": 3.0, "puff_size": 1.8,
+          "color": [0.92, 0.95, 0.97, 0.18], "tint": [0.92, 0.95, 0.97],
+          "density": 0.7, "softness": 1.0,
+          "behaviour": "Drifting spray at the plunge point — soft billboard puffs (particle_puff shader), buoyant, fading."
+        },
+        {
+          "id": "boulder_r",
+          "type": "boulder",
+          "position": { "x": 550, "y": 400, "z": 55 },
+          "size": [2.5, 1.4, 2.0], "yaw": 18.0,
+          "material": {
+            "color": [1, 1, 1], "roughness": 1.0, "metallic": 0.0, "triplanar": true, "tiling": 0.6, "normal_scale": 1.0,
+            "albedo": "res://assets/textures/rock_face_03/rock_face_03_diff_1k.jpg",
+            "normal": "res://assets/textures/rock_face_03/rock_face_03_nor_gl_1k.jpg",
+            "orm":    "res://assets/textures/rock_face_03/rock_face_03_arm_1k.jpg"
+          },
+          "behaviour": "Framing boulder, right of the pool."
+        },
+        {
+          "id": "boulder_l",
+          "type": "boulder",
+          "position": { "x": -600, "y": 700, "z": 45 },
+          "size": [3.0, 1.2, 2.5], "yaw": -25.0,
+          "material": {
+            "color": [1, 1, 1], "roughness": 1.0, "metallic": 0.0, "triplanar": true, "tiling": 0.6, "normal_scale": 1.0,
+            "albedo": "res://assets/textures/rock_face_03/rock_face_03_diff_1k.jpg",
+            "normal": "res://assets/textures/rock_face_03/rock_face_03_nor_gl_1k.jpg",
+            "orm":    "res://assets/textures/rock_face_03/rock_face_03_arm_1k.jpg"
+          },
+          "behaviour": "Framing boulder, left of the pool."
+        },
+        {
+          "id": "boulder_falls_r",
+          "type": "boulder",
+          "position": { "x": 400, "y": 930, "z": 35 },
+          "size": [2.0, 1.0, 1.8], "yaw": 40.0,
+          "material": {
+            "color": [1, 1, 1], "roughness": 1.0, "metallic": 0.0, "triplanar": true, "tiling": 0.6, "normal_scale": 1.0,
+            "albedo": "res://assets/textures/rock_face_03/rock_face_03_diff_1k.jpg",
+            "normal": "res://assets/textures/rock_face_03/rock_face_03_nor_gl_1k.jpg",
+            "orm":    "res://assets/textures/rock_face_03/rock_face_03_arm_1k.jpg"
+          },
+          "behaviour": "Boulder at the right of the falls base, breaking up the pool edge."
+        },
+        {
+          "id": "boulder_falls_l",
+          "type": "boulder",
+          "position": { "x": -430, "y": 880, "z": 40 },
+          "size": [2.2, 1.1, 1.8], "yaw": -35.0,
+          "material": {
+            "color": [1, 1, 1], "roughness": 1.0, "metallic": 0.0, "triplanar": true, "tiling": 0.6, "normal_scale": 1.0,
+            "albedo": "res://assets/textures/rock_face_03/rock_face_03_diff_1k.jpg",
+            "normal": "res://assets/textures/rock_face_03/rock_face_03_nor_gl_1k.jpg",
+            "orm":    "res://assets/textures/rock_face_03/rock_face_03_arm_1k.jpg"
+          },
+          "behaviour": "Boulder at the left of the falls base."
+        }
+      ]
+    }
+  ],
+  "participant_spawns": [
+    {
+      "position": { "x": 0, "y": -800, "z": 0 },
+      "rotation": { "pitch": 0, "yaw": 0, "roll": 0 },
+      "role": "player"
+    }
+  ],
+  "participant_capacity": { "min": 1, "max": 4, "recommended": 1 },
+  "tags": ["outdoor", "nature", "waterfall", "f9", "showcase"]
+}

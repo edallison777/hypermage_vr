@@ -230,6 +230,44 @@ class TscnBuilder:
         )
         return rid
 
+    def plane_mesh(self, w: float, d: float, material: str | None = None) -> str:
+        """Horizontal plane (XZ, faces +Y) — water surfaces, ground sheets."""
+        rid = self._id("PlaneMesh")
+        body = f"size = Vector2({w:.4f}, {d:.4f})\n"
+        if material:
+            body += f'material = SubResource("{material}")\n'
+        self._sub.append(f'[sub_resource type="PlaneMesh" id="{rid}"]\n' + body)
+        return rid
+
+    def quad_mesh(self, w: float, h: float, material: str | None = None) -> str:
+        """Vertical quad (XY, faces +Z) — waterfall sheets, billboard cards."""
+        rid = self._id("QuadMesh")
+        body = f"size = Vector2({w:.4f}, {h:.4f})\n"
+        if material:
+            body += f'material = SubResource("{material}")\n'
+        self._sub.append(f'[sub_resource type="QuadMesh" id="{rid}"]\n' + body)
+        return rid
+
+    def shader_resource(self, path: str) -> str:
+        """Get-or-create an ext_resource for a .gdshader (the custom water/particle shaders)."""
+        if path in self._ext_by_path:
+            return self._ext_by_path[path]
+        return self.ext_resource("Shader", path, self._id("ExtShader"))
+
+    def shader_material(self, shader_path: str, params: dict[str, str]) -> str:
+        """A ShaderMaterial bound to a .gdshader, with shader_parameter overrides. Values are
+        already-serialised .tscn literals (col(...)/Vector2(...)/floats)."""
+        rid = self._id("ShaderMaterial")
+        sh  = self.shader_resource(shader_path)
+        lines = [f'[sub_resource type="ShaderMaterial" id="{rid}"]',
+                 'render_priority = 0',
+                 f'shader = ExtResource("{sh}")']
+        for k, v in params.items():
+            lines.append(f'shader_parameter/{k} = {v}')
+        lines.append("")
+        self._sub.append("\n".join(lines))
+        return rid
+
     def texture_resource(self, path: str) -> str:
         """Get-or-create a CompressedTexture2D ext_resource for a material map, returning
         its id. The image must exist under res:// (step-4 asset-conditioning supplies the
@@ -858,17 +896,21 @@ def add_zone(b: TscnBuilder, zone: dict, doors: list[tuple[str, float]] | None =
     else:
         _static_box(b, f"Floor_{zid}", zone_node, sx, t, sz, 0, floor_ly, 0, floor_mat,
                     WALKABLE_LAYER)
-    if hole and hole["where"] == "ceiling":
-        _build_slab_with_hole(b, f"Ceiling_{zid}", zone_node, sx, sz, 0, ceil_ly, 0,
-                              ceil_mat, hole["cx"], hole["cz"], hole["hx"], hole["hz"])
-    else:
-        _static_box(b, f"Ceiling_{zid}", zone_node, sx, t, sz, 0, ceil_ly, 0, ceil_mat)
-    # north / south walls  (Z faces in Godot) — span along X
-    _build_wall(b, f"WallN_{zid}", zone_node, wall_mat, span_axis="x", span_len=sx, height=sy, thickness=t, lx=0, ly=0, lz=-sz/2 + t/2, door_offset=door.get("N"))
-    _build_wall(b, f"WallS_{zid}", zone_node, wall_mat, span_axis="x", span_len=sx, height=sy, thickness=t, lx=0, ly=0, lz= sz/2 - t/2, door_offset=door.get("S"))
-    # east / west walls  (X faces in Godot) — span along Z
-    _build_wall(b, f"WallE_{zid}", zone_node, wall_mat, span_axis="z", span_len=sz, height=sy, thickness=t, lx= sx/2 - t/2, ly=0, lz=0, door_offset=door.get("E"))
-    _build_wall(b, f"WallW_{zid}", zone_node, wall_mat, span_axis="z", span_len=sz, height=sy, thickness=t, lx=-sx/2 + t/2, ly=0, lz=0, door_offset=door.get("W"))
+    # Open outdoor zone (rural waterfall): emit ONLY the walkable ground — skip ceiling, walls,
+    # corner fillets and the reflection probe. Sun + sky light it; fog hides the ground edges.
+    open_zone = bool(zone.get("open", False))
+    if not open_zone:
+        if hole and hole["where"] == "ceiling":
+            _build_slab_with_hole(b, f"Ceiling_{zid}", zone_node, sx, sz, 0, ceil_ly, 0,
+                                  ceil_mat, hole["cx"], hole["cz"], hole["hx"], hole["hz"])
+        else:
+            _static_box(b, f"Ceiling_{zid}", zone_node, sx, t, sz, 0, ceil_ly, 0, ceil_mat)
+        # north / south walls  (Z faces in Godot) — span along X
+        _build_wall(b, f"WallN_{zid}", zone_node, wall_mat, span_axis="x", span_len=sx, height=sy, thickness=t, lx=0, ly=0, lz=-sz/2 + t/2, door_offset=door.get("N"))
+        _build_wall(b, f"WallS_{zid}", zone_node, wall_mat, span_axis="x", span_len=sx, height=sy, thickness=t, lx=0, ly=0, lz= sz/2 - t/2, door_offset=door.get("S"))
+        # east / west walls  (X faces in Godot) — span along Z
+        _build_wall(b, f"WallE_{zid}", zone_node, wall_mat, span_axis="z", span_len=sz, height=sy, thickness=t, lx= sx/2 - t/2, ly=0, lz=0, door_offset=door.get("E"))
+        _build_wall(b, f"WallW_{zid}", zone_node, wall_mat, span_axis="z", span_len=sz, height=sy, thickness=t, lx=-sx/2 + t/2, ly=0, lz=0, door_offset=door.get("W"))
 
     # Corner fillets (F9): round the four vertical wall-meet edges. A box room's corners are
     # hard 90° edges with flat per-face normals, so the lighting jumps instantly across them →
@@ -880,7 +922,7 @@ def add_zone(b: TscnBuilder, zone: dict, doors: list[tuple[str, float]] | None =
     # absent. The far 3/4 of each cylinder is embedded in the walls; only the room-facing
     # quarter shows, and the world-triplanar material flows its texture across it seamlessly.
     fillet_r = float(zone.get("corner_fillet", 0.0))
-    if fillet_r > 0.01 and fillet_r < min(sx, sz) / 2 - t:
+    if not open_zone and fillet_r > 0.01 and fillet_r < min(sx, sz) / 2 - t:
         inner_x, inner_z = sx / 2 - t, sz / 2 - t
         fillet_mesh = b.cylinder_mesh(fillet_r, sy - 2 * t)
         for sgx in (1, -1):            # +X = E, -X = W
@@ -906,7 +948,7 @@ def add_zone(b: TscnBuilder, zone: dict, doors: list[tuple[str, float]] | None =
     # zone fill-light: a neutral overhead omni for baseline visibility. A scene going for a
     # moody/torchlit look suppresses it ("auto_light": false) and lights the room with placed
     # `light` props instead — the even overhead fill is what reads as "too good for torchlit".
-    if zone.get("auto_light", True):
+    if zone.get("auto_light", not open_zone):
         light_range = max(sx, sz) * 0.9
         omni_props: dict[str, str] = {
             "transform": t3d(0, sy * 0.35, 0),
@@ -927,7 +969,7 @@ def add_zone(b: TscnBuilder, zone: dict, doors: list[tuple[str, float]] | None =
     # (a bright seam) — worth it for glossy rooms, but a rough stone interior shows no
     # parallax benefit, so a moody room sets "reflection_box_projection": false to kill the
     # corner seam at no visual cost.
-    if zone.get("reflection_probe", True):
+    if zone.get("reflection_probe", not open_zone):
         b.node(f"ReflectionProbe_{zid}", "ReflectionProbe", zone_node, {
             "transform":      t3d(0, 0, 0),
             "update_mode":    "0",                       # ONCE
@@ -1020,6 +1062,18 @@ def _add_interactable(b: TscnBuilder, obj: dict, zone_node: str, bounds: dict) -
     if otype == "light":
         _add_light(b, obj, oid, zone_node, lx, ly, lz)
         return
+    if otype in ("water", "pool", "river"):
+        _add_water(b, obj, oid, zone_node, lx, ly, lz)
+        return
+    if otype == "waterfall":
+        _add_waterfall(b, obj, oid, zone_node, lx, ly, lz)
+        return
+    if otype in ("mist", "spray"):
+        _add_mist(b, obj, oid, zone_node, lx, ly, lz)
+        return
+    if otype in ("cliff", "rock", "boulder", "terrain_box"):
+        _add_rock(b, obj, oid, zone_node, lx, ly, lz)
+        return
 
     r, g, b_c = _INTERACTABLE_RGB.get(otype, (0.5, 0.5, 0.5))
     mat = b.material(r, g, b_c)
@@ -1065,6 +1119,115 @@ def _add_interactable(b: TscnBuilder, obj: dict, zone_node: str, bounds: dict) -
         sub = f"{zone_node}/{node_name}"
         b.node("Mesh",      "MeshInstance3D",   sub, {"mesh": f'SubResource("{mesh}")', "surface_material_override/0": f'SubResource("{mat}")'})
         b.node("Collision", "CollisionShape3D", sub, {"shape": f'SubResource("{shape}")'})
+
+
+# ── F9 outdoor / water primitives (rural waterfall scene) ───────────────────────
+# Custom GDShaders carry the realism the StandardMaterial can't (animated water); the
+# converter just emits the geometry + a ShaderMaterial bound to res://shaders/*.gdshader
+# with per-object uniform overrides. All decorative (no collision) except `rock`.
+
+def _add_water(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+               lx: float, ly: float, lz: float) -> None:
+    """Horizontal water surface (plunge pool / river) — PlaneMesh + water_surface shader."""
+    size = obj.get("size", [10.0, 10.0])
+    w, d = float(size[0]), float(size[1])
+    params: dict[str, str] = {}
+    for key in ("deep_color", "shallow_color", "sky_tint", "foam_color"):
+        if key in obj:
+            params[key] = col(*obj[key])
+    for key in ("ripple_scale", "ripple_speed", "normal_strength", "flow_speed",
+                "fresnel_power", "foam_amount", "foam_emission", "surface_alpha", "sparkle"):
+        if key in obj:
+            params[key] = f"{float(obj[key]):.4f}"
+    if "flow_dir" in obj:
+        fd = obj["flow_dir"]
+        params["flow_dir"] = f"Vector2({float(fd[0]):.3f}, {float(fd[1]):.3f})"
+    mat  = b.shader_material("res://shaders/water_surface.gdshader", params)
+    mesh = b.plane_mesh(w, d, mat)
+    yaw  = float(obj.get("yaw", 0.0))
+    b.node(f"Water_{oid}", "MeshInstance3D", zone_node, {
+        "transform": t3d_yaw(lx, ly, lz, yaw) if yaw else t3d(lx, ly, lz),
+        "mesh": f'SubResource("{mesh}")',
+    })
+
+
+def _add_waterfall(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+                   lx: float, ly: float, lz: float) -> None:
+    """Vertical falling-water sheet — QuadMesh (faces +Z, two-sided in-shader) + water_fall."""
+    size = obj.get("size", [4.0, 6.0])
+    w, h = float(size[0]), float(size[1])
+    params: dict[str, str] = {}
+    for key in ("water_color", "foam_color"):
+        if key in obj:
+            params[key] = col(*obj[key])
+    for key in ("flow_speed", "streak_scale", "streak_stretch", "foam_amount",
+                "foam_emission", "base_alpha", "fresnel_power"):
+        if key in obj:
+            params[key] = f"{float(obj[key]):.4f}"
+    mat  = b.shader_material("res://shaders/water_fall.gdshader", params)
+    mesh = b.quad_mesh(w, h, mat)
+    yaw  = float(obj.get("yaw", 0.0))
+    b.node(f"Waterfall_{oid}", "MeshInstance3D", zone_node, {
+        "transform": t3d_yaw(lx, ly, lz, yaw) if yaw else t3d(lx, ly, lz),
+        "mesh": f'SubResource("{mesh}")',
+    })
+
+
+def _add_mist(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+              lx: float, ly: float, lz: float) -> None:
+    """Drifting mist / waterfall spray — CPUParticles3D of soft billboard puffs. CPU particles
+    are the reliable choice on the Compatibility renderer / Quest GL ES3."""
+    ext   = obj.get("extents", [3.0, 0.5, 3.0])
+    color = obj.get("color", [0.9, 0.93, 0.95, 0.22])
+    pmat  = b.shader_material("res://shaders/particle_puff.gdshader", {
+        "tint":     col(*obj.get("tint", [0.9, 0.93, 0.95])),
+        "softness": f"{float(obj.get('softness', 1.0)):.3f}",
+        "density":  f"{float(obj.get('density', 0.85)):.3f}",
+    })
+    puff = float(obj.get("puff_size", 1.6))
+    mesh = b.quad_mesh(puff, puff)
+    b.node(f"Mist_{oid}", "CPUParticles3D", zone_node, {
+        "transform":            t3d(lx, ly, lz),
+        "amount":               str(int(obj.get("amount", 24))),
+        "lifetime":             f"{float(obj.get('lifetime', 4.0)):.3f}",
+        "mesh":                 f'SubResource("{mesh}")',
+        "material_override":     f'SubResource("{pmat}")',
+        "emission_shape":       "3",                       # BOX
+        "emission_box_extents": v3(float(ext[0]), float(ext[1]), float(ext[2])),
+        "direction":            v3(0, 1, 0),
+        "spread":               f"{float(obj.get('spread', 35.0)):.3f}",
+        "gravity":              v3(0, float(obj.get("rise", 0.4)), 0),
+        "initial_velocity_min": f"{float(obj.get('velocity_min', 0.2)):.3f}",
+        "initial_velocity_max": f"{float(obj.get('velocity_max', 0.7)):.3f}",
+        "scale_amount_min":     f"{float(obj.get('scale_min', 1.2)):.3f}",
+        "scale_amount_max":     f"{float(obj.get('scale_max', 2.6)):.3f}",
+        "color":                col(*color),
+    })
+
+
+def _add_rock(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+              lx: float, ly: float, lz: float) -> None:
+    """Solid rock mass — cliff face, boulder, terrain block. StaticBody box with a PBR (triplanar
+    stone) material. Blocks by default; set "walkable": true to clamber on top."""
+    size = obj.get("size", [2.0, 2.0, 2.0])
+    sx_, sy_, sz_ = float(size[0]), float(size[1]), float(size[2])
+    mat       = _surface_material(b, obj.get("material"), (0.45, 0.43, 0.40), ROUGH_WALL)
+    yaw       = float(obj.get("yaw", 0.0))
+    name      = f"Rock_{oid}"
+    mesh_rid  = b.box_mesh(sx_, sy_, sz_)
+    shape_rid = b.box_shape(sx_, sy_, sz_)
+    body_props: dict[str, str] = {
+        "transform": t3d_yaw(lx, ly, lz, yaw) if yaw else t3d(lx, ly, lz),
+    }
+    if obj.get("walkable"):
+        body_props["collision_layer"] = str(WALKABLE_LAYER)
+    b.node(name, "StaticBody3D", zone_node, body_props)
+    sub = f"{zone_node}/{name}"
+    b.node("Mesh", "MeshInstance3D", sub, {
+        "mesh": f'SubResource("{mesh_rid}")',
+        "surface_material_override/0": f'SubResource("{mat}")',
+    })
+    b.node("Collision", "CollisionShape3D", sub, {"shape": f'SubResource("{shape_rid}")'})
 
 
 def _add_mechanism(
@@ -1778,6 +1941,13 @@ _ENV_PRESETS: dict[str, dict] = {
         "sun_angle": (-50.0, 200.0), "sun_energy": 0.25, "sun_color": (0.55, 0.62, 0.85),
         "ambient_energy": 0.35, "sky_energy": 0.4,
         "fog_color": (0.06, 0.08, 0.14), "fog_density": 0.010,
+    },
+    "dawn": {  # misty morning — soft cool light, low pale sun, heavy fog hiding the distance
+        "sky_top": (0.52, 0.60, 0.69), "sky_horizon": (0.82, 0.84, 0.86),
+        "ground_horizon": (0.54, 0.56, 0.54), "ground_bottom": (0.28, 0.31, 0.29),
+        "sun_angle": (-14.0, 65.0), "sun_energy": 0.75, "sun_color": (0.96, 0.94, 0.92),
+        "ambient_energy": 0.95, "sky_energy": 0.9,
+        "fog_color": (0.80, 0.84, 0.87), "fog_density": 0.022,
     },
     "cave": {  # interior/underground: dim, cool, no real sky — sun is just a fill
         "sky_top": (0.04, 0.05, 0.07), "sky_horizon": (0.10, 0.10, 0.12),
