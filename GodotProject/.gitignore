@@ -14,5 +14,11 @@ android/
 # Editor metadata
 .mono/
 
-# F9 room-preview screenshots (tools/screenshot_room.gd output)
-tools/_room_preview.png
+# F9 room-preview screenshots (tools/screenshot_room.gd output + A/B copies)
+tools/_*.png
+
+# F9 raw source assets (asset_src/) — large, reproducible by re-downloading from the
+# source (provenance in assets/models/*/CREDITS.md). Only the conditioned .glb +
+# manifest under assets/models/ are committed (the shippable artefacts the converter
+# references). *.import regenerates on import like the generated scenes do.
+asset_src/

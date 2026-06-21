@@ -422,7 +422,21 @@ Separable from the art work and low-risk; a real VR title needs these:
    re-rendered `forest_clearing`/`ancient_dungeon` off-headset (glossier floor catching reflection,
    sky-ambient wall gradient, tonemap). **Device 90fps + prop-sheen/glow verify pending** (steel reads
    via the reflection probe; folds into the step-2 device-profile pass).
-4. **Asset conditioning stage** (decimate/LOD/atlas/UV2 + offline AO) on a curated hero asset set.
+4. **Asset conditioning stage: DONE on PC** (2026-06-21) — headless Blender pipeline
+   `tools/condition_asset.py` (`blender --background --python …`, build-time only, never at
+   runtime): decimate-to-tri-budget + UV2 lightmap unwrap + texture-budget downscale → a single
+   Quest-ready `.glb` (textures embedded) + a manifest JSON. Runtime LODs are left to Godot's
+   glTF importer (meshoptimizer, on by default). `tools/check_asset_budget.py` asserts the
+   manifest off-headless (CI/test). First hero asset: **Poly Haven `treasure_chest` (CC0)** —
+   conditioned **103,330 → 4,000 tris**, UV2 added, 1k ARM(occlusion/roughness/metallic)+diff+normal
+   maps (maps straight onto the step-3 ORM material support). Converter gained a `prop`/`model`
+   interactable type (instances an imported `.glb`, optional box collision) + `tools/graphics_test.json`
+   showcase scene. Rendered off-headset: the PBR chest reads photoreal against the runtime-lit room —
+   the big jump over primitive boxes. Also fixed `tools/screenshot_room.gd` (it set the camera
+   transform in `_initialize` before nodes were in-tree → silently stayed at the origin, making every
+   prior preview unrepresentative; now positions in `_process`). 61/61 tests green. Committed: `.glb`
+   + manifest + CREDITS (raw `asset_src/` gitignored, reproducible). Blender 5.1.2 installed via winget
+   (`C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`) — new build-time dep.
 5. **Comfort/accessibility sub-phase** (teleport, snap-turn, vignette, settings, handedness)
    — can proceed in parallel; it's independent of the art work.
 6. **Profile, tune, hold 90fps**; commit per the usual recipe; device-verify.

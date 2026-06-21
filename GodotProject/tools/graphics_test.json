@@ -1,0 +1,55 @@
+{
+  "id": "graphics-test",
+  "name": "Graphics Showcase",
+  "description": "F9 art-direction showcase: a conditioned Poly Haven hero prop (treasure chest, decimated 103k->4k tris with ARM/normal PBR), a per-zone materials override, an emissive lamp, and the runtime-lit environment with bloom.",
+  "scene_type": "exploration",
+  "platforms": ["vr"],
+  "environment": {
+    "preset": "day",
+    "glow": true
+  },
+  "zones": [
+    {
+      "id": "vault",
+      "name": "Treasure Vault",
+      "type": "exploration",
+      "bounds": {
+        "center": { "x": 0, "y": 0, "z": 150 },
+        "extents": { "x": 250, "y": 200, "z": 150 }
+      },
+      "materials": {
+        "floor": { "color": [0.42, 0.37, 0.30], "roughness": 0.40 },
+        "wall":  { "color": [0.38, 0.35, 0.32], "roughness": 0.80 }
+      },
+      "interactables": [
+        {
+          "id": "hero_chest",
+          "type": "prop",
+          "model": "res://assets/models/treasure_chest/treasure_chest.glb",
+          "position": { "x": 0, "y": 50, "z": 30 },
+          "yaw": 20.0,
+          "scale": 1.0,
+          "collision": [0.45, 0.30, 0.30],
+          "behaviour": "Conditioned Poly Haven CC0 hero asset: photoscan chest decimated to a 4k-tri Quest budget with UV2 + ARM/normal PBR maps, instanced from the .glb."
+        },
+        {
+          "id": "vault_lamp",
+          "type": "lamp",
+          "position": { "x": 120, "y": -120, "z": 220 },
+          "controlled_by": "vault_lamp",
+          "event": "interact:button",
+          "behaviour": "An emissive indicator lamp so the self-lit material + bloom read."
+        }
+      ]
+    }
+  ],
+  "participant_spawns": [
+    {
+      "position": { "x": 0, "y": -130, "z": 0 },
+      "rotation": { "pitch": 0, "yaw": 0, "roll": 0 },
+      "role": "player"
+    }
+  ],
+  "participant_capacity": { "min": 1, "max": 2, "recommended": 1 },
+  "tags": ["test", "graphics", "f9", "hero-asset"]
+}

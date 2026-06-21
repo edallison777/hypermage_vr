@@ -1,0 +1,28 @@
+{
+  "name": "treasure_chest",
+  "source": "treasure_chest_1k.gltf",
+  "glb": "treasure_chest.glb",
+  "tri_budget": 4000,
+  "tex_size_budget": 1024,
+  "source_tris": 103330,
+  "conditioned_tris": 4000,
+  "has_uv2": true,
+  "textures": [
+    {
+      "name": "treasure_chest_diff",
+      "w": 1024,
+      "h": 1024
+    },
+    {
+      "name": "treasure_chest_metal-treasure_chest_rough",
+      "w": 1024,
+      "h": 1024
+    },
+    {
+      "name": "treasure_chest_nor_gl",
+      "w": 1024,
+      "h": 1024
+    }
+  ],
+  "pass": true
+}

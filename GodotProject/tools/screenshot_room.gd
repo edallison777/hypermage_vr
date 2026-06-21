@@ -8,6 +8,9 @@ extends SceneTree
 var _frames := 0
 var _room_path := "res://scenes/generated/forest-clearing.tscn"
 var _err := ""
+var _cam: Camera3D = null
+var _room: Node = null
+var _placed := false
 
 func _initialize() -> void:
 	# Pull the room path from the args after a bare "--", if given.
@@ -19,31 +22,43 @@ func _initialize() -> void:
 	if packed == null:
 		_err = "could not load " + _room_path
 		return
-	var room := packed.instantiate()
-	get_root().add_child(room)
+	_room = packed.instantiate()
+	get_root().add_child(_room)
+	_cam = Camera3D.new()
+	get_root().add_child(_cam)
+
+func _place_camera() -> void:
+	# Run AFTER the first frame so every node is in-tree: querying global_position or
+	# calling look_at in _initialize hits "!is_inside_tree()" and silently no-ops, leaving
+	# the camera at the origin (the bug that made earlier previews unrepresentative).
 	# Silence the editor PreviewCamera (it looks down from outside) and stand a camera at
 	# player eye height inside the room, looking roughly horizontally — the VR-like view
 	# that actually exercises sky-ambient, the sun shadow, fog depth and the materials.
 	var spawn := Vector3(0, 0, 0)
-	for n in room.get_children():
+	var found_spawn := false
+	for n in _room.get_children():
 		if n is Camera3D:
 			(n as Camera3D).current = false
 		elif n.name.begins_with("SpawnPoint"):
 			spawn = (n as Node3D).global_position
-	var cam := Camera3D.new()
-	get_root().add_child(cam)
-	cam.current = true
+			found_spawn = true
+	_cam.current = true
 	var eye := spawn + Vector3(0, 1.6, 0)
-	cam.global_position = eye
+	_cam.global_position = eye
 	# Look across the room (toward -Z) with a slight downward tilt so floor+walls+ceiling
-	# are all in frame.
-	cam.look_at(eye + Vector3(0, -0.25, -1), Vector3.UP)
+	# (and a prop on the floor ahead) are all in frame.
+	_cam.look_at(eye + Vector3(0, -0.35, -1), Vector3.UP)
+	print("screenshot_room: camera at %s (spawn %s, found=%s)" % [eye, spawn, found_spawn])
 
 func _process(_d: float) -> bool:
 	if _err != "":
 		push_error("screenshot_room: " + _err)
 		return true
 	_frames += 1
+	if not _placed:
+		_place_camera()
+		_placed = true
+		return false
 	# Let the sky, the directional shadow and the ONCE reflection-probe bake settle.
 	if _frames < 50:
 		return false

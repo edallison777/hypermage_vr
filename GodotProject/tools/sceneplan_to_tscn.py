@@ -75,6 +75,18 @@ def t3d_yaw(lx: float, ly: float, lz: float, yaw_deg: float) -> str:
     )
 
 
+def t3d_yaw_scale(lx: float, ly: float, lz: float, yaw_deg: float, scale: float) -> str:
+    """Transform3D with a yaw + uniform scale + translation. Used to place/size an
+    instanced glTF prop (a conditioned hero asset)."""
+    yaw = math.radians(yaw_deg)
+    c, s = math.cos(yaw), math.sin(yaw)
+    # basis X=(c,0,-s), Y=(0,1,0), Z=(s,0,c) scaled uniformly, in t3d_axes column layout.
+    return (
+        f"Transform3D({c * scale:.5f}, 0, {s * scale:.5f}, 0, {scale:.5f}, 0, "
+        f"{-s * scale:.5f}, 0, {c * scale:.5f}, {lx:.4f}, {ly:.4f}, {lz:.4f})"
+    )
+
+
 def col(r: float, g: float, b: float, a: float = 1.0) -> str:
     return f"Color({r:.3f}, {g:.3f}, {b:.3f}, {a:.3f})"
 
@@ -159,6 +171,29 @@ class TscnBuilder:
             return self._ext_by_path[path]
         rid = f"ExtScript_{len(self._ext_by_path) + 1}"
         return self.ext_resource("Script", path, rid)
+
+    def packed_scene_resource(self, path: str) -> str:
+        """Get-or-create a PackedScene ext_resource for an imported glTF/scene (a
+        conditioned hero asset, F9 §4c.4). Godot imports a .glb as a PackedScene, so a
+        prop is placed by instancing it."""
+        if path in self._ext_by_path:
+            return self._ext_by_path[path]
+        rid = f"ExtScene_{len(self._ext_by_path) + 1}"
+        return self.ext_resource("PackedScene", path, rid)
+
+    def instance_node(self, name: str, parent: str, scene_rid: str,
+                      props: dict[str, str] | None = None,
+                      groups: list[str] | None = None) -> None:
+        """Emit an instanced-scene node ([node ... instance=ExtResource(...)]) — no `type`,
+        used to drop an imported glTF prop into the tree."""
+        groups_attr = ""
+        if groups:
+            groups_attr = " groups=[" + ", ".join(f'"{g}"' for g in groups) + "]"
+        lines = [f'[node name="{name}" parent="{parent}"{groups_attr} instance=ExtResource("{scene_rid}")]']
+        for k, v in (props or {}).items():
+            lines.append(f"{k} = {v}")
+        lines.append("")
+        self._nodes.append("\n".join(lines))
 
     # ── sub-resource factories ────────────────────────────────────────────────
 
@@ -939,6 +974,9 @@ def _add_interactable(b: TscnBuilder, obj: dict, zone_node: str, bounds: dict) -
     if otype == "enemy_spawn":
         _add_enemy_spawn(b, obj, oid, zone_node, lx, ly, lz)
         return
+    if otype in ("prop", "model"):
+        _add_prop(b, obj, oid, zone_node, lx, ly, lz)
+        return
 
     r, g, b_c = _INTERACTABLE_RGB.get(otype, (0.5, 0.5, 0.5))
     mat = b.material(r, g, b_c)
@@ -1222,6 +1260,36 @@ def _add_enemy_spawn(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
         "mesh": f'SubResource("{mesh}")',
         "surface_material_override/0": f'SubResource("{mat}")',
     })
+
+
+def _add_prop(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+              lx: float, ly: float, lz: float) -> None:
+    """A conditioned hero asset (F9 §4c.4) — an imported glTF instanced into the scene.
+    Wrapped in a StaticBody3D so it blocks the player; the .glb itself carries the mesh +
+    its PBR (albedo/normal/ORM) material. ScenePlan fields:
+      model (res:// path to the conditioned .glb, required); yaw (deg); scale (uniform);
+      collision: box half-extents [x,y,z] in m + optional collision_offset [x,y,z]
+      (omit collision → decorative, no collider)."""
+    model = obj.get("model")
+    if not model:
+        return
+    name = f"Prop_{oid}"
+    path = f"{zone_node}/{name}"
+    yaw = float(obj.get("yaw", 0.0))
+    scale = float(obj.get("scale", 1.0))
+    b.node(name, "StaticBody3D", zone_node, {
+        "transform": t3d_yaw_scale(lx, ly, lz, yaw, scale),
+    }, groups=["prop"])
+    scene_rid = b.packed_scene_resource(str(model))
+    b.instance_node("Model", path, scene_rid)
+    coll = obj.get("collision")
+    if isinstance(coll, list) and len(coll) >= 3:
+        off = obj.get("collision_offset", [0, coll[1], 0])
+        shape = b.box_shape(coll[0] * 2, coll[1] * 2, coll[2] * 2)
+        b.node("Collision", "CollisionShape3D", path, {
+            "transform": t3d(float(off[0]), float(off[1]), float(off[2])),
+            "shape": f'SubResource("{shape}")',
+        })
 
 
 def _add_keypad(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
