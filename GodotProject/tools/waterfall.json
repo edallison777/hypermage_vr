@@ -8,7 +8,9 @@
     "preset": "dawn",
     "fog": true,
     "glow": true,
-    "ambient_energy": 1.0
+    "ambient_energy": 1.3,
+    "sun_energy": 0.9,
+    "sun_angle": [-17.0, 120.0]
   },
   "zones": [
     {
@@ -30,17 +32,43 @@
       },
       "interactables": [
         {
-          "id": "cliff",
+          "id": "cliff_main",
           "type": "cliff",
-          "position": { "x": 0, "y": 1200, "z": 400 },
-          "size": [24, 10, 6],
+          "position": { "x": 0, "y": 1350, "z": 400 },
+          "size": [30, 12, 5],
           "material": {
-            "color": [1, 1, 1], "roughness": 1.0, "metallic": 0.0, "triplanar": true, "tiling": 0.2, "normal_scale": 1.0,
+            "color": [1, 1, 1], "roughness": 1.0, "metallic": 0.0, "triplanar": true, "tiling": 0.22, "normal_scale": 1.1,
             "albedo": "res://assets/textures/cliff_side/cliff_side_diff_1k.jpg",
             "normal": "res://assets/textures/cliff_side/cliff_side_nor_gl_1k.jpg",
             "orm":    "res://assets/textures/cliff_side/cliff_side_arm_1k.jpg"
           },
-          "behaviour": "The rock face the river pours over. Tall cliff, base sunk below the ground, cliff_side PBR (world-triplanar)."
+          "behaviour": "The main rock face the river pours over. Tall, base sunk below ground, cliff_side PBR (world-triplanar)."
+        },
+        {
+          "id": "cliff_left",
+          "type": "cliff",
+          "position": { "x": -950, "y": 1050, "z": 320 },
+          "size": [7, 9, 6.5], "yaw": 8.0,
+          "material": {
+            "color": [1, 1, 1], "roughness": 1.0, "metallic": 0.0, "triplanar": true, "tiling": 0.22, "normal_scale": 1.1,
+            "albedo": "res://assets/textures/cliff_side/cliff_side_diff_1k.jpg",
+            "normal": "res://assets/textures/cliff_side/cliff_side_nor_gl_1k.jpg",
+            "orm":    "res://assets/textures/cliff_side/cliff_side_arm_1k.jpg"
+          },
+          "behaviour": "Left buttress jutting forward, framing the falls in a notch."
+        },
+        {
+          "id": "cliff_right",
+          "type": "cliff",
+          "position": { "x": 950, "y": 1050, "z": 340 },
+          "size": [7, 9.5, 6.5], "yaw": -8.0,
+          "material": {
+            "color": [1, 1, 1], "roughness": 1.0, "metallic": 0.0, "triplanar": true, "tiling": 0.22, "normal_scale": 1.1,
+            "albedo": "res://assets/textures/cliff_side/cliff_side_diff_1k.jpg",
+            "normal": "res://assets/textures/cliff_side/cliff_side_nor_gl_1k.jpg",
+            "orm":    "res://assets/textures/cliff_side/cliff_side_arm_1k.jpg"
+          },
+          "behaviour": "Right buttress jutting forward, framing the falls in a notch."
         },
         {
           "id": "riverbed",
@@ -71,19 +99,19 @@
         {
           "id": "falls",
           "type": "waterfall",
-          "position": { "x": 0, "y": 890, "z": 400 },
-          "size": [5, 9],
-          "water_color": [0.55, 0.68, 0.72],
-          "foam_color": [0.93, 0.97, 0.98],
-          "flow_speed": 1.8, "streak_scale": 7.0, "streak_stretch": 16.0,
-          "foam_amount": 0.5, "foam_emission": 0.22, "base_alpha": 0.82, "fresnel_power": 2.5,
+          "position": { "x": 0, "y": 1080, "z": 420 },
+          "size": [6.5, 10.5],
+          "water_color": [0.62, 0.74, 0.78],
+          "foam_color": [0.95, 0.98, 0.99],
+          "flow_speed": 2.1, "streak_scale": 22.0, "streak_stretch": 44.0,
+          "foam_amount": 0.4, "foam_emission": 0.25, "base_alpha": 0.9, "fresnel_power": 2.2,
           "behaviour": "The hero falling sheet — water_fall shader: scrolling foam streaks, bright impact/base foam, fresnel rim glow in the haze. Hangs just in front of the cliff face, base into the pool."
         },
         {
           "id": "spray",
           "type": "mist",
-          "position": { "x": 0, "y": 820, "z": 60 },
-          "extents": [3.0, 0.5, 1.3],
+          "position": { "x": 0, "y": 1050, "z": 70 },
+          "extents": [3.5, 0.6, 1.2],
           "amount": 32, "lifetime": 4.0, "rise": 0.5,
           "velocity_min": 0.3, "velocity_max": 0.9, "spread": 40.0,
           "scale_min": 1.4, "scale_max": 3.0, "puff_size": 1.8,

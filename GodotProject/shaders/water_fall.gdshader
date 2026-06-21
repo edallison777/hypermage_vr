@@ -39,8 +39,8 @@ void fragment(){
 	float flow = mix(s1, s2, 0.5);
 
 	// more foam at the lip (UV.y~0, impact) and the base (UV.y~1, plunge)
-	float ends = smoothstep(0.82, 1.0, UV.y) + smoothstep(0.18, 0.0, UV.y);
-	float foam = smoothstep(1.0 - foam_amount, 1.0, flow + ends * 0.45);
+	float ends = smoothstep(0.80, 1.0, UV.y) + smoothstep(0.20, 0.0, UV.y);
+	float foam = smoothstep(1.0 - foam_amount, 1.0, flow + ends * 0.5);
 
 	// 3-tap procedural normal so the streaks catch the sun
 	float e = 0.0035;
@@ -50,9 +50,16 @@ void fragment(){
 
 	float fres = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), fresnel_power);
 
+	// break the hard rectangular quad: feather the two vertical edges (wavering with the flow
+	// so the sheet has a living, irregular outline) and taper the very top where it spills.
+	float edge_wave = (vnoise(vec2(UV.y * 9.0 + t, 0.0)) - 0.5) * 0.06;
+	float edges = smoothstep(0.0, 0.10, UV.x + edge_wave) * smoothstep(1.0, 0.90, UV.x + edge_wave);
+	float top   = smoothstep(0.0, 0.06, UV.y);
+	float shape = edges * top;
+
 	ALBEDO    = mix(water_color, foam_color, foam);
 	ROUGHNESS = mix(0.16, 0.55, foam);    // glassy water, rougher foam
 	METALLIC  = 0.0;
-	ALPHA     = clamp(base_alpha + foam * 0.2 + fres * 0.15, 0.0, 1.0);
+	ALPHA     = clamp((base_alpha + foam * 0.2 + fres * 0.15) * shape, 0.0, 1.0);
 	EMISSION  = foam_color * foam * foam_emission;
 }
