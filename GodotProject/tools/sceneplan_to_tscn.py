@@ -254,6 +254,7 @@ class TscnBuilder:
         orm_tex: str | None = None,
         uv1_scale: tuple[float, float, float] | None = None,
         normal_scale: float = 1.0,
+        triplanar: bool = False,
         transparent: bool = False,
         unshaded: bool = False,
     ) -> str:
@@ -294,6 +295,14 @@ class TscnBuilder:
             lines.append(f"emission_energy_multiplier = {emission_energy:.3f}")
         if uv1_scale is not None:
             lines.append(f"uv1_scale = {v3(*uv1_scale)}")
+        if triplanar:
+            # World-space triplanar: the texture is projected from world axes instead of the
+            # mesh's per-face UVs, so it flows CONTINUOUSLY across the separate wall boxes and
+            # their corners — kills the box-room corner/edge seams. uv1_scale is then in
+            # world units (tiles per metre-ish). Costs extra texture fetches; use on the few
+            # big room surfaces, not every prop.
+            lines.append("uv1_triplanar = true")
+            lines.append("uv1_world_triplanar = true")
         lines.append("")
         self._sub.append("\n".join(lines))
         return rid
@@ -792,6 +801,7 @@ def _surface_material(b: TscnBuilder, override: dict | None,
     if "normal" in o:        kw["normal_tex"]   = str(o["normal"])
     if "orm" in o:           kw["orm_tex"]      = str(o["orm"])
     if "normal_scale" in o:  kw["normal_scale"] = float(o["normal_scale"])
+    if o.get("triplanar"):   kw["triplanar"]    = True
     em = o.get("emission")
     if isinstance(em, list) and len(em) >= 3:
         kw["emission"] = (float(em[0]), float(em[1]), float(em[2]))
@@ -860,6 +870,28 @@ def add_zone(b: TscnBuilder, zone: dict, doors: list[tuple[str, float]] | None =
     _build_wall(b, f"WallE_{zid}", zone_node, wall_mat, span_axis="z", span_len=sz, height=sy, thickness=t, lx= sx/2 - t/2, ly=0, lz=0, door_offset=door.get("E"))
     _build_wall(b, f"WallW_{zid}", zone_node, wall_mat, span_axis="z", span_len=sz, height=sy, thickness=t, lx=-sx/2 + t/2, ly=0, lz=0, door_offset=door.get("W"))
 
+    # Corner fillets (F9): round the four vertical wall-meet edges. A box room's corners are
+    # hard 90° edges with flat per-face normals, so the lighting jumps instantly across them →
+    # a bright seam line under raking torch light that NO material fix touches (it survived the
+    # metallic/normal/reflection-probe passes). A vertical cylinder tangent to both walls
+    # replaces the knife-edge with a smooth convex curve, so the surface normal — and thus the
+    # lighting — varies gradually across the corner and the seam is gone. Visual-only (the flat
+    # walls behind still block the player); radius from zone "corner_fillet" (metres), off when
+    # absent. The far 3/4 of each cylinder is embedded in the walls; only the room-facing
+    # quarter shows, and the world-triplanar material flows its texture across it seamlessly.
+    fillet_r = float(zone.get("corner_fillet", 0.0))
+    if fillet_r > 0.01 and fillet_r < min(sx, sz) / 2 - t:
+        inner_x, inner_z = sx / 2 - t, sz / 2 - t
+        fillet_mesh = b.cylinder_mesh(fillet_r, sy - 2 * t)
+        for sgx in (1, -1):            # +X = E, -X = W
+            for sgz in (1, -1):        # +Z = S, -Z = N  (matches wall side convention)
+                nm = f"Fillet_{zid}_{'E' if sgx > 0 else 'W'}{'S' if sgz > 0 else 'N'}"
+                b.node(nm, "MeshInstance3D", zone_node, {
+                    "transform": t3d(sgx * (inner_x - fillet_r), 0, sgz * (inner_z - fillet_r)),
+                    "mesh": f'SubResource("{fillet_mesh}")',
+                    "surface_material_override/0": f'SubResource("{wall_mat}")',
+                })
+
     # Navigation region (F8): a flat quad over the floor, inset from the walls, so enemy
     # NavigationAgent3Ds can path across the room. Open-arena navmesh (no obstacle bake).
     nav_inset = 0.6
@@ -871,31 +903,39 @@ def add_zone(b: TscnBuilder, zone: dict, doors: list[tuple[str, float]] | None =
         "navigation_mesh": f'SubResource("{navmesh}")',
     })
 
-    # zone fill-light
-    light_range = max(sx, sz) * 0.9
-    omni_props: dict[str, str] = {
-        "transform": t3d(0, sy * 0.35, 0),
-        "omni_range": f"{light_range:.3f}",
-        "light_energy": "1.2",
-    }
-    if b.bake:
-        # Bake the indirect bounce into the lightmap while the light stays realtime for
-        # direct (so dynamic props/players are still lit normally) — visually safe.
-        omni_props["light_bake_mode"] = "2"   # BAKE_DYNAMIC (static indirect + dynamic direct)
-    b.node(f"Light_{zid}", "OmniLight3D", zone_node, omni_props)
+    # zone fill-light: a neutral overhead omni for baseline visibility. A scene going for a
+    # moody/torchlit look suppresses it ("auto_light": false) and lights the room with placed
+    # `light` props instead — the even overhead fill is what reads as "too good for torchlit".
+    if zone.get("auto_light", True):
+        light_range = max(sx, sz) * 0.9
+        omni_props: dict[str, str] = {
+            "transform": t3d(0, sy * 0.35, 0),
+            "omni_range": f"{light_range:.3f}",
+            "light_energy": f'{float(zone.get("auto_light_energy", 1.2)):.3f}',
+        }
+        if b.bake:
+            # Bake the indirect bounce into the lightmap while the light stays realtime for
+            # direct (so dynamic props/players are still lit normally) — visually safe.
+            omni_props["light_bake_mode"] = "2"   # BAKE_DYNAMIC (static indirect + dynamic direct)
+        b.node(f"Light_{zid}", "OmniLight3D", zone_node, omni_props)
 
     # F9 reflection probe — one per zone, sized to the interior, baked ONCE on-device at
     # load (the Quest has a real GPU/RD, so the headless-PC bake limitation doesn't apply
-    # here). interior=true + box_projection give correct in-room reflections; keep the
-    # count low (one per room) to bound the load-time bake cost.
-    b.node(f"ReflectionProbe_{zid}", "ReflectionProbe", zone_node, {
-        "transform":      t3d(0, 0, 0),
-        "update_mode":    "0",                       # ONCE
-        "size":           v3(sx - 0.1, sy - 0.1, sz - 0.1),
-        "interior":       "true",
-        "box_projection": "true",
-        "enable_shadows": "true",
-    })
+    # here). interior=true gives in-room reflections; keep the count low (one per room) to
+    # bound the load-time bake cost. box_projection reprojects the cubemap onto the box
+    # volume for parallax-correct reflections, but the reprojection TEARS at the box corners
+    # (a bright seam) — worth it for glossy rooms, but a rough stone interior shows no
+    # parallax benefit, so a moody room sets "reflection_box_projection": false to kill the
+    # corner seam at no visual cost.
+    if zone.get("reflection_probe", True):
+        b.node(f"ReflectionProbe_{zid}", "ReflectionProbe", zone_node, {
+            "transform":      t3d(0, 0, 0),
+            "update_mode":    "0",                       # ONCE
+            "size":           v3(sx - 0.1, sy - 0.1, sz - 0.1),
+            "interior":       "true",
+            "box_projection": "true" if zone.get("reflection_box_projection", True) else "false",
+            "enable_shadows": "true",
+        })
 
     # interactables
     for obj in zone.get("interactables", []):
@@ -1286,6 +1326,11 @@ def _add_light(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
         props["omni_attenuation"] = f'{float(obj["attenuation"]):.3f}'
     if obj.get("shadow"):
         props["shadow_enabled"] = "true"
+    if obj.get("flicker"):
+        props["script"] = f'ExtResource("{b.script_resource("res://scripts/light_flicker.gd")}")'
+        props["phase"] = f'{float(obj.get("flicker_phase", 0.0)):.3f}'
+        if "flicker_amount" in obj:
+            props["amount"] = f'{float(obj["flicker_amount"]):.3f}'
     b.node(name, "OmniLight3D", zone_node, props)
     if obj.get("bulb"):
         bulb_mat = b.material(color[0], color[1], color[2],
