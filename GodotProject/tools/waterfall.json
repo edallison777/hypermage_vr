@@ -4,13 +4,16 @@
   "description": "F9 outdoor showcase: a rural waterfall at misty dawn — a cliff pouring a custom-shader water sheet into a plunge pool over a pebble bed, drifting spray, framed by mossy boulders. Heavy fog + low pale sun. Built on the converter's new open-zone + water/waterfall/mist/rock primitives.",
   "scene_type": "exploration",
   "platforms": ["vr"],
+  "style": "watercolour",
   "environment": {
     "preset": "dawn",
     "fog": true,
     "glow": true,
-    "ambient_energy": 1.3,
-    "sun_energy": 0.9,
-    "sun_angle": [-17.0, 120.0]
+    "ambient_energy": 1.15,
+    "sun_energy": 0.85,
+    "sun_angle": [-20.0, 120.0],
+    "fog_density": 0.016,
+    "fog_color": [0.85, 0.87, 0.86]
   },
   "zones": [
     {
@@ -199,12 +202,12 @@
           "type": "water",
           "position": { "x": 0, "y": 600, "z": 8 },
           "size": [13, 9],
-          "deep_color": [0.10, 0.20, 0.24],
-          "shallow_color": [0.30, 0.45, 0.48],
-          "sky_tint": [0.80, 0.84, 0.87],
-          "foam_color": [0.92, 0.96, 0.97],
-          "ripple_scale": 2.6, "ripple_speed": 0.28, "normal_strength": 0.35,
-          "fresnel_power": 4.0, "foam_amount": 0.06, "surface_alpha": 0.86, "sparkle": 0.6,
+          "deep_color": [0.34, 0.47, 0.50],
+          "shallow_color": [0.58, 0.68, 0.67],
+          "sky_tint": [0.86, 0.88, 0.88],
+          "foam_color": [0.94, 0.96, 0.95],
+          "ripple_scale": 2.4, "ripple_speed": 0.22, "normal_strength": 0.28,
+          "fresnel_power": 4.0, "foam_amount": 0.05, "surface_alpha": 0.78, "sparkle": 0.35,
           "behaviour": "Plunge pool — water_surface shader: animated ripples, fresnel sky reflection (misty dawn tint), faint drifting foam, sun sparkle."
         },
         {
@@ -212,10 +215,10 @@
           "type": "waterfall",
           "position": { "x": 0, "y": 990, "z": 450 },
           "size": [8.5, 10],
-          "water_color": [0.62, 0.74, 0.78],
-          "foam_color": [0.95, 0.98, 0.99],
-          "flow_speed": 2.1, "streak_scale": 22.0, "streak_stretch": 44.0,
-          "foam_amount": 0.4, "foam_emission": 0.25, "base_alpha": 0.9, "fresnel_power": 2.2,
+          "water_color": [0.76, 0.84, 0.85],
+          "foam_color": [0.96, 0.97, 0.96],
+          "flow_speed": 2.0, "streak_scale": 20.0, "streak_stretch": 42.0,
+          "foam_amount": 0.42, "foam_emission": 0.18, "base_alpha": 0.82, "fresnel_power": 2.2,
           "behaviour": "The hero falling sheet — water_fall shader: scrolling foam streaks, bright impact/base foam, fresnel rim glow in the haze. Hangs just in front of the cliff face, base into the pool."
         },
         {

@@ -172,6 +172,9 @@ class TscnBuilder:
         # lightmap-ready (UV2 + STATIC gi_mode), lights bake their indirect, and a
         # LightmapGI node is added — so the only editor step is select-Bake-Lightmaps + save.
         self.bake = False
+        # Scene-wide surface art style (e.g. "watercolour") — routes every floor/wall/rock
+        # surface through the matching stylised shader for a cohesive look. Set in convert().
+        self.surface_style = None
 
     # ── external resource factories ───────────────────────────────────────────
 
@@ -832,6 +835,27 @@ def _add_staircase(b: TscnBuilder, g: dict) -> None:
     })
 
 
+def _watercolour_material(b: TscnBuilder, o: dict) -> str:
+    """A ShaderMaterial bound to watercolour.gdshader — soft pigment washes + paper grain for
+    the stylised rural scene. Albedo is sampled (triplanar) but heavily flattened; normal/orm
+    are intentionally ignored (the style flattens micro-detail)."""
+    params: dict[str, str] = {}
+    if "albedo" in o:
+        params["albedo_tex"] = f'ExtResource("{b.texture_resource(str(o["albedo"]))}")'
+    uv = o.get("tiling")
+    if isinstance(uv, (int, float)):
+        params["tiling"] = f"{float(uv):.4f}"
+    elif isinstance(uv, list) and uv:
+        params["tiling"] = f"{float(uv[0]):.4f}"
+    if "wash_tint" in o:
+        params["wash_tint"] = col(*o["wash_tint"])
+    for key in ("wash_amount", "desaturate", "lighten", "edge_pigment",
+                "paper_strength", "paper_scale", "wobble"):
+        if key in o:
+            params[key] = f"{float(o[key]):.4f}"
+    return b.shader_material("res://shaders/watercolour.gdshader", params)
+
+
 def _surface_material(b: TscnBuilder, override: dict | None,
                       base_rgb: tuple[float, float, float], default_rough: float) -> str:
     """Resolve a room surface (floor/wall/ceiling) to a PBR material. The procedural
@@ -840,9 +864,17 @@ def _surface_material(b: TscnBuilder, override: dict | None,
     tiling (step-4 assets). Schema per surface:
       { "color":[r,g,b], "roughness":0.6, "metallic":0.0, "emission":[r,g,b],
         "emission_energy":1.0, "albedo":"res://...", "normal":"res://...",
-        "orm":"res://...", "normal_scale":1.0, "tiling":4 | [4,4] }"""
-    r, g, bl = base_rgb
+        "orm":"res://...", "normal_scale":1.0, "tiling":4 | [4,4] }
+
+    A material may set "shader": "watercolour" to render through the unified watercolour
+    style shader instead of StandardMaterial3D (soft pigment washes + paper grain — see
+    shaders/watercolour.gdshader). Used by the rural waterfall scene."""
     o = override or {}
+    # Per-material opt-in, or the whole scene's surface_style — unless the material opts out
+    # with "shader": "off" (e.g. an emissive/transparent surface that shouldn't be washed).
+    if o.get("shader") == "watercolour" or (b.surface_style == "watercolour" and o.get("shader") != "off"):
+        return _watercolour_material(b, o)
+    r, g, bl = base_rgb
     c = o.get("color")
     if isinstance(c, list) and len(c) >= 3:
         r, g, bl = float(c[0]), float(c[1]), float(c[2])
@@ -2068,6 +2100,7 @@ def _add_environment(b: TscnBuilder, cfg: dict) -> None:
 def convert(scene_plan: dict, vr: bool = False, bake: bool = False) -> str:
     b = TscnBuilder()
     b.bake = bake
+    b.surface_style = scene_plan.get("style")
     name = scene_plan.get("name", "GeneratedScene").replace(" ", "_")
 
     # VR init script ext_resource
