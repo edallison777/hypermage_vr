@@ -1255,7 +1255,12 @@ def _add_mist(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
 def _add_rock(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
               lx: float, ly: float, lz: float) -> None:
     """Solid rock mass — cliff face, boulder, terrain block. StaticBody box with a PBR (triplanar
-    stone) material. Blocks by default; set "walkable": true to clamber on top."""
+    stone) material. Blocks by default; set "walkable": true to clamber on top. If the object
+    carries a "model" (res:// glTF), it's instanced as a real rounded rock MESH instead of a box
+    (via _add_prop) — that's how the scene gets non-angular geometry."""
+    if obj.get("model"):
+        _add_prop(b, obj, oid, zone_node, lx, ly, lz)
+        return
     size = obj.get("size", [2.0, 2.0, 2.0])
     sx_, sy_, sz_ = float(size[0]), float(size[1]), float(size[2])
     mat       = _surface_material(b, obj.get("material"), (0.45, 0.43, 0.40), ROUGH_WALL)
@@ -1578,6 +1583,14 @@ def _add_prop(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
     }, groups=["prop"])
     scene_rid = b.packed_scene_resource(str(model))
     b.instance_node("Model", path, scene_rid)
+    # Stylise instanced models to match the scene: override their glTF materials with the
+    # watercolour shader (the model gives the rounded SHAPE; the shader gives the look).
+    if b.surface_style == "watercolour":
+        wc_script = b.script_resource("res://scripts/apply_watercolour.gd")
+        props = {"script": f'ExtResource("{wc_script}")'}
+        if "wc_tiling" in obj:
+            props["tiling"] = f"{float(obj['wc_tiling']):.4f}"
+        b.node(f"Style_{oid}", "Node", path, props)
     coll = obj.get("collision")
     if isinstance(coll, list) and len(coll) >= 3:
         off = obj.get("collision_offset", [0, coll[1], 0])

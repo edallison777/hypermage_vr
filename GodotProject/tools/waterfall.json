@@ -236,54 +236,38 @@
         {
           "id": "boulder_r",
           "type": "boulder",
-          "position": { "x": 550, "y": 400, "z": 55 },
-          "size": [2.5, 1.4, 2.0], "yaw": 18.0, "pitch": 11.0, "roll": -8.0,
-          "material": {
-            "color": [1, 1, 1], "roughness": 1.0, "metallic": 0.0, "triplanar": true, "tiling": 0.6, "normal_scale": 1.0,
-            "albedo": "res://assets/textures/rock_face_03/rock_face_03_diff_1k.jpg",
-            "normal": "res://assets/textures/rock_face_03/rock_face_03_nor_gl_1k.jpg",
-            "orm":    "res://assets/textures/rock_face_03/rock_face_03_arm_1k.jpg"
-          },
-          "behaviour": "Framing boulder, right of the pool."
+          "position": { "x": 550, "y": 400, "z": 0 },
+          "model": "res://assets/models/boulder_01/boulder_01_1k.gltf",
+          "scale": 2.2, "yaw": 18.0,
+          "collision": [1.1, 0.9, 1.0],
+          "behaviour": "Framing boulder, right of the pool (rounded rock MESH, watercolour-styled)."
         },
         {
           "id": "boulder_l",
           "type": "boulder",
-          "position": { "x": -600, "y": 700, "z": 45 },
-          "size": [3.0, 1.2, 2.5], "yaw": -25.0, "pitch": -9.0, "roll": 13.0,
-          "material": {
-            "color": [1, 1, 1], "roughness": 1.0, "metallic": 0.0, "triplanar": true, "tiling": 0.6, "normal_scale": 1.0,
-            "albedo": "res://assets/textures/rock_face_03/rock_face_03_diff_1k.jpg",
-            "normal": "res://assets/textures/rock_face_03/rock_face_03_nor_gl_1k.jpg",
-            "orm":    "res://assets/textures/rock_face_03/rock_face_03_arm_1k.jpg"
-          },
-          "behaviour": "Framing boulder, left of the pool."
+          "position": { "x": -600, "y": 700, "z": 0 },
+          "model": "res://assets/models/rock_07/rock_07_1k.gltf",
+          "scale": 2.4, "yaw": -25.0,
+          "collision": [1.2, 0.8, 1.1],
+          "behaviour": "Framing boulder, left of the pool (rock mesh)."
         },
         {
           "id": "boulder_falls_r",
           "type": "boulder",
-          "position": { "x": 400, "y": 930, "z": 35 },
-          "size": [2.0, 1.0, 1.8], "yaw": 40.0, "pitch": 7.0, "roll": 17.0,
-          "material": {
-            "color": [1, 1, 1], "roughness": 1.0, "metallic": 0.0, "triplanar": true, "tiling": 0.6, "normal_scale": 1.0,
-            "albedo": "res://assets/textures/rock_face_03/rock_face_03_diff_1k.jpg",
-            "normal": "res://assets/textures/rock_face_03/rock_face_03_nor_gl_1k.jpg",
-            "orm":    "res://assets/textures/rock_face_03/rock_face_03_arm_1k.jpg"
-          },
-          "behaviour": "Boulder at the right of the falls base, breaking up the pool edge."
+          "position": { "x": 400, "y": 930, "z": 0 },
+          "model": "res://assets/models/stone_01/stone_01_1k.gltf",
+          "scale": 1.7, "yaw": 40.0,
+          "collision": [0.9, 0.7, 0.9],
+          "behaviour": "Stone at the right of the falls base, breaking up the pool edge (rock mesh)."
         },
         {
           "id": "boulder_falls_l",
           "type": "boulder",
-          "position": { "x": -430, "y": 880, "z": 40 },
-          "size": [2.2, 1.1, 1.8], "yaw": -35.0, "pitch": -13.0, "roll": -9.0,
-          "material": {
-            "color": [1, 1, 1], "roughness": 1.0, "metallic": 0.0, "triplanar": true, "tiling": 0.6, "normal_scale": 1.0,
-            "albedo": "res://assets/textures/rock_face_03/rock_face_03_diff_1k.jpg",
-            "normal": "res://assets/textures/rock_face_03/rock_face_03_nor_gl_1k.jpg",
-            "orm":    "res://assets/textures/rock_face_03/rock_face_03_arm_1k.jpg"
-          },
-          "behaviour": "Boulder at the left of the falls base."
+          "position": { "x": -430, "y": 880, "z": 0 },
+          "model": "res://assets/models/boulder_01/boulder_01_1k.gltf",
+          "scale": 1.9, "yaw": -120.0,
+          "collision": [1.0, 0.8, 0.9],
+          "behaviour": "Boulder at the left of the falls base (rock mesh)."
         }
       ]
     }
