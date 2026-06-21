@@ -87,6 +87,21 @@ def t3d_yaw_scale(lx: float, ly: float, lz: float, yaw_deg: float, scale: float)
     )
 
 
+def t3d_euler(lx: float, ly: float, lz: float,
+              yaw_deg: float, pitch_deg: float, roll_deg: float) -> str:
+    """Transform3D rotated by yaw(Y)·pitch(X)·roll(Z) + translation. Tumbling a box on all
+    three axes makes a placed rock read far less like an axis-aligned cube."""
+    y, p, r = math.radians(yaw_deg), math.radians(pitch_deg), math.radians(roll_deg)
+    cy, sy = math.cos(y), math.sin(y)
+    cp, sp = math.cos(p), math.sin(p)
+    cr, sr = math.cos(r), math.sin(r)
+    # R = Ry @ Rx @ Rz ; columns become the local X/Y/Z axes
+    xa = (cy * cr + sy * sp * sr, cp * sr, -sy * cr + cy * sp * sr)
+    ya = (-cy * sr + sy * sp * cr, cp * cr, sy * sr + cy * sp * cr)
+    za = (sy * cp, -sp, cy * cp)
+    return t3d_axes(xa, ya, za, (lx, ly, lz))
+
+
 def col(r: float, g: float, b: float, a: float = 1.0) -> str:
     return f"Color({r:.3f}, {g:.3f}, {b:.3f}, {a:.3f})"
 
@@ -1213,12 +1228,18 @@ def _add_rock(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
     sx_, sy_, sz_ = float(size[0]), float(size[1]), float(size[2])
     mat       = _surface_material(b, obj.get("material"), (0.45, 0.43, 0.40), ROUGH_WALL)
     yaw       = float(obj.get("yaw", 0.0))
+    pitch     = float(obj.get("pitch", 0.0))
+    roll      = float(obj.get("roll", 0.0))
     name      = f"Rock_{oid}"
     mesh_rid  = b.box_mesh(sx_, sy_, sz_)
     shape_rid = b.box_shape(sx_, sy_, sz_)
-    body_props: dict[str, str] = {
-        "transform": t3d_yaw(lx, ly, lz, yaw) if yaw else t3d(lx, ly, lz),
-    }
+    if pitch or roll:
+        xform = t3d_euler(lx, ly, lz, yaw, pitch, roll)   # tumbled — reads less like a cube
+    elif yaw:
+        xform = t3d_yaw(lx, ly, lz, yaw)
+    else:
+        xform = t3d(lx, ly, lz)
+    body_props: dict[str, str] = {"transform": xform}
     if obj.get("walkable"):
         body_props["collision_layer"] = str(WALKABLE_LAYER)
     b.node(name, "StaticBody3D", zone_node, body_props)

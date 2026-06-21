@@ -26,9 +26,11 @@ float vnoise(vec2 p){
 	float c = hash21(i + vec2(0.0, 1.0)), d = hash21(i + vec2(1.0, 1.0));
 	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
-// two-octave stretched noise -> vertical streaks that scroll down with t
+// two-octave stretched noise -> vertical streaks that scroll DOWN the sheet (device-verified:
+// "+t" read as flowing UP on the QuadMesh, so we subtract t to push the foam streaks downward
+// into the pool).
 float streaks(vec2 uv, float t){
-	vec2 p = vec2(uv.x * streak_scale, uv.y * streak_stretch + t);
+	vec2 p = vec2(uv.x * streak_scale, uv.y * streak_stretch - t);
 	return vnoise(p) * 0.7 + vnoise(p * 2.3 + 11.0) * 0.3;
 }
 

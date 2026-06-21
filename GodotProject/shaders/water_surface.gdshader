@@ -52,12 +52,19 @@ void fragment(){
 
 	vec3 col = mix(deep_color, shallow_color, clamp(r * 0.5 + 0.5, 0.0, 1.0));
 	col = mix(col, sky_tint, fres * 0.65);
-	col = mix(col, foam_color, foam);
+
+	// foamy waterline: a band of foam hugging the irregular shore so the pool doesn't end on a
+	// hard rectangular line. edge = 0 centre -> 1 at the plane border, wobbled by noise.
+	float edge = max(abs(UV.x - 0.5), abs(UV.y - 0.5)) * 2.0;
+	edge += (vnoise(UV * 6.0 + vec2(t * 0.1)) - 0.5) * 0.16;
+	float shore_foam = smoothstep(0.72, 0.92, edge);
+	col = mix(col, foam_color, max(foam, shore_foam));
+	float rim = 1.0 - smoothstep(0.90, 1.0, edge);   // fade the very edge to nothing
 
 	ALBEDO    = col;
-	ROUGHNESS = mix(0.04, 0.5, foam);   // mirror-glossy water for sharp sun sparkle; rough foam
+	ROUGHNESS = mix(0.04, 0.5, max(foam, shore_foam));   // glossy water, rough foam
 	METALLIC  = 0.0;
-	ALPHA     = clamp(mix(surface_alpha, 1.0, fres) + foam * 0.1, 0.0, 1.0);
-	EMISSION  = foam_color * foam * foam_emission;
+	ALPHA     = clamp((mix(surface_alpha, 1.0, fres) + foam * 0.1) * rim, 0.0, 1.0);
+	EMISSION  = foam_color * max(foam, shore_foam) * foam_emission;
 	SPECULAR  = sparkle;
 }
