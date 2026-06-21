@@ -19,6 +19,7 @@ config/features=PackedStringArray("4.6", "Mobile")
 GameEvents="*res://scripts/game_events.gd"
 Audio="*res://scripts/audio_manager.gd"
 Haptics="*res://scripts/haptics.gd"
+Comfort="*res://scripts/comfort_settings.gd"
 
 [rendering]
 

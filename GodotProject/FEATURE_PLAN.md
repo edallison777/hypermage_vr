@@ -437,8 +437,20 @@ Separable from the art work and low-risk; a real VR title needs these:
    prior preview unrepresentative; now positions in `_process`). 61/61 tests green. Committed: `.glb`
    + manifest + CREDITS (raw `asset_src/` gitignored, reproducible). Blender 5.1.2 installed via winget
    (`C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`) — new build-time dep.
-5. **Comfort/accessibility sub-phase** (teleport, snap-turn, vignette, settings, handedness)
-   — can proceed in parallel; it's independent of the art work.
+5. **Comfort/accessibility sub-phase: DONE on PC** (2026-06-21) — new `Comfort` autoload
+   (`scripts/comfort_settings.gd`) holds all settings, persists to `user://comfort.cfg`, emits
+   `changed`; comfort-first defaults (snap-turn + vignette ON). `locomotion.gd` rewritten to read
+   it: **snap-turn** (debounced flick, configurable 15/30/45/60°) vs smooth; **teleport** locomotion
+   (parabolic arc off the move hand, walkable-layer target, ring marker, confirm-on-release) vs smooth
+   move; **handedness** (move/turn hand swap); **height offset + seated** lift; feeds the
+   **comfort vignette** (`scripts/comfort_vignette.gd` — camera-attached radial shader, tunnels the
+   periphery on move/turn, eased, strength-scaled). World-space **settings menu**
+   (`scripts/comfort_menu.gd`, in `main_vr.tscn`): A/X toggles a panel of fingertip-poke buttons that
+   `cycle()` each setting — fully LOCAL (off the networked bus), `ui_click` + haptic feedback. Master
+   volume → AudioServer Master bus. 74/74 tests green (13 new in `test/test_comfort.gd`: cycle/persist/
+   dict/snap-radians/vignette-mapping/menu-format). All Comfort/vignette/menu/locomotion scripts
+   compile-checked; `main_vr.tscn` loads. **Device-verify pending** (teleport aim, snap comfort,
+   vignette feel, menu poke, settings persistence) — folds into the F9 device pass.
 6. **Profile, tune, hold 90fps**; commit per the usual recipe; device-verify.
 
 ---

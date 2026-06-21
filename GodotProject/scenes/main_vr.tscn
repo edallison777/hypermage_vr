@@ -17,6 +17,7 @@
 [ext_resource type="Script" path="res://scripts/combat_manager.gd" id="Script_combat"]
 [ext_resource type="Script" path="res://scripts/weapon_manager.gd" id="Script_weapon"]
 [ext_resource type="Script" path="res://scripts/enemy_manager.gd" id="Script_enemy"]
+[ext_resource type="Script" path="res://scripts/comfort_menu.gd" id="Script_comfortmenu"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 
@@ -106,3 +107,6 @@ script = ExtResource("Script_weapon")
 
 [node name="EnemyManager" type="Node" parent="."]
 script = ExtResource("Script_enemy")
+
+[node name="ComfortMenu" type="Node3D" parent="."]
+script = ExtResource("Script_comfortmenu")
