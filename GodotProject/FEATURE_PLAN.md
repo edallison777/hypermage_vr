@@ -410,8 +410,18 @@ Separable from the art work and low-risk; a real VR title needs these:
    interiors are sky-ambient + OmniLight lit; the sun shadow only matters for open/sky-facing
    scenes. **Device 90fps check still pending** (the ReflectionProbe on-device load bake + fog
    overdraw are the things to profile). Flat-harness env/sun removed (rooms self-light now).
-3. **Materials** — extend the ScenePlan material block (albedo/normal/ORM, roughness/metallic);
-   shared/atlased materials; emissive support.
+3. **Materials: DONE on PC** (2026-06-21) — converter `material()`/`pbr_material()` now emit full
+   PBR `StandardMaterial3D`: per-surface roughness tiers (floor 0.55 polished / wall 0.82 / ceiling
+   0.90 — at the old roughness 1.0 surfaces returned ZERO specular so the sky ambient + reflection
+   probe never showed); metallic steel for mechanism arms + gun bodies (roughness 0.35 / metallic
+   0.85); self-lit emission on lamp bulbs, torch lenses, ammo pickups. Optional per-zone ScenePlan
+   `materials` block ({floor,wall,ceiling} → color/roughness/metallic/emission + albedo/normal/orm
+   texture paths + tiling) so step-4 conditioned maps wire in with no further converter work; ORM
+   packs occlusion=R/roughness=G/metallic=B. Optional `environment.glow` bloom (default OFF — Quest
+   tile-GPU cost; opt-in for hero scenes) makes the emissive parts bloom. All 61 tests green;
+   re-rendered `forest_clearing`/`ancient_dungeon` off-headset (glossier floor catching reflection,
+   sky-ambient wall gradient, tonemap). **Device 90fps + prop-sheen/glow verify pending** (steel reads
+   via the reflection probe; folds into the step-2 device-profile pass).
 4. **Asset conditioning stage** (decimate/LOD/atlas/UV2 + offline AO) on a curated hero asset set.
 5. **Comfort/accessibility sub-phase** (teleport, snap-turn, vignette, settings, handedness)
    — can proceed in parallel; it's independent of the art work.

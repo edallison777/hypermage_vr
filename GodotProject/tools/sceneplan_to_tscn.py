@@ -115,6 +115,20 @@ WALKABLE_LAYER = 1 | (1 << 2)   # = 5
 STEP_RISE  = 0.18  # height gained per visible step (m)
 STEP_GOING = 0.30  # horizontal depth per step (m); rise:going sets the incline
 
+# F9 step-3 materials — surface PBR defaults. At roughness 1.0 a surface is fully
+# diffuse and returns ZERO specular, so the sky ambient + per-zone ReflectionProbe
+# never show and everything reads dead-flat. Dropping roughness lets surfaces catch a
+# glossy sky/room reflection and the sun highlight. Floors are the most reflective
+# (polished stone), ceilings the least. Tuned conservatively so interiors read as
+# semi-gloss stone, NOT plastic mirrors. Override per-surface from a ScenePlan
+# zone "materials" block (see _surface_material).
+ROUGH_DEFAULT = 0.80   # generic props
+ROUGH_FLOOR   = 0.55   # polished — shows sky/room reflection + sun glint
+ROUGH_WALL    = 0.82
+ROUGH_CEIL    = 0.90
+ROUGH_METAL   = 0.35   # steel arms, gun bodies
+METAL_STEEL   = 0.85
+
 
 # ── .tscn builder ─────────────────────────────────────────────────────────────
 
@@ -181,25 +195,87 @@ class TscnBuilder:
         )
         return rid
 
-    def material(self, r: float, g: float, b: float) -> str:
+    def texture_resource(self, path: str) -> str:
+        """Get-or-create a CompressedTexture2D ext_resource for a material map, returning
+        its id. The image must exist under res:// (step-4 asset-conditioning supplies the
+        Quest-ready albedo/normal/ORM maps); referencing a missing file would break load,
+        so textures are opt-in via a ScenePlan "materials" block only."""
+        if path in self._ext_by_path:
+            return self._ext_by_path[path]
+        rid = f"ExtTex_{len([p for p in self._ext_by_path if p.endswith(('.png', '.jpg', '.webp', '.ktx', '.exr'))]) + 1}"
+        return self.ext_resource("Texture2D", path, rid)
+
+    def pbr_material(
+        self,
+        r: float, g: float, b: float,
+        *,
+        a: float = 1.0,
+        roughness: float = ROUGH_DEFAULT,
+        metallic: float = 0.0,
+        emission: tuple[float, float, float] | None = None,
+        emission_energy: float = 1.0,
+        albedo_tex: str | None = None,
+        normal_tex: str | None = None,
+        orm_tex: str | None = None,
+        uv1_scale: tuple[float, float, float] | None = None,
+        normal_scale: float = 1.0,
+        transparent: bool = False,
+        unshaded: bool = False,
+    ) -> str:
+        """A StandardMaterial3D with full PBR control (F9 step-3).
+
+        Procedural use: pass albedo + roughness/metallic/emission. Textured use (step-4
+        assets): pass res:// paths for albedo_tex / normal_tex / orm_tex (occlusion=R,
+        roughness=G, metallic=B packed) + uv1_scale for tiling across large surfaces.
+        Channels follow StandardMaterial3D's *_texture_channel enum (R=0,G=1,B=2)."""
         rid = self._id("StandardMaterial3D")
-        self._sub.append(
-            f'[sub_resource type="StandardMaterial3D" id="{rid}"]\n'
-            f'albedo_color = {col(r, g, b)}\n'
-        )
+        lines = [f'[sub_resource type="StandardMaterial3D" id="{rid}"]']
+        if transparent:
+            lines.append("transparency = 1")
+        if unshaded:
+            lines.append("shading_mode = 0")
+        lines.append(f"albedo_color = {col(r, g, b, a)}")
+        if albedo_tex:
+            lines.append(f'albedo_texture = ExtResource("{self.texture_resource(albedo_tex)}")')
+        if not unshaded:
+            lines.append(f"roughness = {roughness:.3f}")
+            lines.append(f"metallic = {metallic:.3f}")
+        if normal_tex:
+            lines.append("normal_enabled = true")
+            lines.append(f'normal_texture = ExtResource("{self.texture_resource(normal_tex)}")')
+            lines.append(f"normal_scale = {normal_scale:.3f}")
+        if orm_tex:
+            tex = self.texture_resource(orm_tex)
+            lines.append("ao_enabled = true")
+            lines.append(f'ao_texture = ExtResource("{tex}")')
+            lines.append("ao_texture_channel = 0")              # occlusion = R
+            lines.append(f'roughness_texture = ExtResource("{tex}")')
+            lines.append("roughness_texture_channel = 1")       # roughness = G
+            lines.append(f'metallic_texture = ExtResource("{tex}")')
+            lines.append("metallic_texture_channel = 2")        # metallic = B
+        if emission is not None:
+            lines.append("emission_enabled = true")
+            lines.append(f"emission = {col(*emission)}")
+            lines.append(f"emission_energy_multiplier = {emission_energy:.3f}")
+        if uv1_scale is not None:
+            lines.append(f"uv1_scale = {v3(*uv1_scale)}")
+        lines.append("")
+        self._sub.append("\n".join(lines))
         return rid
+
+    def material(self, r: float, g: float, b: float, *,
+                 roughness: float = ROUGH_DEFAULT, metallic: float = 0.0,
+                 emission: tuple[float, float, float] | None = None,
+                 emission_energy: float = 1.0) -> str:
+        """Back-compat solid-colour material — now PBR-aware (lower default roughness so
+        the F9 sky ambient / reflection probe actually register)."""
+        return self.pbr_material(r, g, b, roughness=roughness, metallic=metallic,
+                                 emission=emission, emission_energy=emission_energy)
 
     def material_rgba(self, r: float, g: float, b: float, a: float) -> str:
         """Translucent, unshaded material — used for hazard volumes so the danger
         zone reads as a coloured glow you can see (and walk into) through."""
-        rid = self._id("StandardMaterial3D")
-        self._sub.append(
-            f'[sub_resource type="StandardMaterial3D" id="{rid}"]\n'
-            f'transparency = 1\n'
-            f'shading_mode = 0\n'
-            f'albedo_color = {col(r, g, b, a)}\n'
-        )
-        return rid
+        return self.pbr_material(r, g, b, a=a, transparent=True, unshaded=True)
 
     def raw_sub(self, rtype: str, props: dict[str, str]) -> str:
         """Generic sub-resource: emit any resource type from a {prop: value-string} dict.
@@ -659,6 +735,40 @@ def _add_staircase(b: TscnBuilder, g: dict) -> None:
     })
 
 
+def _surface_material(b: TscnBuilder, override: dict | None,
+                      base_rgb: tuple[float, float, float], default_rough: float) -> str:
+    """Resolve a room surface (floor/wall/ceiling) to a PBR material. The procedural
+    zone-tint is the default; an optional per-zone ScenePlan "materials" block overrides
+    colour/roughness/metallic/emission and supplies albedo/normal/orm texture paths +
+    tiling (step-4 assets). Schema per surface:
+      { "color":[r,g,b], "roughness":0.6, "metallic":0.0, "emission":[r,g,b],
+        "emission_energy":1.0, "albedo":"res://...", "normal":"res://...",
+        "orm":"res://...", "normal_scale":1.0, "tiling":4 | [4,4] }"""
+    r, g, bl = base_rgb
+    o = override or {}
+    c = o.get("color")
+    if isinstance(c, list) and len(c) >= 3:
+        r, g, bl = float(c[0]), float(c[1]), float(c[2])
+    kw: dict = {
+        "roughness": float(o.get("roughness", default_rough)),
+        "metallic":  float(o.get("metallic", 0.0)),
+    }
+    if "albedo" in o:        kw["albedo_tex"]   = str(o["albedo"])
+    if "normal" in o:        kw["normal_tex"]   = str(o["normal"])
+    if "orm" in o:           kw["orm_tex"]      = str(o["orm"])
+    if "normal_scale" in o:  kw["normal_scale"] = float(o["normal_scale"])
+    em = o.get("emission")
+    if isinstance(em, list) and len(em) >= 3:
+        kw["emission"] = (float(em[0]), float(em[1]), float(em[2]))
+        kw["emission_energy"] = float(o.get("emission_energy", 1.0))
+    uv = o.get("tiling", o.get("uv_scale"))
+    if isinstance(uv, (int, float)):
+        kw["uv1_scale"] = (float(uv), float(uv), float(uv))
+    elif isinstance(uv, list) and len(uv) >= 2:
+        kw["uv1_scale"] = (float(uv[0]), float(uv[1]), float(uv[2]) if len(uv) > 2 else 1.0)
+    return b.pbr_material(r, g, bl, **kw)
+
+
 def add_zone(b: TscnBuilder, zone: dict, doors: list[tuple[str, float]] | None = None,
              hole: dict | None = None) -> None:
     zid    = zone["id"].replace("-", "_")
@@ -677,9 +787,13 @@ def add_zone(b: TscnBuilder, zone: dict, doors: list[tuple[str, float]] | None =
     )
 
     base_r, base_g, base_b = _ZONE_RGB.get(ztype, (0.5, 0.5, 0.5))
-    floor_mat = b.material(base_r,                  base_g,                  base_b)
-    wall_mat  = b.material(base_r * 0.85,           base_g * 0.85,           base_b * 0.85)
-    ceil_mat  = b.material(base_r * 0.70,           base_g * 0.70,           base_b * 0.70)
+    mats = zone.get("materials", {})
+    floor_mat = _surface_material(b, mats.get("floor"),
+                                  (base_r, base_g, base_b), ROUGH_FLOOR)
+    wall_mat  = _surface_material(b, mats.get("wall", mats.get("walls")),
+                                  (base_r * 0.85, base_g * 0.85, base_b * 0.85), ROUGH_WALL)
+    ceil_mat  = _surface_material(b, mats.get("ceiling", mats.get("ceil")),
+                                  (base_r * 0.70, base_g * 0.70, base_b * 0.70), ROUGH_CEIL)
 
     t = WALL_DIM
     zone_node = f"Zone_{zid}"
@@ -928,7 +1042,7 @@ def _add_mechanism(
     # Rotating part.
     b.node("Pivot", "Node3D", mech_path)
     pivot = f"{mech_path}/Pivot"
-    arm_mat = b.material(0.45, 0.48, 0.55)   # steel
+    arm_mat = b.material(0.45, 0.48, 0.55, roughness=ROUGH_METAL, metallic=METAL_STEEL)  # steel
     if kind == "lever":
         arm_mesh = b.box_mesh(0.05, arm_len, 0.05)
         b.node("Arm", "MeshInstance3D", pivot, {
@@ -1153,8 +1267,9 @@ def _add_torch(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
         "surface_material_override/0": f'SubResource("{body_mat}")',
     })
     b.node("Collision", "CollisionShape3D", path, {"shape": f'SubResource("{shape}")'})
-    # A bright lens at the -Z emitting end so the torch reads directionally.
-    lens_mat = b.material(0.95, 0.95, 0.70)
+    # A bright lens at the -Z emitting end so the torch reads directionally — self-lit
+    # so it glows like a lamp lens regardless of the room lighting.
+    lens_mat = b.material(0.95, 0.95, 0.70, emission=(0.95, 0.92, 0.65), emission_energy=1.4)
     lens_mesh = b.cylinder_mesh(0.034, 0.02)
     b.node("Lens", "MeshInstance3D", path, {
         "transform": "Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0, -0.11)",
@@ -1215,7 +1330,7 @@ def _add_gun(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
         "fire_cooldown": f'{float(obj.get("fire_cooldown", 0.25)):.4f}',
     }
     b.node(name, "Node3D", zone_node, props, groups=["weapon"])
-    body_mat = b.material(0.14, 0.14, 0.17)
+    body_mat = b.material(0.14, 0.14, 0.17, roughness=ROUGH_METAL, metallic=METAL_STEEL)  # gunmetal
     body_mesh = b.box_mesh(0.05, 0.12, 0.20)
     b.node("Body", "MeshInstance3D", path, {
         "mesh": f'SubResource("{body_mesh}")',
@@ -1276,7 +1391,8 @@ def _add_ammo(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
         "script": f'ExtResource("{script}")',
         "pickup_id": f'"{oid}"',
     }, groups=["ammo_pickup"])
-    mat = b.material(0.20, 0.80, 0.35)
+    # Self-lit so the pickup pops as a glowing power-up against the room.
+    mat = b.material(0.20, 0.80, 0.35, emission=(0.10, 0.70, 0.25), emission_energy=0.9)
     mesh = b.box_mesh(0.22, 0.22, 0.22)
     b.node("Icon", "MeshInstance3D", path, {
         "transform": t3d(0, 0.20, 0),
@@ -1423,7 +1539,9 @@ def _add_lamp(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
         "source_id": f'"{src}"',
         "light_path": 'NodePath("Lamp")',
     }, groups=["reactor"])
-    bulb_mat = b.material(0.90, 0.85, 0.50)
+    # Faint self-emission so the cream bulb reads as a bulb (glows) even before the
+    # reactor toggles its OmniLight on; indicator_lamp.gd brightens it on activation.
+    bulb_mat = b.material(0.90, 0.85, 0.50, emission=(0.90, 0.78, 0.45), emission_energy=0.6)
     bulb_mesh = b.sphere_mesh(0.08)
     b.node("Bulb", "MeshInstance3D", path, {
         "mesh": f'SubResource("{bulb_mesh}")',
@@ -1552,6 +1670,10 @@ def _resolve_env(env_cfg: dict) -> dict:
             cfg[key] = float(env_cfg[key])
     cfg["tonemap"] = str(env_cfg.get("tonemap", "aces")).lower()
     cfg["fog_enabled"] = bool(env_cfg.get("fog", True))
+    # Bloom — makes the emissive parts (bulbs, lenses, pickups) glow. Default OFF: glow is
+    # a screen-space pass with a real cost on the Quest tile GPU, so it's opt-in (hero
+    # scenes / device-profiled scenes) rather than on by default.
+    cfg["glow_enabled"] = bool(env_cfg.get("glow", False))
     return cfg
 
 
@@ -1586,6 +1708,17 @@ def _add_environment(b: TscnBuilder, cfg: dict) -> None:
             "fog_density":     f'{cfg["fog_density"]:.4f}',
             "fog_sky_affect":  "0.4",
             "fog_aerial_perspective": "0.5",
+        })
+    if cfg["glow_enabled"]:
+        # Bloom only on the brightest (emissive/HDR) pixels — threshold high so lit walls
+        # don't smear. Modest intensity keeps it a highlight, not a haze.
+        env_props.update({
+            "glow_enabled":         "true",
+            "glow_intensity":       "0.6",
+            "glow_strength":        "1.0",
+            "glow_bloom":           "0.1",
+            "glow_hdr_threshold":   "1.1",
+            "glow_blend_mode":      "1",   # additive (screen-safe highlight bloom)
         })
     env = b.raw_sub("Environment", env_props)
     b.node("WorldEnvironment", "WorldEnvironment", ".", {"environment": f'SubResource("{env}")'})
