@@ -25,5 +25,8 @@ blender --background --python tools/condition_asset.py -- \
     --tri-budget 4000 --tex-size 1024
 python tools/check_asset_budget.py assets/models
 ```
-Committed artefacts: `treasure_chest.glb` (textures embedded) + `treasure_chest.manifest.json`.
-`*.import` regenerates on Godot import (gitignored, like the generated scenes).
+Committed artefacts (glTF-separate — external textures, imported in-place as ETC2/ASTC, no
+duplication): `treasure_chest.gltf` + `treasure_chest.bin` + the three texture .jpgs +
+`treasure_chest.manifest.json`. `*.import` regenerates on Godot import (gitignored, like the
+generated scenes). (GLB was avoided: Godot re-extracts embedded GLB textures to sibling files
+with fragile UIDs — glTF-separate sidesteps that.)

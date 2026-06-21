@@ -25,7 +25,7 @@
         {
           "id": "hero_chest",
           "type": "prop",
-          "model": "res://assets/models/treasure_chest/treasure_chest.glb",
+          "model": "res://assets/models/treasure_chest/treasure_chest.gltf",
           "position": { "x": 0, "y": 50, "z": 30 },
           "yaw": 20.0,
           "scale": 1.0,

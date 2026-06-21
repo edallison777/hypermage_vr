@@ -128,18 +128,24 @@ def _condition_textures(tex_size: int) -> list[dict]:
     return out
 
 
-def _export_glb(path: str) -> None:
+def _export_gltf(path: str) -> None:
+    # glTF-SEPARATE (.gltf + .bin + external texture files) rather than GLB. A single GLB
+    # embeds its textures, but Godot's glTF importer then re-extracts them to sibling files
+    # (embedded_image_handling=Extract) whose paths/UIDs are fragile; separate keeps the
+    # textures as plain external files the .gltf references, imported in-place as ETC2/ASTC
+    # (Quest-optimal, no duplication). All files are committed together.
     os.makedirs(os.path.dirname(path), exist_ok=True)
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.export_scene.gltf(
         filepath=path,
-        export_format="GLB",
+        export_format="GLTF_SEPARATE",
         use_selection=True,
         export_apply=True,          # apply modifiers
         export_yup=True,            # Godot/glTF +Y up
         export_texcoords=True,
         export_normals=True,
         export_tangents=True,       # ship tangents so the normal map is correct without recompute
+        export_keep_originals=False,
     )
 
 
@@ -165,23 +171,15 @@ def main() -> None:
     _add_uv2(obj)
     uv2 = len(obj.data.uv_layers) >= 2
 
-    out_glb = os.path.join(args.output_dir, f"{args.name}.glb")
+    out_gltf = os.path.join(args.output_dir, f"{args.name}.gltf")
     textures = _condition_textures(args.tex_size)
-    _export_glb(out_glb)
-
-    # GLB embeds its textures (self-contained), but the exporter can drop redundant
-    # external image copies beside it — remove them so the committed artefact set is just
-    # the .glb + manifest (+ any hand-authored CREDITS.md).
-    keep = {f"{args.name}.glb", f"{args.name}.manifest.json", "credits.md"}
-    for fn in os.listdir(args.output_dir):
-        if fn.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".bin")) and fn not in keep:
-            os.remove(os.path.join(args.output_dir, fn))
+    _export_gltf(out_gltf)
 
     over_tex = [t for t in textures if max(t["w"], t["h"]) > args.tex_size]
     manifest = {
         "name": args.name,
         "source": os.path.basename(args.input),
-        "glb": os.path.basename(out_glb),
+        "gltf": os.path.basename(out_gltf),
         "tri_budget": args.tri_budget,
         "tex_size_budget": args.tex_size,
         "source_tris": src_tris,
@@ -194,7 +192,7 @@ def main() -> None:
     with open(mpath, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
 
-    print("condition_asset: wrote", out_glb)
+    print("condition_asset: wrote", out_gltf)
     print("condition_asset: tris %d -> %d (budget %d), uv2=%s, textures=%d, PASS=%s" % (
         src_tris, out_tris, args.tri_budget, uv2, len(textures), manifest["pass"]))
 

@@ -1,7 +1,7 @@
 {
   "name": "treasure_chest",
   "source": "treasure_chest_1k.gltf",
-  "glb": "treasure_chest.glb",
+  "gltf": "treasure_chest.gltf",
   "tri_budget": 4000,
   "tex_size_budget": 1024,
   "source_tris": 103330,
