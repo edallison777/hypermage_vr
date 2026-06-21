@@ -7,7 +7,7 @@
   "environment": {
     "preset": "day",
     "glow": true,
-    "ambient_energy": 1.6
+    "ambient_energy": 0.5
   },
   "zones": [
     {
@@ -20,19 +20,19 @@
       },
       "materials": {
         "floor": {
-          "color": [1, 1, 1], "roughness": 1.0, "metallic": 1.0, "tiling": 3,
+          "color": [1, 1, 1], "roughness": 1.0, "metallic": 1.0, "tiling": 3, "normal_scale": 1.6,
           "albedo": "res://assets/textures/cobblestone_floor_08/cobblestone_floor_08_diff_1k.jpg",
           "normal": "res://assets/textures/cobblestone_floor_08/cobblestone_floor_08_nor_gl_1k.jpg",
           "orm":    "res://assets/textures/cobblestone_floor_08/cobblestone_floor_08_arm_1k.jpg"
         },
         "wall": {
-          "color": [1, 1, 1], "roughness": 1.0, "metallic": 1.0, "tiling": 2,
+          "color": [1, 1, 1], "roughness": 1.0, "metallic": 1.0, "tiling": 2, "normal_scale": 1.6,
           "albedo": "res://assets/textures/medieval_blocks_05/medieval_blocks_05_diff_1k.jpg",
           "normal": "res://assets/textures/medieval_blocks_05/medieval_blocks_05_nor_gl_1k.jpg",
           "orm":    "res://assets/textures/medieval_blocks_05/medieval_blocks_05_arm_1k.jpg"
         },
         "ceiling": {
-          "color": [1, 1, 1], "roughness": 1.0, "metallic": 1.0, "tiling": 2,
+          "color": [1, 1, 1], "roughness": 1.0, "metallic": 1.0, "tiling": 2, "normal_scale": 1.6,
           "albedo": "res://assets/textures/medieval_blocks_05/medieval_blocks_05_diff_1k.jpg",
           "normal": "res://assets/textures/medieval_blocks_05/medieval_blocks_05_nor_gl_1k.jpg",
           "orm":    "res://assets/textures/medieval_blocks_05/medieval_blocks_05_arm_1k.jpg"
@@ -50,12 +50,25 @@
           "behaviour": "Conditioned Poly Haven CC0 hero asset: photoscan chest decimated to a 4k-tri Quest budget with UV2 + ARM/normal PBR maps, instanced from the .glb."
         },
         {
-          "id": "vault_lamp",
-          "type": "lamp",
-          "position": { "x": 120, "y": -120, "z": 220 },
-          "controlled_by": "vault_lamp",
-          "event": "interact:button",
-          "behaviour": "An emissive indicator lamp so the self-lit material + bloom read."
+          "id": "torch_r",
+          "type": "light",
+          "position": { "x": 110, "y": 110, "z": 215 },
+          "energy": 2.6, "range": 7.5, "attenuation": 1.5, "color": [1.0, 0.72, 0.42],
+          "behaviour": "Warm torch (pulled off the wall, softened falloff) raking the right side + lighting the chest from one side — side light reveals the stone relief without blowing out the nearby wall."
+        },
+        {
+          "id": "torch_l",
+          "type": "light",
+          "position": { "x": -120, "y": -90, "z": 165 },
+          "energy": 2.2, "range": 7.5, "attenuation": 1.5, "color": [1.0, 0.68, 0.38],
+          "behaviour": "Warm torch raking the front-left side + filling the chest's other side."
+        },
+        {
+          "id": "fill_cool",
+          "type": "light",
+          "position": { "x": -120, "y": 130, "z": 200 },
+          "energy": 0.9, "range": 7.0, "attenuation": 1.5, "color": [0.55, 0.66, 1.0],
+          "behaviour": "Dim cool fill so the shadowed faces aren't pure black (keeps contrast without flattening)."
         }
       ]
     }

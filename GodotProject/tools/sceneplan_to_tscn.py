@@ -977,6 +977,9 @@ def _add_interactable(b: TscnBuilder, obj: dict, zone_node: str, bounds: dict) -
     if otype in ("prop", "model"):
         _add_prop(b, obj, oid, zone_node, lx, ly, lz)
         return
+    if otype == "light":
+        _add_light(b, obj, oid, zone_node, lx, ly, lz)
+        return
 
     r, g, b_c = _INTERACTABLE_RGB.get(otype, (0.5, 0.5, 0.5))
     mat = b.material(r, g, b_c)
@@ -1260,6 +1263,38 @@ def _add_enemy_spawn(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
         "mesh": f'SubResource("{mesh}")',
         "surface_material_override/0": f'SubResource("{mat}")',
     })
+
+
+def _add_light(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
+               lx: float, ly: float, lz: float) -> None:
+    """A placeable OmniLight (F9). Use ANGLED warm lights to RAKE textured surfaces — that
+    side-light is what reveals normal-mapped relief and gives a room mood (flat overhead +
+    high ambient washes the relief out). ScenePlan fields: energy, range, color [r,g,b],
+    shadow (bool — costs on Quest, use sparingly), attenuation, specular. Optionally an
+    emissive bulb mesh (bulb: true) so the source itself reads as a glowing light."""
+    name = f"Light_{oid}"
+    path = f"{zone_node}/{name}"
+    color = obj.get("color", [1.0, 0.80, 0.55])   # warm torch default
+    props: dict[str, str] = {
+        "transform":    t3d(lx, ly, lz),
+        "light_energy": f'{float(obj.get("energy", 2.5)):.3f}',
+        "omni_range":   f'{float(obj.get("range", 7.0)):.3f}',
+        "light_color":  col(color[0], color[1], color[2]),
+        "light_specular": f'{float(obj.get("specular", 0.6)):.3f}',
+    }
+    if "attenuation" in obj:
+        props["omni_attenuation"] = f'{float(obj["attenuation"]):.3f}'
+    if obj.get("shadow"):
+        props["shadow_enabled"] = "true"
+    b.node(name, "OmniLight3D", zone_node, props)
+    if obj.get("bulb"):
+        bulb_mat = b.material(color[0], color[1], color[2],
+                              emission=(color[0], color[1], color[2]), emission_energy=2.0)
+        bulb_mesh = b.sphere_mesh(0.05)
+        b.node("Bulb", "MeshInstance3D", path, {
+            "mesh": f'SubResource("{bulb_mesh}")',
+            "surface_material_override/0": f'SubResource("{bulb_mat}")',
+        })
 
 
 def _add_prop(b: TscnBuilder, obj: dict, oid: str, zone_node: str,
