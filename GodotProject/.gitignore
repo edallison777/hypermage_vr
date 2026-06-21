@@ -1,6 +1,9 @@
 # Godot cache
 .godot/
 *.import
+# ...but DO version-control import settings for committed assets (textures need explicit
+# normal-map / mipmap / VRAM-compression flags that Godot won't re-derive headlessly).
+!assets/**/*.import
 
 # Generated scene output (produced by sceneplan_to_tscn.py — not committed)
 scenes/generated/

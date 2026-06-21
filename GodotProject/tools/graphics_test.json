@@ -30,6 +30,12 @@
           "albedo": "res://assets/textures/medieval_blocks_05/medieval_blocks_05_diff_1k.jpg",
           "normal": "res://assets/textures/medieval_blocks_05/medieval_blocks_05_nor_gl_1k.jpg",
           "orm":    "res://assets/textures/medieval_blocks_05/medieval_blocks_05_arm_1k.jpg"
+        },
+        "ceiling": {
+          "color": [1, 1, 1], "roughness": 1.0, "metallic": 1.0, "tiling": 2,
+          "albedo": "res://assets/textures/medieval_blocks_05/medieval_blocks_05_diff_1k.jpg",
+          "normal": "res://assets/textures/medieval_blocks_05/medieval_blocks_05_nor_gl_1k.jpg",
+          "orm":    "res://assets/textures/medieval_blocks_05/medieval_blocks_05_arm_1k.jpg"
         }
       },
       "interactables": [
