@@ -28,10 +28,15 @@ const SNAP_PRIME    := 0.7      # stick.x past this arms a snap turn; must fall 
 const SNAP_RESET    := 0.3      # stick.x must drop below this before another snap fires
 const TP_AIM        := 0.6      # forward stick push past this aims a teleport
 const TP_RELEASE    := 0.25     # stick magnitude below this confirms (releases) the teleport
-const TP_ARC_SPEED  := 8.0      # teleport arc launch speed (m/s)
-const TP_ARC_G      := -16.0    # teleport arc gravity (m/s^2)
-const TP_ARC_STEPS  := 30
+# Arc tuned to land INSIDE small rooms: a fast/flat arc sails over the floor and (since walls
+# aren't on the walkable mask) passes through the wall finding no target. Slower launch +
+# stronger gravity drops it onto the floor a couple of metres ahead. A straight-down ray from
+# the arc tip is also cast each step so aiming at your feet always finds the floor.
+const TP_ARC_SPEED  := 4.5      # teleport arc launch speed (m/s)
+const TP_ARC_G      := -18.0    # teleport arc gravity (m/s^2)
+const TP_ARC_STEPS  := 40
 const TP_ARC_DT     := 0.04
+const TP_MAX_RANGE  := 8.0      # ignore landings further than this (keeps it sane in open scenes)
 const SEATED_LIFT   := 0.45     # extra rig height when seated (so seated eye ~ standing eye)
 
 @onready var origin: XROrigin3D = get_node_or_null("../XROrigin3D")
@@ -298,8 +303,11 @@ func _aim_teleport(ctrl: XRController3D) -> void:
 		q.exclude = [_body.get_rid()]
 		var hit := space.intersect_ray(q)
 		if hit:
-			_tp_target = hit.position
-			_tp_valid = true
+			var here := Vector3(camera.global_position.x, 0, camera.global_position.z)
+			var there := Vector3(hit.position.x, 0, hit.position.z)
+			if here.distance_to(there) <= TP_MAX_RANGE:
+				_tp_target = hit.position
+				_tp_valid = true
 			break
 		pos = nxt
 	if _tp_marker:

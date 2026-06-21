@@ -6,7 +6,8 @@
   "platforms": ["vr"],
   "environment": {
     "preset": "day",
-    "glow": true
+    "glow": true,
+    "ambient_energy": 1.6
   },
   "zones": [
     {
@@ -18,8 +19,18 @@
         "extents": { "x": 250, "y": 200, "z": 150 }
       },
       "materials": {
-        "floor": { "color": [0.42, 0.37, 0.30], "roughness": 0.40 },
-        "wall":  { "color": [0.38, 0.35, 0.32], "roughness": 0.80 }
+        "floor": {
+          "color": [1, 1, 1], "roughness": 1.0, "metallic": 1.0, "tiling": 3,
+          "albedo": "res://assets/textures/cobblestone_floor_08/cobblestone_floor_08_diff_1k.jpg",
+          "normal": "res://assets/textures/cobblestone_floor_08/cobblestone_floor_08_nor_gl_1k.jpg",
+          "orm":    "res://assets/textures/cobblestone_floor_08/cobblestone_floor_08_arm_1k.jpg"
+        },
+        "wall": {
+          "color": [1, 1, 1], "roughness": 1.0, "metallic": 1.0, "tiling": 2,
+          "albedo": "res://assets/textures/medieval_blocks_05/medieval_blocks_05_diff_1k.jpg",
+          "normal": "res://assets/textures/medieval_blocks_05/medieval_blocks_05_nor_gl_1k.jpg",
+          "orm":    "res://assets/textures/medieval_blocks_05/medieval_blocks_05_arm_1k.jpg"
+        }
       },
       "interactables": [
         {
